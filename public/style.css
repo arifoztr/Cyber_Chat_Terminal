@@ -604,4 +604,14 @@ body {
     .unread-badge { animation: none !important; }
     .lock-icon-anim { animation: none !important; }
     .lock-ring, .lock-ring-inner { animation: none !important; }
+    .reconnect-icon { animation: none !important; }
+    .reconnect-dot { animation: none !important; opacity: 1; }
 }
+
+/* ─── YENİDEN BAĞLANMA OVERLAY ─── */
+@keyframes reconnect-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.7; }
+    50% { transform: scale(1.15); opacity: 1; }
+}
+#reconnectOverlay .reconnect-icon { animation: reconnect-pulse 2s ease-in-out infinite; }
+#reconnectOverlay .reconnect-dot { box-shadow: 0 0 6px var(--neon-pink); }

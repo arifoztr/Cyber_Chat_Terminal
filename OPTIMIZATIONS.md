@@ -1,29 +1,116 @@
-Must-follow constraints
+# OPTİMİZASYON VE GÜVENLİK KILAVUZU (OPTIMIZATIONS)
 
-Zero-Knowledge Backend: The Node.js server (server.js) acts only as a signaling and relay server. You MUST NOT write backend logic to parse, decrypt, inspect, or log textPayload or filePayload.
+**Sürüm:** v10 (Cyber-HUD Edition)
+**Son Güncelleme:** 2026-06-28
 
-Client-Side Storage Strictness: Chat history (cyber_history_), contacts (cyber_contacts_), and derived ECDH secrets MUST remain exclusively in the browser's localStorage. Never transmit these keys or histories to the server.
+---
 
-Native Web Crypto: All client-side encryption/decryption MUST use the native window.crypto.subtle API. Do not introduce external cryptography packages (e.g., crypto-js).
+## 📌 Uyulması Zorunlu Kısıtlamalar
 
-Vanilla Frontend Ecosystem: The client (siber_e2ee_sohbet_terminali.html) is a single HTML file using vanilla JavaScript and Tailwind CSS via CDN. DO NOT introduce frontend frameworks (React/Vue/Svelte) or build steps/bundlers.
+### 1. Sıfır-Bilgi Backend (Zero-Knowledge)
+Node.js sunucusu (`server.js`, `socket.js`) yalnızca signaling ve relay görevi görür.
+Backend mantığında `textPayload` veya `filePayload` içeriğini **asla** çözmeyin, parse etmeyin, inceleyin veya loglayın.
 
-Repo-specific conventions
+### 2. İstemci Tarafı Depolama Katılığı
+Sohbet geçmişi (`cyber_history_`), kişi listesi (`cyber_contacts_`) ve türetilmiş ECDH sırları **yalnızca** tarayıcının IndexedDB / localStorage'ında saklanır. Bu verileri **asla** sunucuya iletmeyin.
 
-Synchronous JSON Commits: The current backend database is a raw database.json file. Any mutation to the db object (e.g., db.users, db.queue) in server.js MUST be immediately followed by a saveDatabase() call (debounced ~50ms); use saveDatabaseImmediate() only for shutdown/critical-path flushes.
+### 3. Yerel Web Crypto Kullanımı
+Tüm istemci tarafı şifreleme/şifre çözme işlemleri `window.crypto.subtle` API'si ile yapılmalıdır. Harici kriptografi paketleri (crypto-js vb.) **yasaktır**.
 
-Agent ID Format: System-generated user IDs must strictly follow the AGN-XXXX-XXXX format.
+### 4. Vanilla Frontend Ekosistemi
+İstemci (`siber_e2ee_sohbet_terminali.html`) Vanilla JavaScript ve Tailwind CSS (CDN) kullanır. React, Vue, Svelte veya herhangi bir framework/bundler **yasaktır**.
 
-Bilingual & Thematic Separation: - Code architecture (variables, functions, API events) MUST be in English.
+---
 
-User-facing UI text MUST be in Turkish.
+## 🔒 Güvenlik Yapılandırması (FAZ 1 — Tamamlandı)
 
-UI additions must strictly adhere to the established "cyber" aesthetic (Tailwind neon colors, monospace fonts, uppercase text, glitch effects).
+### JWT Güvenliği
+- JWT, bağımlılıksız HMAC-SHA256 ile imzalanır.
+- `JWT_SECRET` ortam değişkeni `.env` dosyasından okunur.
+- **Üretim ortamında** `.env` yoksa rastgele 32-byte geçici anahtar üretilir (sunucu restart oturumları geçersiz kılar).
+- **Geliştirme ortamında** sabit geliştirme anahtarı kullanılır.
+- JWT süresi: 24 saat.
 
-Change safety rules & Known gotchas
+### Rate Limiting (Hız Sınırlandırma)
+| İşlem | Limit | Pencere |
+|-------|-------|---------|
+| Kayıt (`register`) | 3 | 60 saniye |
+| Giriş (`login`) | 5 | 60 saniye |
+| Mesaj gönderimi (`send_packet`) | 60 | 60 saniye |
+| ECDH teklifi/yanıtı | 10 | 60 saniye |
+| Anahtar istekleri (`get_pubkey`) | 60 | 60 saniye |
+| Kullanıcı arama (`search`) | 30 | 60 saniye |
+| Profil güncelleme (`update_avatar`) | 10 | 60 saniye |
+| Hesap silme (`delete_account`) | 3 | 60 saniye |
 
-Revoke Protocol Fragility: The message revoke feature (revoke_packet) relies on exact schema matching. If you modify message packet structures, you MUST preserve packetId, senderId, and targetId. You MUST also verify that the frontend DOM removal logic (document.getElementById('msg-'+packetId)) and the backend db.queue filter remain intact.
+### Express Güvenlik Başlıkları
+- `Strict-Transport-Security`: HSTS aktif (1 yıl, alt domainler dahil)
+- `X-Content-Type-Options`: nosniff
+- `X-Frame-Options`: DENY
+- `X-XSS-Protection`: 1; mode=block
 
-Global State vs. UI Sync: The frontend relies entirely on global state variables (myContacts, activeTarget, derivedSecrets, unreadCounts). Mutating these variables does not automatically update the DOM. You MUST manually trigger respective UI render functions (e.g., renderContactsSidebar(), enableChatUI()) after state mutations.
+### CORS ve Proxy Yapılandırması
+- CORS origin `CORS_ORIGIN` ortam değişkeniyle ayarlanabilir (varsayılan: `*`).
+- `trust proxy` aktif — `x-forwarded-for` header'ı üzerinden gerçek istemci IP'si alınır.
+- `allowEIO3` (eski Socket.IO protokolü) kaldırıldı.
 
-Offline Queue Overwrites: When pushing to db.queue[targetId] in server.js, always verify the array exists first (if (!db.queue[targetId]) db.queue[targetId] = [];) to prevent overwriting pending messages.
+### Statik Dosya Güvenliği
+- Yalnızca `./public/` dizini HTTP üzerinden sunulur.
+- `database.json`, `database.sqlite`, `server.js`, `socket.js`, `package.json` gibi hassas dosyalara HTTP erişimi engellenmiştir.
+
+---
+
+## 🗄️ Veritabanı Mimarisi (FAZ 2 — Tamamlandı)
+
+### SQLite Geçişi
+- `database.json` → SQLite (WAL modu) geçişi tamamlandı.
+- Otomatik migration: İlk çalıştırmada `database.json` verilerini SQLite'a aktarır ve eski dosyayı `.backup` olarak yedekler.
+- Bellek-içi cache (`db.users`, `db.queue`) ile hızlı okuma, transaction bazlı yazma ile veri bütünlüğü.
+
+### Debounced Yazma Mekanizması
+- `saveDatabase()`: 50ms debounce ile birleştirilmiş yazma (normal işlemler).
+- `saveDatabaseImmediate()`: Anında diske yazma (hesap silme, sunucu kapanışı).
+- Write lock ile eşzamanlı yazma çakışması önlenir.
+
+### Çöp Toplayıcı (Garbage Collector)
+- Her saat başı çalışır.
+- `MAX_PACKET_AGE_MS = 7 gün` süresi dolan çevrimdışı paketleri siler.
+- Hem SQLite hem bellek-içi durumu senkronize eder.
+
+---
+
+## 🔗 Bağlantı Yönetimi ve Yeniden Bağlanma
+
+### İstemci Otomatik Yeniden Bağlanma
+- Bağlantı koptuğunda (sunucu restart, ağ hatası) istemci otomatik olarak yeniden bağlanmayı dener.
+- Maksimum 20 deneme, 2 saniye aralıklarla.
+- Yeniden bağlanma sırasında cyberpunk temalı overlay gösterilir, kullanıcı oturumu korunur.
+- Başarılı yeniden bağlanmada JWT ile oturum doğrulanır, ECDH anahtarları tekrar yayınlanır.
+
+### Çevrimiçi Durum Takibi
+- `onlineNodes` Map'i bellekte tutulur. Sunucu restart durumunda kullanıcılar tekrar giriş yapana kadar çevrimdışı görünür.
+- Her kullanıcının birden fazla socket bağlantısı desteklenir (çoklu sekme/cihaz).
+
+---
+
+## 📐 Repo Kuralları ve Bilinen Kırılganlıklar
+
+### Agent ID Formatı
+Sistem tarafından üretilen kullanıcı ID'leri `AGN-XXXX-XXXX` formatını takip eder.
+
+### Çift Dil Kuralı
+- Kod mimarisi (değişkenler, fonksiyonlar, API olayları): **İngilizce**
+- Kullanıcı arayüzü metinleri: **Türkçe**
+- UI eklemeleri mevcut "cyber" estetiğine uymalıdır (neon renkler, monospace fontlar, büyük harf, glitch efektleri).
+
+### Revoke Protokolü Kırılganlığı
+- `revoke_packet` olayı `packetId`, `senderId` ve `targetId` alanlarının tam eşleşmesine bağlıdır.
+- Paket şeması değiştirilirse bu üç alan korunmalıdır.
+- DOM'da `msg-{packetId}` ID'siyle element aranır.
+
+### Global State vs. UI Senkronizasyonu
+- Frontend global state değişkenleri (`myContacts`, `activeTarget`, `derivedSecrets`, `unreadCounts`) DOM'a otomatik yansımaz.
+- State değişikliği sonrası ilgili render fonksiyonları (`renderContactsSidebar()`, `enableChatUI()` vb.) manuel çağrılmalıdır.
+
+### Çevrimdışı Kuyruk Overwrite Riski
+- `db.queue[targetId]` dizisine ekleme yapmadan önce her zaman `if (!db.queue[targetId]) db.queue[targetId] = [];` kontrolü yapın.

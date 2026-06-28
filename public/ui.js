@@ -222,9 +222,8 @@ function handleAuthSubmit() {
 
     if (!socket || socket.io.uri !== serverUrl || socket.disconnected) {
         if (socket) socket.disconnect();
-        socket = io(serverUrl, { transports: ['polling', 'websocket'], upgrade: true, reconnectionAttempts: 10, timeout: 15000, forceNew: true });
-        socket.on('connect_error', (err) => { restoreBtn(); playSound('error'); showToast(`AĞ HATASI! ${err.message}`, 'error'); });
-        socket.on('disconnect', () => { handleDisconnectUI(); });
+        socket = io(serverUrl, { transports: ['polling', 'websocket'], upgrade: true, reconnectionAttempts: 20, reconnectionDelay: 2000, timeout: 15000, forceNew: true });
+        setupSocketEvents(socket);
     }
     if (socket.connected) connectAndRun(); else socket.once('connect', connectAndRun);
 }
@@ -236,9 +235,8 @@ function autoLoginAttempt() {
     const serverUrl = document.getElementById('serverIp').value;
     showToast("OTURUM DOĞRULANIYOR...", 'info');
     
-    socket = io(serverUrl, { transports: ['polling', 'websocket'], auth: { token } });
-    
-    socket.on('disconnect', () => { handleDisconnectUI(); });
+    socket = io(serverUrl, { transports: ['polling', 'websocket'], auth: { token }, reconnectionAttempts: 20, reconnectionDelay: 2000 });
+    setupSocketEvents(socket);
 
     socket.once('connect', () => {
         socket.emit('verify_session', token, (res) => {
@@ -252,6 +250,104 @@ function autoLoginAttempt() {
             }
         });
     });
+}
+
+// === YENİDEN BAĞLANMA OVERLAY YÖNETİMİ ===
+
+function showReconnectOverlay() {
+    const overlay = document.getElementById('reconnectOverlay');
+    if (overlay) overlay.classList.remove('hidden');
+}
+
+function hideReconnectOverlay() {
+    const overlay = document.getElementById('reconnectOverlay');
+    if (overlay) overlay.classList.add('hidden');
+}
+
+function updateReconnectStatus(text) {
+    const el = document.getElementById('reconnectStatus');
+    if (el) el.innerText = text;
+}
+
+// Merkezi socket olay yöneticisi — tüm bağlantı/kesinti/yeniden bağlanma mantığı burada
+function setupSocketEvents(sock) {
+    sock.on('connect_error', (err) => {
+        console.error('[!] Bağlantı hatası:', err.message);
+        // Eğer henüz oturum açılmamışsa (auth ekranındayız), toast göster
+        if (!currentUser) {
+            playSound('error');
+            showToast(`AĞ HATASI! ${err.message}`, 'error');
+        }
+    });
+
+    sock.on('disconnect', (reason) => {
+        console.warn(`[!] Bağlantı kesildi: ${reason}`);
+        
+        // İstemci tarafından istenerek yapılan bağlantı kesimi (logout vb.)
+        if (reason === 'io client disconnect') {
+            handleDisconnectUI();
+            return;
+        }
+        
+        // İstemsiz bağlantı kesimi — oturum açıksa overlay göster, state'i koru
+        if (currentUser) {
+            showReconnectOverlay();
+            updateReconnectStatus('YENİDEN BAĞLANILIYOR...');
+            showToast("BAĞLANTI KESİLDİ — OTOMATİK YENİDEN BAĞLANILIYOR...", 'warning');
+        } else {
+            handleDisconnectUI();
+        }
+    });
+
+    sock.io.on('reconnect_attempt', (attempt) => {
+        updateReconnectStatus(`DENEME ${attempt}/20...`);
+    });
+
+    sock.io.on('reconnect_failed', () => {
+        updateReconnectStatus('BAĞLANTI BAŞARISIZ — MANUEL BAĞLAN');
+        showToast("OTOMATİK BAĞLANTI BAŞARISIZ. TEKRAR DENEYİN.", 'error');
+    });
+
+    sock.on('connect', () => {
+        // Yeniden bağlanma — oturum açıksa JWT ile oturumu doğrula
+        const token = localStorage.getItem('cyber_jwt');
+        if (currentUser && token) {
+            sock.emit('verify_session', token, (res) => {
+                if (res && res.success) {
+                    currentUser = res.user;
+                    hideReconnectOverlay();
+                    showToast("BAĞLANTI YENİDEN KURULDU!", 'success');
+                    playSound('success');
+
+                    // Kripto anahtarlarını tekrar yayınla ve durumları senkronize et
+                    if (myPublicKeyJwk) sock.emit('publish_public_key', myPublicKeyJwk);
+                    if (myContacts.length > 0) {
+                        safeEmit('join_status_rooms', myContacts.map(c => c.id));
+                    }
+                    sock.emit('client_ready');
+                    checkOnlineStatuses();
+                    bindSocketEvents();
+                } else {
+                    // Token geçersizleşmiş (sunucu restart vb.)
+                    hideReconnectOverlay();
+                    localStorage.removeItem('cyber_jwt');
+                    handleDisconnectUI();
+                    showToast("OTURUM GEÇERSİZLEŞTİ — TEKRAR GİRİŞ GEREKLİ.", 'error');
+                }
+            });
+        }
+    });
+}
+
+// Manuel yeniden bağlanma butonu
+function forceReconnect() {
+    if (socket) {
+        updateReconnectStatus('BAĞLANTI KURULUYOR...');
+        socket.connect();
+    } else {
+        hideReconnectOverlay();
+        handleDisconnectUI();
+    }
 }
 
 // === GİRİŞ SONRASI KURULUM ===
@@ -324,6 +420,7 @@ function finishLoginSetup() {
 // === BAĞLANTI KESİLME ===
 
 function handleDisconnectUI() {
+    hideReconnectOverlay();
     document.getElementById('chatTerminalWrapper').classList.add('hidden'); 
     document.getElementById('snifferToggleBtn').classList.add('hidden');
     document.getElementById('authGateway').classList.remove('hidden');

@@ -11,7 +11,7 @@ Frontend  ||    Vanilla JavaScript, Tailwind CSS (CDN), Socket.io (client)
 Backend   ||	Node.js, Express, Socket.io (server)
 Şifreleme   ||	Web Crypto API (crypto.subtle): AES-GCM, ECDH, SHA-256
 Kimlik Doğrulama    ||	JWT (bağımlılıksız, HMAC-SHA256) + bcrypt
-Veritabanı  ||	JSON dosyası (database.json) – senkron, debounced yazma
+Veritabanı  ||	SQLite (WAL modu) + bellek-içi cache, debounced yazma
 CSS Kütüphanesi ||	Tailwind CSS (CDN) + özel cyberpunk stilleri (style.css)
 Fontlar ||	Fira Code, Share Tech Mono
 
@@ -21,14 +21,18 @@ Fontlar ||	Fira Code, Share Tech Mono
 text
 /
 ├── public/
-│   ├── client.js                         # Frontend ana mantık (socket, UI, kripto)
 │   ├── siber_e2ee_sohbet_terminali.html  # Ana HTML şablonu
+│   ├── ui.js                             # UI, state yönetimi, auth, sniffer, reconnect
+│   ├── socket-handlers.js                # Socket.IO olay dinleyicileri (istemci)
+│   ├── crypto.js                         # ECDH/AES kripto işlemleri (istemci)
+│   ├── db.js                             # IndexedDB yönetimi (istemci)
 │   └── style.css                         # Tüm özel CSS (cyber tema, animasyonlar)
-├── database.js                           # JSON veritabanı yönetimi (okuma/yazma, indeks, GC)
-├── socket.js                             # Socket.io olay işleyicileri (sunucu tarafı)
+├── database.js                           # SQLite veritabanı yönetimi (okuma/yazma, migration, GC)
+├── socket.js                             # Socket.IO olay işleyicileri (sunucu tarafı)
 ├── server.js                             # Express + HTTP sunucu başlangıcı
-├── database.json                         # (Çalışma zamanı oluşur) Kullanıcılar ve kuyruklar
-├── OPTIMIZATIONS.md                      # Gelecek faz planlaması (güvenlik, ölçeklendirme)
+├── database.sqlite                       # (Çalışma zamanı oluşur) SQLite veritabanı
+├── .env                                  # Ortam değişkenleri (JWT_SECRET, CORS_ORIGIN)
+├── OPTIMIZATIONS.md                      # Güvenlik kılavuzu ve optimizasyon detayları
 ├── PROGRESS.md                           # Mevcut durum ve roadmap
 └── AGENTS.md                             # (Bu dosya) – AI asistanı için kılavuz
 🤖 AI Asistanı İçin Özel Talimatlar
@@ -79,12 +83,12 @@ Risk: Paket yapısı değişirse (örneğin alan adı değişikliği) iptal çal
 
 Öneri: Packet şemasını değiştirirken bu üç alanı koruyun. socket.js içindeki filtreleme mantığını da güncelleyin.
 
-🟡 Veritabanı (JSON) Performansı
-Tüm veriler database.json'da saklanır. Çok sayıda kullanıcı veya kuyruk mesajı olduğunda fs.writeFile darboğaz oluşturabilir.
+🟡 Veritabanı (SQLite) Performansı
+Veriler SQLite (WAL modu) ile saklanır, bellek-içi cache (db.users, db.queue) üzerinden okunur.
 
 Debounce (50ms) ile yazma işlemleri birleştirilse de, yüksek trafikte tam senkronizasyon sorunları yaşanabilir.
 
-Gelecek: SQLite/MongoDB'ye geçiş planlanmaktadır (FAZ 2).
+Transaction bazlı yazma ve write lock mekanizması ile veri bütünlüğü korunur.
 
 🟠 Frontend State Yönetimi
 Global değişkenler üzerinden yapılan tüm mutasyonlar DOM'a otomatik yansımaz.
@@ -119,6 +123,6 @@ database.js içindeki MAX_PACKET_AGE_MS = 7 gün değeri, kuyruktaki mesajların
 
 Sniffer (ağ dinleyici) yalnızca metadata'yı gösterir, şifreli içerik asla görüntülenmez.
 
-Son Güncelleme: 2026-06-20
+Son Güncelleme: 2026-06-28
 Versiyon: v10 (Cyber-HUD Edition)
 Maintainer: Vibe Coding Collective 🚀

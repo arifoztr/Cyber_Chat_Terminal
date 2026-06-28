@@ -548,6 +548,26 @@
         <div>CORE: E2EE CYBER_WP v10 | PROTOCOLS: [ASYNC ECDH, TTL REVOKE, FP VALIDATION, IDB]</div>
         <div class="text-cyan-500/80 font-bold drop-shadow-[0_0_2px_rgba(0,240,255,0.5)]">SİBER GÜVENLİK P2P LAB KONSOLU</div>
     </footer>
+    <!-- ─── YENİDEN BAĞLANMA OVERLAY ─── -->
+    <div id="reconnectOverlay" class="hidden fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-md">
+        <div class="flex flex-col items-center gap-4 p-8 cyber-glass neon-border-pink clip-corners max-w-sm mx-4 text-center">
+            <div class="reconnect-icon text-4xl animate-pulse">🔌</div>
+            <div class="text-pink-400 font-black tracking-[0.25em] uppercase text-sm neon-text-pink">
+                BAĞLANTI KESİLDİ
+            </div>
+            <div id="reconnectStatus" class="text-cyan-400/80 text-[10px] tracking-widest uppercase font-mono">
+                YENİDEN BAĞLANILIYOR...
+            </div>
+            <div class="flex gap-1.5 items-center">
+                <span class="reconnect-dot w-2 h-2 rounded-full bg-pink-500 animate-pulse"></span>
+                <span class="reconnect-dot w-2 h-2 rounded-full bg-pink-500 animate-pulse" style="animation-delay:0.2s"></span>
+                <span class="reconnect-dot w-2 h-2 rounded-full bg-pink-500 animate-pulse" style="animation-delay:0.4s"></span>
+            </div>
+            <button onclick="forceReconnect()" class="mt-2 px-6 py-2 bg-pink-500/20 border border-pink-500/60 text-pink-300 text-[10px] uppercase tracking-[0.2em] font-black hover:bg-pink-500/40 transition-all clip-corners-sm cyber-button-hover">
+                [ TEKRAR BAĞLAN ]
+            </button>
+        </div>
+    </div>
 
     <!-- Modüler İstemci Yüklemesi (sıra önemli!) -->
     <script src="crypto.js"></script>

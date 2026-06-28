@@ -1,6 +1,6 @@
 # PROJE İLERLEME DURUMU (PROGRESS)
 
-**Mevcut Sürüm:** v8.6 (Revoke Fix Aktif)
+**Mevcut Sürüm:** v10 (Cyber-HUD Edition)
 **Proje Odak Noktası:** E2EE (Uçtan Uca Şifreleme), Asenkron ECDH, Çevrimdışı Kuyruklama ve Ağ Dinleme (Sniffer) yeteneklerine sahip P2P Terminal.
 
 ## 🟢 MEVCUT DURUM (TAMAMLANAN ÖZELLİKLER)
@@ -10,29 +10,32 @@
 * **İmha Mekanizmaları:** * Kullanıcı tarafından başlatılan "Revoke" (Herkesten Sil) protokolü entegre edilmiştir.
     * TTL (Zaman ayarlı) mesajların geri sayım bitiminde yerel kasadan ve DOM üzerinden otomatik silinmesi sağlanmıştır.
 * **Terminal Arayüzü:** Ağ paketlerini izleyen sniffer, siber güvenlik temalı UI ve görsel sıkıştırma destekli dosya gönderimi aktiftir.
+* **Kullanıcı Arama ve Bildirimler:** Rate-limited kullanıcı arama, karşılıklı kişi ekleme isteği/onayı ve parmak izi doğrulama rehberi entegre edilmiştir.
+
+---
+
+## 🟢 TAMAMLANAN FAZLAR
+
+### FAZ 1 — Güvenlik İyileştirmeleri ✅
+* **[x] JWT Entegrasyonu:** Socket bağlantıları JWT (HMAC-SHA256) ile doğrulanmaktadır. Otomatik oturum yenileme ve güvenli fallback hiyerarşisi aktiftir.
+* **[x] Fingerprint Doğrulaması:** ECDH açık anahtar parmak izi hesaplama ve doğrulama mekanizması kurulmuştur.
+* **[x] İstek Sınırlandırma (Rate Limiting):** Kayıt, giriş, mesaj gönderimi, anahtar istekleri ve arama işlemlerine IP bazlı hız limiti getirilmiştir.
+* **[x] Güvenli Aktarım:** Express güvenlik başlıkları (HSTS, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection) aktiftir. Proxy trust yapılandırması ve CORS origin env değişkeniyle kontrol edilmektedir.
+
+### FAZ 2 — Backend Altyapı İyileştirmeleri ✅
+* **[x] Veritabanı Geçişi:** `database.json` → SQLite (WAL modunda) geçişi tamamlanmıştır. Otomatik migration, bellek-içi cache ve transaction bazlı yazma mekanizması aktiftir.
+* **[x] Asenkron İşlemler:** Tüm dosya/veritabanı işlemleri asenkron Promise tabanlıdır. Debounced yazma (50ms) ve write lock mekanizması uygulanmıştır.
+* **[x] Gelişmiş Durum Takibi:** "Yazıyor..." bildirimi ve çevrimiçi/çevrimdışı durum takibi aktiftir.
+* **[x] Çevrimdışı Kuyruk:** Çevrimdışı paketler SQLite'da kalıcı olarak saklanmakta, 7 günlük GC ile otomatik temizlenmektedir.
 
 ---
 
 ## 🟡 GELİŞTİRME YOL HARİTASI (PLANLANAN FAZLAR)
 
-[cite_start]Aşağıdaki fazlar, mevcut sistemin güvenlik ve ölçeklenebilirlik açısından üretim (production) ortamına hazırlanması için planlanmıştır[cite: 1, 29].
-
-### FAZ 1 — Güvenlik İyileştirmeleri
-* [cite_start]**[ ] JWT Entegrasyonu:** Kullanıcı girişlerinde socket bağlantıları için JSON Web Token tabanlı kimlik doğrulamasına geçilecektir[cite: 3, 4].
-* [cite_start]**[ ] Fingerprint Doğrulaması:** Ortadaki adam (MITM) saldırılarını engellemek için açık anahtarlar arası parmak izi doğrulama mekanizması kurulacaktır[cite: 6].
-* [cite_start]**[ ] İstek Sınırlandırma (Rate Limiting):** Brute-force ve spam engellemek için giriş/kayıt ve mesaj akışına limit getirilecektir[cite: 7, 8].
-* [cite_start]**[ ] Güvenli Aktarım:** Veri transferi HTTPS üzerinden yapılacak, Cookie kullanımı halinde `httpOnly` ve `secure` bayrakları eklenecektir[cite: 9].
-
-### FAZ 2 — Backend Altyapı İyileştirmeleri
-* [cite_start]**[ ] Veritabanı Geçişi:** Mevcut `database.json` yapısından daha ölçeklenebilir olan SQLite veya MongoDB gibi bir sisteme geçilecektir[cite: 11].
-* [cite_start]**[ ] Asenkron İşlemler:** Sunucu performansını artırmak adına senkron dosya işlemleri asenkron hale getirilecektir[cite: 13].
-* [cite_start]**[ ] Gelişmiş Durum Takibi:** Sadece "çevrimiçi/çevrimdışı" bilgisi yerine "son görülme" ve "yazıyor..." bilgileri sisteme dahil edilecektir[cite: 14].
-* [cite_start]**[ ] Kalıcı Kuyruk:** Çevrimdışı mesaj kuyruğu bellekte tutulmak yerine Redis gibi kalıcı bir sistemle yönetilecektir[cite: 16].
-
 ### FAZ 3 — Kriptografik Yapının Geliştirilmesi
-* [cite_start]**[ ] İleriye Dönük Gizlilik (Forward Secrecy):** Tek bir oturum anahtarına bağlı kalmamak için her mesaj/oturum bazında yeni anahtar türetimi sağlanacaktır[cite: 19, 20].
-* [cite_start]**[ ] Dijital İmza:** Gönderici kaynak doğrulamasını kesinleştirmek adına mesaj bütünlüğünü koruyan dijital imzalama mekanizması eklenecektir[cite: 21, 22].
+* **[ ] İleriye Dönük Gizlilik (Forward Secrecy):** Tek bir oturum anahtarına bağlı kalmamak için her mesaj/oturum bazında yeni anahtar türetimi sağlanacaktır.
+* **[ ] Dijital İmza:** Gönderici kaynak doğrulamasını kesinleştirmek adına mesaj bütünlüğünü koruyan dijital imzalama mekanizması eklenecektir.
 
 ### FAZ 4 & 5 — Deneyim ve Operasyon
-* [cite_start]**[ ] Kapsamlı Profiling:** Kullanıcı arama özellikleri, profil görseli atama ve nickname sistemleri geliştirilecektir[cite: 25].
-* [cite_start]**[ ] DevOps ve Dağıtım:** İstemci ve sunucu bileşenleri bulut ortamında yayınlanacak [cite: 26][cite_start], sistem olayları için loglama ve izleme (monitoring) altyapısı kurulacaktır[cite: 27, 28].
+* **[ ] Kapsamlı Profiling:** Profil görseli atama ve nickname sistemleri geliştirilecektir.
+* **[ ] DevOps ve Dağıtım:** İstemci ve sunucu bileşenleri bulut ortamında yayınlanacak, sistem olayları için loglama ve izleme (monitoring) altyapısı kurulacaktır.

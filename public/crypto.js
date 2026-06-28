@@ -30,7 +30,7 @@ function bufferToBase64(buffer) {      //Buffer bilgisayarın hafızasında dura
     for (let i = 0; i < bytes.length; i += 8192) {
         chunks.push(String.fromCharCode(...bytes.subarray(i, i + 8192)));
     }
-    return window.btoa(chunks.join(''));
+    return window.btoa(chunks.join('')); 
 }
 
 function base64ToBuffer(base64) {

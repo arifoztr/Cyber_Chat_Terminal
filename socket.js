@@ -5,8 +5,24 @@ const dbManager = require('./database');
 const MAX_QUEUE_SIZE = 50;
 const onlineNodes = new Map();
 
-// [FAZ 1 - FIX] JWT GİZLİ ANAHTARI 
-const JWT_SECRET = process.env.JWT_SECRET || 'CYBER_HUD_V9_SECRET_KEY_2026_X_OVERRIDE';
+// [FAZ 1 - FIX] JWT GİZLİ ANAHTARI — Güvenli Fallback Hiyerarşisi
+let JWT_SECRET;
+if (process.env.JWT_SECRET) {
+    JWT_SECRET = process.env.JWT_SECRET;
+} else if (process.env.NODE_ENV === 'production') {
+    // Üretim ortamında .env yoksa rastgele geçici anahtar üret ve uyar
+    JWT_SECRET = require('crypto').randomBytes(32).toString('hex');
+    console.error('╔══════════════════════════════════════════════════════════╗');
+    console.error('║  [!] KRİTİK: JWT_SECRET ortam değişkeni tanımlı değil! ║');
+    console.error('║  Geçici rastgele anahtar üretildi.                      ║');
+    console.error('║  Sunucu yeniden başlatılırsa mevcut oturumlar geçersiz   ║');
+    console.error('║  olacaktır. Lütfen .env dosyasına JWT_SECRET ekleyin.    ║');
+    console.error('╚══════════════════════════════════════════════════════════╝');
+} else {
+    // Yalnızca geliştirme ortamında sabit anahtar kullanılır
+    JWT_SECRET = 'CYBER_HUD_DEV_SECRET_KEY_DO_NOT_USE_IN_PROD';
+    console.warn('[⚠] JWT_SECRET .env dosyasında tanımlı değil — geliştirme anahtarı kullanılıyor.');
+}
 
 // Basit Bağımlılıksız JWT Üretimi
 function signJWT(payload) {
@@ -26,6 +42,16 @@ function verifyJWT(token) {
         if (payload.exp < Date.now()) return null;
         return payload;
     } catch (e) { return null; }
+}
+
+// [FIX] Proxy arkasında güvenli IP çıkarma yardımcısı
+function getClientIp(socket) {
+    const forwarded = socket.handshake.headers['x-forwarded-for'];
+    if (forwarded) {
+        // İlk IP gerçek istemci IP'sidir (virgülle ayrılmış liste)
+        return forwarded.split(',')[0].trim();
+    }
+    return socket.handshake.address;
 }
 
 module.exports = function setupSockets(io) {
@@ -73,7 +99,7 @@ module.exports = function setupSockets(io) {
     });
 
     io.on('connection', (socket) => {
-        const ip = socket.handshake.address;
+        const ip = getClientIp(socket);
         console.log(`[+] YENİ BİR DÜĞÜM BAĞLANDI: ${socket.id} (IP: ${ip})`);
 
         socket.on('register', async (data, callback) => {

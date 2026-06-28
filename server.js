@@ -19,6 +19,9 @@ app.use((req, res, next) => {
     next();
 });
 
+// [FİX-2] Proxy Arkası IP Güveni (Nginx, Cloudflare vb.)
+app.set('trust proxy', 1);
+
 // [FİX-1] Yalnızca ./public/ dizinindeki istemci dosyaları sunuluyor.
 // database.json, server.js, socket.js, package.json vb. artık HTTP üzerinden erişilemez.
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true }));
@@ -28,11 +31,12 @@ app.get('/', (req, res) => {
 });
 
 // Socket.io Ayarları
-// [FİX-14] origin "*" iken credentials: true kullanılması spec hatasıdır. credentials flag'i silindi.
+// [FİX-14] CORS origin artık çevre değişkeniyle yapılandırılabilir.
+// Üretimde CORS_ORIGIN=https://example.com ayarlayın. Varsayılan: "*" (geliştirme).
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 const io = require('socket.io')(http, {
-    cors: { origin: "*", methods: ["GET", "POST"] },
-    transports: ['websocket', 'polling'],
-    allowEIO3: true
+    cors: { origin: CORS_ORIGIN, methods: ["GET", "POST"] },
+    transports: ['websocket', 'polling']
 });
 
 // Modüler socket olayları
