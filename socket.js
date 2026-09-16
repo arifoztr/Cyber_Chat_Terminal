@@ -103,13 +103,21 @@ module.exports = function setupSockets(io) {
         console.log(`[+] YENİ BİR DÜĞÜM BAĞLANDI: ${socket.id} (IP: ${ip})`);
 
         socket.on('register', async (data, callback) => {
-            if (!checkRateLimit(ip, 'register', 3, 60000)) {
-                return callback({ success: false, message: "SİBER SAVUNMA: Çok fazla kayıt denemesi." });
+            console.log(`[>> REGİSTER İSTEĞİ ALINDI] email: ${data?.email}, user: ${data?.username}, ip: ${ip}`);
+            if (!checkRateLimit(ip, 'register', 20, 60000)) {
+                console.warn(`[!] REGİSTER RATE LIMIT AŞILDI: ${ip}`);
+                return callback({ success: false, message: "SİBER SAVUNMA: Çok fazla kayıt denemesi. Lütfen bir dakika bekleyin." });
             }
 
             try {
                 const { email, password, username } = data;
-                if (db.users[email]) return callback({ success: false, message: "Bu e-posta adresi zaten kullanımda." });
+                if (!email || !password || !username) {
+                    return callback({ success: false, message: "Tüm alanlar zorunludur." });
+                }
+                if (db.users[email]) {
+                    console.log(`[!] REGİSTER: E-posta zaten kullanımda (${email})`);
+                    return callback({ success: false, message: "Bu e-posta adresi zaten kullanımda." });
+                }
                 
                 const hashedPassword = await bcrypt.hash(password, 10);
                 const userId = 'AGN-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000);
@@ -118,27 +126,53 @@ module.exports = function setupSockets(io) {
                 userIdIndex[userId] = email;
                 await dbManager.saveDatabase();
                 
-                if (callback) callback({ success: true, message: "Kayıt başarılı." });
+                const newUser = db.users[email];
+                socket.user = newUser;
+                if (!onlineNodes.has(userId)) onlineNodes.set(userId, new Set());
+                onlineNodes.get(userId).add(socket.id);
+                io.emit('node_status_change', { userId: userId, status: 'online' });
+
+                console.log(`[+] YENİ KULLANICI KAYIT OLDU VE GİRİŞ YAPTI: ${username} (${userId})`);
+                const token = signJWT({ email: newUser.email, userId: newUser.userId });
+                if (callback) callback({
+                    success: true,
+                    message: "Kayıt başarılı.",
+                    token,
+                    user: { email: newUser.email, username: newUser.username, userId: newUser.userId, avatar: newUser.avatar }
+                });
             } catch (error) {
                 console.error('[!] register hatası:', error);
-                if (callback) callback({ success: false, message: "Sunucu hatası." });
+                if (callback) callback({ success: false, message: "Sunucu hatası: " + error.message });
             }
         });
 
         socket.on('login', async (data, callback) => {
-            if (!checkRateLimit(ip, 'login', 5, 60000)) {
-                return callback({ success: false, message: "SİBER SAVUNMA: Çok fazla giriş denemesi." });
+            console.log(`[>> LOGİN İSTEĞİ ALINDI] email: ${data?.email}, ip: ${ip}`);
+            if (!checkRateLimit(ip, 'login', 30, 60000)) {
+                console.warn(`[!] LOGİN RATE LIMIT AŞILDI: ${ip}`);
+                return callback({ success: false, message: "SİBER SAVUNMA: Çok fazla giriş denemesi. Lütfen bir dakika bekleyin." });
             }
 
             try {
                 const { email, password } = data;
+                if (!email || !password) {
+                    return callback({ success: false, message: "E-posta ve şifre zorunludur." });
+                }
                 const user = db.users[email];
                 
-                if (!user) return callback({ success: false, message: "Kullanıcı bulunamadı." });
-                if (!user.password) return callback({ success: false, message: "Eski tip hesap. Yeni hesap açın." });
+                if (!user) {
+                    console.log(`[!] LOGİN: Kullanıcı bulunamadı (${email})`);
+                    return callback({ success: false, message: "Kullanıcı bulunamadı." });
+                }
+                if (!user.password) {
+                    return callback({ success: false, message: "Eski tip hesap. Yeni hesap açın." });
+                }
                 
                 const isMatch = await bcrypt.compare(password, user.password);
-                if (!isMatch) return callback({ success: false, message: "Hatalı şifre." });
+                if (!isMatch) {
+                    console.log(`[!] LOGİN: Hatalı şifre (${email})`);
+                    return callback({ success: false, message: "Hatalı şifre." });
+                }
 
                 if (!user.userId) {
                     user.userId = 'AGN-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000);
@@ -151,12 +185,13 @@ module.exports = function setupSockets(io) {
                 onlineNodes.get(user.userId).add(socket.id);
                 io.emit('node_status_change', { userId: user.userId, status: 'online' });
 
+                console.log(`[+] KULLANICI GİRİŞ YAPTI: ${user.username} (${user.userId})`);
                 const token = signJWT({ email: user.email, userId: user.userId });
                 
                 if (callback) callback({ success: true, token, user: { email: user.email, username: user.username, userId: user.userId, avatar: user.avatar } });
             } catch (error) {
                 console.error('[!] login hatası:', error);
-                if (callback) callback({ success: false, message: "Sunucu hatası." });
+                if (callback) callback({ success: false, message: "Sunucu hatası: " + error.message });
             }
         });
 

@@ -122,7 +122,7 @@ async function ensureSharedSecret(targetId) {
                         saveContactsToVault();
                         renderContactsSidebarDebounced();
                         if (activeTarget && activeTarget.id === targetId) {
-                            document.getElementById('chatTargetFingerprint').innerText = `FP: ${fp}`;
+                            document.getElementById('chatTargetFingerprint').innerText = fp;
                             updateFingerprintHeaderUI();
                         }
                     }

@@ -21,8 +21,7 @@ function bindSocketEvents() {
     socket.on('user_typing', (data) => {
         if (typingDiv && activeTarget && activeTarget.id === data.senderId) {
             typingDiv.innerHTML = `
-                <span class="animate-pulse">⚡</span>
-                <span class="tracking-widest font-black uppercase">[${data.senderId}]</span> VERİ AKIŞI BAŞLATTI
+                ${data.senderId} yazıyor...
                 <span class="typing-dots">
                     <span class="typing-dot"></span>
                     <span class="typing-dot"></span>
@@ -45,7 +44,7 @@ function bindSocketEvents() {
             contact = { id: data.senderId, key: null, fingerprint: null, fingerprintVerified: false, ecdhStatus: 'pending', isOnline: true };
             myContacts.push(contact); saveContactsToVault();
             safeEmit('join_status_rooms', [data.senderId]); 
-            triggerDesktopNotification("YENİ AJAN", `${data.senderId} bağlandı.`);
+            triggerDesktopNotification("Yeni kişi", `${data.senderId} bağlandı.`);
             safeEmit('check_node_status', data.senderId, (res) => { updateContactStatusUI(res.userId, res.isOnline); });
             safeEmit('get_profiles', [data.senderId], (res) => {
                 if(res && res.profiles && res.profiles[data.senderId]) { contact.avatar = res.profiles[data.senderId].avatar; saveContactsToVault(); renderContactsSidebarDebounced(); }
@@ -97,7 +96,7 @@ function bindSocketEvents() {
             if (activeTarget && activeTarget.id === data.senderId) { 
                 document.getElementById('chatTargetFingerprint').innerText = `FP: ${fp}`;
                 updateFingerprintHeaderUI();
-                enableChatUI(); showToast(`[${data.senderId}] TÜNEL AKTİF!`, 'success'); 
+                enableChatUI(); showToast(`${data.senderId} ile şifreli bağlantı kuruldu!`, 'success'); 
             }
         } catch(e) {}
     });
@@ -121,7 +120,7 @@ function bindSocketEvents() {
             playSound('transit'); await processIncomingPacket(packet, senderContact);
         } else {
             playSound('success'); unreadCounts[packet.senderId] = (unreadCounts[packet.senderId] || 0) + 1;
-            renderContactsSidebar(); showToast(`[!] ${packet.senderId}'DEN VERİ GELDİ.`, 'info');
+            renderContactsSidebar(); showToast(`${packet.senderId} yeni mesaj gönderdi.`, 'info');
         }
     });
 
@@ -129,7 +128,7 @@ function bindSocketEvents() {
     socket.on('packet_revoked', async (data) => {
         await removePacketFromVault(data.senderId, data.packetId);
         const msgElement = document.getElementById(`msg-${data.packetId}`);
-        if (msgElement) glitchAndRemoveElement(msgElement, () => showToast(`[!] BİR MESAJ İMHA EDİLDİ.`, 'warning'));
+        if (msgElement) fadeOutAndRemoveElement(msgElement, () => showToast(`Bir mesaj silindi.`, 'warning'));
     });
 
     socket.off('contact_request');

@@ -62,23 +62,21 @@ function showCustomConfirm(message, onConfirmCallback) {
     btnNo.onclick = () => { playSound('type'); cleanUp(); };
 }
 
-function glitchAndRemoveElement(element, onComplete) {
+function fadeOutAndRemoveElement(element, onComplete) {
     if (!element) return;
-    playSound('destroy');
-    element.classList.add('glitch-active');
-    const chars = '01X_ #$@&%';
-    element.querySelectorAll('span, div').forEach(node => {
-        if (node.children.length === 0 && node.textContent.trim()) {
-            node.textContent = Array.from(node.textContent).map(() => chars[Math.floor(Math.random() * chars.length)]).join('');
-        }
-    });
-    setTimeout(() => { element.remove(); if (onComplete) onComplete(); }, 600);
+    element.style.transition = 'opacity 0.4s ease-out, transform 0.4s ease-out';
+    element.style.opacity = '0';
+    element.style.transform = 'scale(0.95)';
+    setTimeout(() => {
+        element.remove();
+        if (onComplete) onComplete();
+    }, 400);
 }
 
 function renderLogPlaceholder(logBox, icon, message, spinner = true) {
     logBox.innerHTML = `<div class="chat-placeholder flex flex-col items-center justify-center h-full opacity-50 mt-4 sm:mt-10">
         ${spinner ? '<div class="w-10 h-10 sm:w-16 sm:h-16 border-2 sm:border-4 border-dashed border-green-500/50 animate-[spin_4s_linear_infinite] rounded-full mb-2 sm:mb-4"></div>' : `<span class="text-2xl sm:text-4xl mb-1 sm:mb-2">${icon}</span>`}
-        <div class="text-green-500 text-[9px] sm:text-xs font-mono tracking-widest uppercase text-center">${message}</div>
+        <div class="text-green-500 text-[9px] sm:text-xs font-mono tracking-normal uppercase text-center">${message}</div>
     </div>`;
 }
 
@@ -120,11 +118,11 @@ function showToast(message, type = 'info') {
 
     // Tip konfigürasyonu
     const config = {
-        success: { label: 'BAŞARI',      icon: '✓',  cls: 'toast-success',  color: 'var(--neon-green)'  },
-        error:   { label: 'KRİTİK HATA', icon: '✕',  cls: 'toast-error',    color: 'var(--neon-pink)'   },
-        warning: { label: 'UYARI',       icon: '⚠',  cls: 'toast-warning',  color: 'var(--neon-amber)'  },
-        info:    { label: 'BİLGİ',       icon: 'ℹ',  cls: 'toast-info',     color: 'var(--neon-cyan)'   },
-        system:  { label: 'SİSTEM',      icon: '⚡', cls: 'toast-system',   color: 'var(--neon-purple)' },
+        success: { label: 'Başarılı',      icon: '✓',  cls: 'toast-success',  color: 'var(--neon-green)'  },
+        error:   { label: 'Hata', icon: '✕',  cls: 'toast-error',    color: 'var(--neon-pink)'   },
+        warning: { label: 'Uyarı',       icon: '⚠',  cls: 'toast-warning',  color: 'var(--neon-amber)'  },
+        info:    { label: 'Bilgi',       icon: 'ℹ',  cls: 'toast-info',     color: 'var(--neon-cyan)'   },
+        system:  { label: 'Sistem',      icon: '⚡', cls: 'toast-system',   color: 'var(--neon-purple)' },
     };
     const cfg = config[type] || config.info;
 
@@ -156,76 +154,253 @@ function showToast(message, type = 'info') {
 
 // === KİMLİK DOĞRULAMA (AUTH) ===
 
+function setAuthAlert(message, type = 'error') {
+    const alertEl = document.getElementById('authAlert');
+    if (!alertEl) return;
+    if (!message) {
+        alertEl.className = 'hidden auth-alert';
+        alertEl.innerHTML = '';
+        return;
+    }
+    const icons = {
+        error: '⚠️',
+        info: '🔄',
+        success: '✅'
+    };
+    alertEl.className = `auth-alert auth-alert-${type}`;
+    alertEl.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${message}</span>`;
+    alertEl.classList.remove('hidden');
+}
+
+function clearAuthAlert() {
+    setAuthAlert(null);
+    ['serverIp', 'authUsername', 'authEmail', 'authPassword', 'authPasswordConfirm'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('input-error');
+    });
+}
+
 function switchAuthTab(tab) {
-    playSound('type'); currentAuthTab = tab;
+    playSound('type');
+    currentAuthTab = tab;
+    clearAuthAlert();
+
     const regContainer = document.getElementById('regUsernameContainer');
+    const regConfirmContainer = document.getElementById('regPasswordConfirmContainer');
     const tabLoginBtn = document.getElementById('tabLoginBtn');
     const tabRegisterBtn = document.getElementById('tabRegisterBtn');
     const authSubmitBtn = document.getElementById('authSubmitBtn');
-    const activeClass = "flex-1 py-1.5 sm:py-2 bg-cyan-500/20 border border-cyan-400 text-cyan-300 font-bold tracking-widest clip-corners-sm transition-all text-[10px] sm:text-xs";
-    const inactiveClass = "flex-1 py-1.5 sm:py-2 bg-transparent border border-gray-600 text-gray-500 font-bold tracking-widest clip-corners-sm hover:border-cyan-500/50 hover:text-cyan-400 transition-all text-[10px] sm:text-xs";
+    const authTitle = document.getElementById('authTitle');
+    const authSubtitle = document.getElementById('authSubtitle');
+    const authSwitchPrompt = document.getElementById('authSwitchPrompt');
+    const authSwitchLink = document.getElementById('authSwitchLink');
+
+    const activeClass = "flex-1 py-2 bg-[--accent-light] text-[--accent] rounded-lg font-medium transition-colors text-sm shadow-sm";
+    const inactiveClass = "flex-1 py-2 bg-transparent text-[--text-secondary] rounded-lg font-medium hover:bg-[--surface-hover] transition-colors text-sm";
+
     if (tab === 'login') {
-        regContainer.classList.add('hidden');
-        tabLoginBtn.className = activeClass; tabRegisterBtn.className = inactiveClass;
-        authSubmitBtn.innerText = "[ BAĞLANTIYI BAŞLAT ]";
+        if (regContainer) regContainer.classList.add('hidden');
+        if (regConfirmContainer) regConfirmContainer.classList.add('hidden');
+        if (tabLoginBtn) tabLoginBtn.className = activeClass;
+        if (tabRegisterBtn) tabRegisterBtn.className = inactiveClass;
+        if (authSubmitBtn) authSubmitBtn.innerText = "Giriş Yap";
+        if (authTitle) authTitle.innerText = "Giriş Yap";
+        if (authSubtitle) authSubtitle.innerText = "Uçtan Uca Şifreli Güvenli Bağlantı";
+        if (authSwitchPrompt) authSwitchPrompt.innerText = "Hesabınız yok mu?";
+        if (authSwitchLink) authSwitchLink.innerText = "Kayıt Olun";
+
+        const emailInput = document.getElementById('authEmail');
+        if (emailInput && document.activeElement !== emailInput) emailInput.focus();
     } else {
-        regContainer.classList.remove('hidden');
-        tabRegisterBtn.className = activeClass; tabLoginBtn.className = inactiveClass;
-        authSubmitBtn.innerText = "[ YENİ KİMLİK OLUŞTUR ]";
+        if (regContainer) regContainer.classList.remove('hidden');
+        if (regConfirmContainer) regConfirmContainer.classList.remove('hidden');
+        if (tabRegisterBtn) tabRegisterBtn.className = activeClass;
+        if (tabLoginBtn) tabLoginBtn.className = inactiveClass;
+        if (authSubmitBtn) authSubmitBtn.innerText = "Kayıt Ol ve Giriş Yap";
+        if (authTitle) authTitle.innerText = "Hesap Oluştur";
+        if (authSubtitle) authSubtitle.innerText = "Yeni E2EE Güvenlik Kimliği Oluşturma";
+        if (authSwitchPrompt) authSwitchPrompt.innerText = "Zaten bir hesabınız var mı?";
+        if (authSwitchLink) authSwitchLink.innerText = "Giriş Yapın";
+
+        const userInput = document.getElementById('authUsername');
+        if (userInput) userInput.focus();
     }
 }
 
 function handleAuthSubmit() {
-    const serverUrl = document.getElementById('serverIp').value.trim();
-    const email = document.getElementById('authEmail').value.trim();
-    const password = document.getElementById('authPassword').value.trim();
-    const username = document.getElementById('authUsername').value.trim();
+    clearAuthAlert();
 
-    if (!serverUrl || !email || !password || (currentAuthTab === 'register' && !username)) {
-        playSound('error'); showToast("HATA: PARAMETRELER EKSİK!", 'error'); return;
+    const serverUrlInput = document.getElementById('serverIp');
+    const emailInput = document.getElementById('authEmail');
+    const passwordInput = document.getElementById('authPassword');
+    const usernameInput = document.getElementById('authUsername');
+    const passwordConfirmInput = document.getElementById('authPasswordConfirm');
+
+    const serverUrl = (serverUrlInput ? serverUrlInput.value.trim() : '') || 'http://localhost:3000';
+    const email = emailInput ? emailInput.value.trim() : '';
+    const password = passwordInput ? passwordInput.value.trim() : '';
+    const username = usernameInput ? usernameInput.value.trim() : '';
+    const passwordConfirm = passwordConfirmInput ? passwordConfirmInput.value.trim() : '';
+
+    // Validasyon
+    if (!email) {
+        playSound('error');
+        if (emailInput) emailInput.classList.add('input-error');
+        setAuthAlert("Lütfen e-posta adresinizi girin.", 'error');
+        if (emailInput) emailInput.focus();
+        return;
     }
 
-    // Loading animasyonu
+    if (!password) {
+        playSound('error');
+        if (passwordInput) passwordInput.classList.add('input-error');
+        setAuthAlert("Lütfen şifrenizi girin.", 'error');
+        if (passwordInput) passwordInput.focus();
+        return;
+    }
+
+    if (currentAuthTab === 'register') {
+        if (!username) {
+            playSound('error');
+            if (usernameInput) usernameInput.classList.add('input-error');
+            setAuthAlert("Lütfen bir kullanıcı adı (kod adı) belirleyin.", 'error');
+            if (usernameInput) usernameInput.focus();
+            return;
+        }
+
+        if (passwordConfirm && password !== passwordConfirm) {
+            playSound('error');
+            if (passwordConfirmInput) passwordConfirmInput.classList.add('input-error');
+            setAuthAlert("Girdiğiniz şifreler birbiriyle eşleşmiyor.", 'error');
+            if (passwordConfirmInput) passwordConfirmInput.focus();
+            return;
+        }
+
+        if (password.length < 4) {
+            playSound('error');
+            if (passwordInput) passwordInput.classList.add('input-error');
+            setAuthAlert("Şifre en az 4 karakter uzunluğunda olmalıdır.", 'error');
+            if (passwordInput) passwordInput.focus();
+            return;
+        }
+    }
+
+    // Loading durumu
     const btn = document.getElementById('authSubmitBtn');
-    const originalText = btn.innerText;
-    btn.classList.add('btn-loading');
-    btn.innerText = '[ VERİ AKIŞI... ]';
-    btn.disabled = true;
+    const originalText = btn ? btn.innerText : 'Gönder';
+    if (btn) {
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+        btn.innerText = currentAuthTab === 'register' ? 'Kayıt Yapılıyor...' : 'Giriş Yapılıyor...';
+        btn.disabled = true;
+    }
 
     const restoreBtn = () => {
-        btn.classList.remove('btn-loading');
-        btn.innerText = originalText;
-        btn.disabled = false;
+        if (btn) {
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
     };
 
-    showToast("SİSTEME BAĞLANILIYOR...", 'info');
+    setAuthAlert("Sunucuya bağlanılıyor...", 'info');
 
-    const connectAndRun = () => {
+    let connectionTimeout = setTimeout(() => {
+        restoreBtn();
+        playSound('error');
+        setAuthAlert(`Sunucuya bağlanılamadı (${serverUrl}). Lütfen Node.js sunucusunun açık olduğundan emin olun.`, 'error');
+        showToast("Sunucu bağlantı zaman aşımı.", 'error');
+    }, 6000);
+
+    const runAuthAction = () => {
+        clearTimeout(connectionTimeout);
+
         if (currentAuthTab === 'register') {
+            setAuthAlert("Hesap oluşturuluyor...", 'info');
             socket.emit('register', { email, password, username }, (res) => {
                 restoreBtn();
                 if (res && res.success) {
-                    playSound('success'); showToast("KİMLİK OLUŞTURULDU! OTURUM AÇILIYOR...", 'success');
-                    switchAuthTab('login'); document.getElementById('authEmail').value = email; document.getElementById('authPassword').value = password; handleAuthSubmit(); 
-                } else { playSound('error'); showToast(`KAYIT HATASI: ${res ? res.message : 'Yanıt alınamadı'}`, 'error'); }
+                    playSound('success');
+                    if (res.token) {
+                        localStorage.setItem('cyber_jwt', res.token);
+                        socket.auth = { token: res.token };
+                        currentUser = res.user;
+                        setAuthAlert("Kayıt başarılı! Güvenli oturum başlatılıyor...", 'success');
+                        showToast("Hesap oluşturuldu ve giriş yapıldı!", 'success');
+                        finishLoginSetup();
+                    } else {
+                        setAuthAlert("Hesap oluşturuldu! Giriş yapılıyor...", 'success');
+                        showToast("Hesap oluşturuldu! Giriş yapılıyor...", 'success');
+                        switchAuthTab('login');
+                        if (emailInput) emailInput.value = email;
+                        if (passwordInput) passwordInput.value = password;
+                        handleAuthSubmit();
+                    }
+                } else {
+                    playSound('error');
+                    setAuthAlert(`Kayıt Hatası: ${res ? res.message : 'Sunucudan yanıt alınamadı'}`, 'error');
+                    showToast(`Kayıt Hatası: ${res ? res.message : 'Yanıt alınamadı'}`, 'error');
+                }
             });
         } else {
+            setAuthAlert("Kimlik doğrulanıyor...", 'info');
             socket.emit('login', { email, password }, (res) => {
                 restoreBtn();
                 if (res && res.success) {
-                    if (res.token) { localStorage.setItem('cyber_jwt', res.token); socket.auth = { token: res.token }; }
-                    currentUser = res.user; finishLoginSetup();
-                } else { playSound('error'); showToast(`GİRİŞ HATASI: ${res ? res.message : 'Yanıt alınamadı'}`, 'error'); }
+                    if (res.token) {
+                        localStorage.setItem('cyber_jwt', res.token);
+                        socket.auth = { token: res.token };
+                    }
+                    currentUser = res.user;
+                    setAuthAlert("Doğrulama başarılı! Yönlendiriliyorsunuz...", 'success');
+                    finishLoginSetup();
+                } else {
+                    playSound('error');
+                    setAuthAlert(`Giriş Hatası: ${res ? res.message : 'Kullanıcı adı veya şifre hatalı'}`, 'error');
+                    showToast(`Giriş Hatası: ${res ? res.message : 'Yanıt alınamadı'}`, 'error');
+                }
             });
         }
     };
 
-    if (!socket || socket.io.uri !== serverUrl || socket.disconnected) {
-        if (socket) socket.disconnect();
-        socket = io(serverUrl, { transports: ['polling', 'websocket'], upgrade: true, reconnectionAttempts: 20, reconnectionDelay: 2000, timeout: 15000, forceNew: true });
-        setupSocketEvents(socket);
+    // Socket bağlantı kontrolü ve başlatma
+    let targetUrl = serverUrl;
+    if (window.location.origin && window.location.origin !== 'null' && !window.location.origin.startsWith('file://')) {
+        if (!serverUrl || serverUrl === 'http://localhost:3000') {
+            targetUrl = window.location.origin;
+        }
     }
-    if (socket.connected) connectAndRun(); else socket.once('connect', connectAndRun);
+
+    if (!socket || !socket.connected) {
+        if (socket) {
+            try { socket.disconnect(); } catch(e) {}
+        }
+        console.log('[+] Socket bağlantısı kuruluyor:', targetUrl);
+        socket = io(targetUrl, {
+            transports: ['polling', 'websocket'],
+            upgrade: true,
+            reconnectionAttempts: 3,
+            reconnectionDelay: 1000,
+            timeout: 5000,
+            forceNew: true
+        });
+        setupSocketEvents(socket);
+
+        socket.once('connect', () => {
+            console.log('[+] Socket bağlantısı başarılı. Socket ID:', socket.id);
+            runAuthAction();
+        });
+
+        socket.once('connect_error', (err) => {
+            console.error('[!] Socket bağlantı hatası:', err);
+            clearTimeout(connectionTimeout);
+            restoreBtn();
+            playSound('error');
+            setAuthAlert(`Sunucuya bağlanılamadı (${targetUrl}): ${err.message || 'Bağlantı hatası'}. Terminalde "node server.js" çalıştığından emin olun.`, 'error');
+            showToast("Sunucuya bağlanılamadı.", 'error');
+        });
+    } else {
+        runAuthAction();
+    }
 }
 
 function autoLoginAttempt() {
@@ -233,7 +408,7 @@ function autoLoginAttempt() {
     if (!token) return;
     
     const serverUrl = document.getElementById('serverIp').value;
-    showToast("OTURUM DOĞRULANIYOR...", 'info');
+    showToast("Oturum doğrulanıyor...", 'info');
     
     socket = io(serverUrl, { transports: ['polling', 'websocket'], auth: { token }, reconnectionAttempts: 20, reconnectionDelay: 2000 });
     setupSocketEvents(socket);
@@ -246,7 +421,7 @@ function autoLoginAttempt() {
             } else {
                 localStorage.removeItem('cyber_jwt');
                 socket.disconnect();
-                showToast("OTURUM GEÇERSSİZ, LÜTFEN TEKRAR GİRİŞ YAPIN.", 'error');
+                showToast("Oturum süresi doldu, lütfen tekrar giriş yapın.", 'error');
             }
         });
     });
@@ -293,7 +468,7 @@ function setupSocketEvents(sock) {
         if (currentUser) {
             showReconnectOverlay();
             updateReconnectStatus('YENİDEN BAĞLANILIYOR...');
-            showToast("BAĞLANTI KESİLDİ — OTOMATİK YENİDEN BAĞLANILIYOR...", 'warning');
+            showToast("Bağlantı kesildi, yeniden bağlanılıyor...", 'warning');
         } else {
             handleDisconnectUI();
         }
@@ -316,7 +491,7 @@ function setupSocketEvents(sock) {
                 if (res && res.success) {
                     currentUser = res.user;
                     hideReconnectOverlay();
-                    showToast("BAĞLANTI YENİDEN KURULDU!", 'success');
+                    showToast("Bağlantı yeniden kuruldu!", 'success');
                     playSound('success');
 
                     // Kripto anahtarlarını tekrar yayınla ve durumları senkronize et
@@ -357,12 +532,12 @@ function updateMyAvatarUI() {
     if (currentUser && currentUser.avatar) {
         container.innerHTML = `<img src="${currentUser.avatar}" class="w-full h-full object-cover">`;
     } else {
-        container.innerHTML = `<span class="text-cyan-300 font-black tech-font text-[10px] sm:text-xs">OP</span>`;
+        container.innerHTML = `<span class="text-blue-300 font-black  text-[10px] sm:text-xs">OP</span>`;
     }
 }
 
 function finishLoginSetup() {
-    playSound('success'); showToast("DOĞRULAMA BAŞARILI! KRİPTOLAR YÜKLENİYOR.", 'success');
+    playSound('success'); showToast("Doğrulama başarılı!", 'success');
     // Scroll-to-bottom FAB başlat
     setTimeout(initScrollToBottomFab, 200); // DOM hazır olunca bağla
     loadContactsFromVault(); loadSecretsFromVault();
@@ -425,9 +600,9 @@ function handleDisconnectUI() {
     document.getElementById('snifferToggleBtn').classList.add('hidden');
     document.getElementById('authGateway').classList.remove('hidden');
     document.getElementById('clearChatBtn').classList.add('hidden');
-    renderLogPlaceholder(document.getElementById('chatLog'), null, "// BAĞLANTI KESİLDİ //", true);
-    document.getElementById('snifferLog').innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-60"><span class="text-lg sm:text-2xl mb-1 sm:mb-2">🔌</span><div class="text-pink-500 text-center tracking-[0.1em] sm:tracking-[0.2em] uppercase text-[9px] sm:text-[10px]">Sistem çevrimdışı...</div></div>`;
-    document.getElementById('packetSizeDisplay').innerText = "KASA: BOŞ";
+    renderLogPlaceholder(document.getElementById('chatLog'), null, "Bağlantı kesildi", true);
+    document.getElementById('snifferLog').innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-60"><span class="text-lg sm:text-2xl mb-1 sm:mb-2">🔌</span><div class="text-pink-500 text-center tracking-[0.1em] sm:tracking-normal uppercase text-[9px] sm:text-[10px]">Sistem çevrimdışı...</div></div>`;
+    document.getElementById('packetSizeDisplay').innerText = "";
     
     Object.keys(_activeTimers).forEach(id => { clearInterval(_activeTimers[id]); delete _activeTimers[id]; });
     Object.keys(_aesKeyCache).forEach(k => delete _aesKeyCache[k]);
@@ -439,7 +614,7 @@ function handleDisconnectUI() {
 
 function disconnectFromServer() { 
     if (socket) { 
-        playSound('error'); socket.disconnect(); showToast("OTURUM SONLANDIRILDI.", 'warning'); 
+        playSound('error'); socket.disconnect(); showToast("Çıkış yapıldı.", 'warning'); 
         localStorage.removeItem('cyber_jwt'); handleDisconnectUI(); 
     } 
 }
@@ -450,11 +625,11 @@ function updateContactStatusUI(userId, isOnline) {
     const contact = myContacts.find(c => c.id === userId);
     if (contact) contact.isOnline = isOnline;
     const dot = document.getElementById(`status_dot_${userId}`);
-    if (dot) dot.className = `w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shadow-[0_0_8px_currentColor] flex-shrink-0 ${isOnline ? 'bg-[#00ff66] text-[#00ff66] animate-pulse' : 'bg-gray-600 text-gray-600 opacity-50'}`;
+    if (dot) dot.className = `w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full  flex-shrink-0 ${isOnline ? 'bg-green-500 text-green-500 animate-pulse' : 'bg-gray-600 text-gray-600 opacity-50'}`;
     
     if (activeTarget && activeTarget.id === userId) {
         const headerDot = document.getElementById('chatStatusDot');
-        if (headerDot) headerDot.className = `w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shadow-[0_0_10px_currentColor] flex-shrink-0 ${isOnline ? 'bg-[#00ff66] text-[#00ff66] animate-pulse' : 'bg-gray-600 text-gray-600 opacity-50'}`;
+        if (headerDot) headerDot.className = `w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full  flex-shrink-0 ${isOnline ? 'bg-green-500 text-green-500 animate-pulse' : 'bg-gray-600 text-gray-600 opacity-50'}`;
     }
 }
 
@@ -478,8 +653,8 @@ function renderContactsSidebar() {
     if (myContacts.length === 0) {
         listContainer.replaceChildren();
         const emptyDiv = document.createElement('div');
-        emptyDiv.className = 'text-cyan-700/50 text-[9px] sm:text-[10px] text-center italic mt-2 sm:mt-6 border border-dashed border-cyan-800/30 p-3 bg-black/20 clip-corners-sm font-mono tracking-widest leading-relaxed';
-        emptyDiv.innerHTML = '📡<br>// REHBER BOŞ.<br><span class="text-cyan-600">SİSTEME AJAN_ID GİRİN.</span>';
+        emptyDiv.className = 'text-cyan-700/50 text-[9px] sm:text-[10px] text-center italic mt-2 sm:mt-6 border border-dashed border-cyan-800/30 p-3 bg-black/20  font-mono tracking-normal leading-relaxed';
+        emptyDiv.innerHTML = '<div class="text-[var(--text-muted)] text-center py-4"><div class="text-2xl mb-2">👥</div><div class="text-xs">Henüz kişi eklenmemiş.</div></div>';
         listContainer.appendChild(emptyDiv); return;
     }
 
@@ -492,10 +667,10 @@ function renderContactsSidebar() {
         const card = document.createElement('div');
         card.setAttribute('onclick', `selectTarget('${contact.id}')`);
         // Aktif kart özel animasyonlu sınıf, pasif kart normal hover
-        card.className = `contact-card p-2 sm:p-3 border clip-corners-sm cursor-pointer transition-all duration-300 flex flex-col justify-between relative overflow-hidden ${
+        card.className = `contact-card p-2 sm:p-3 border  cursor-pointer transition-all duration-300 flex flex-col justify-between relative overflow-hidden ${
             isActive
-                ? 'contact-card-active border-cyan-400/60'
-                : 'bg-black/50 border-cyan-500/20 hover:bg-cyan-900/15 hover:border-cyan-500/50'
+                ? 'contact-card-active border-blue-500/60'
+                : ''
         }`;
 
         const topRow = document.createElement('div'); topRow.className = 'flex justify-between items-center z-10 relative';
@@ -503,24 +678,24 @@ function renderContactsSidebar() {
         
         // Avatar
         const avatarDiv = document.createElement('div');
-        const avatarBorder = isActive ? 'border-cyan-400 shadow-[0_0_8px_rgba(0,240,255,0.5)]' : 'border-cyan-700';
-        avatarDiv.className = `w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 ${avatarBorder} flex items-center justify-center overflow-hidden flex-shrink-0 bg-cyan-950 transition-all`;
+        const avatarBorder = isActive ? 'border-blue-400 shadow-sm' : 'border-gray-700';
+        avatarDiv.className = `w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 ${avatarBorder} flex items-center justify-center overflow-hidden flex-shrink-0 bg-secondary transition-all`;
         if (contact.avatar) {
             const img = document.createElement('img'); img.src = contact.avatar; img.className = 'w-full h-full object-cover'; avatarDiv.appendChild(img);
         } else {
             const initial = contact.id ? contact.id.charAt(4) || 'A' : 'A';
-            const spn = document.createElement('span'); spn.className = 'text-[8px] sm:text-[10px] text-cyan-300 font-bold'; spn.innerText = initial; avatarDiv.appendChild(spn);
+            const spn = document.createElement('span'); spn.className = 'text-[8px] sm:text-[10px] text-blue-300 font-bold'; spn.innerText = initial; avatarDiv.appendChild(spn);
         }
         leftWrap.appendChild(avatarDiv);
 
         const idCol = document.createElement('div'); idCol.className = 'flex flex-col min-w-0';
         const idSpan = document.createElement('span');
-        idSpan.className = `font-black font-mono text-[9px] sm:text-[10px] truncate ${isActive ? 'text-white neon-text-cyan' : 'text-cyan-400'}`;
+        idSpan.className = `font-black font-mono text-[9px] sm:text-[10px] truncate ${isActive ? 'text-white font-semibold' : 'text-blue-400'}`;
         idSpan.textContent = contact.id;
 
         const subLine = document.createElement('span');
         subLine.className = `text-[7px] font-mono truncate ${hasSecret ? 'text-green-500' : 'text-yellow-600 animate-pulse'}`;
-        subLine.textContent = hasSecret ? '🔐 TÜNEL AKTİF' : '⏳ ANAHTAR BEKLENİYOR';
+        subLine.textContent = hasSecret ? '🔐 Şifreli' : '⏳ Bekleniyor';
         
         const fpSpan = document.createElement('span');
         fpSpan.className = `text-[7px] font-mono truncate ${contact.fingerprintVerified ? 'text-green-400' : 'text-yellow-500/80 animate-pulse'}`;
@@ -545,7 +720,7 @@ function renderContactsSidebar() {
         const rightActions = document.createElement('div'); rightActions.className = 'flex items-center gap-2 flex-shrink-0 ml-1';
         
         const statusDot = document.createElement('span'); statusDot.id = `status_dot_${contact.id}`;
-        statusDot.className = `w-2 h-2 rounded-full shadow-[0_0_6px_currentColor] flex-shrink-0 ${contact.isOnline ? 'bg-[#00ff66] text-[#00ff66] animate-pulse' : 'bg-gray-600 text-gray-600 opacity-40'}`;
+        statusDot.className = `w-2 h-2 rounded-full  flex-shrink-0 ${contact.isOnline ? 'bg-green-500 text-green-500 animate-pulse' : 'bg-gray-600 text-gray-600 opacity-40'}`;
         statusDot.title = contact.isOnline ? 'Çevrimiçi' : 'Çevrimdışı';
         
         const removeBtn = document.createElement('button');
@@ -563,7 +738,7 @@ function renderContactsSidebar() {
 
 function removeContact(targetId, event) {
     event.stopPropagation();
-    showCustomConfirm(`DİKKAT: [${targetId}] kodlu ajan ile\nolan tüm kriptografik bağı ve yerel geçmişi\nkalıcı olarak SİLMEK üzeresiniz.\n\nEmin misiniz?`, async () => {
+    showCustomConfirm(`${targetId} kişisine ait tüm sohbet geçmişi ve şifreleme anahtarları silinecektir. Bu işlem geri alınamaz.`, async () => {
         myContacts = myContacts.filter(c => c.id !== targetId); saveContactsToVault();
         try {
             const db = await openVaultDB();
@@ -575,29 +750,29 @@ function removeContact(targetId, event) {
         } catch(e) {}
         if (derivedSecrets[targetId]) { delete derivedSecrets[targetId]; saveSecretsToVault(); }
         if (activeTarget && activeTarget.id === targetId) {
-            activeTarget = null; document.getElementById('chatTargetHeader').innerText = "AJAN SEÇİNİZ";
+            activeTarget = null; document.getElementById('chatTargetHeader').innerText = "Bir sohbet seçin";
             document.getElementById('chatTargetFingerprint').innerText = "FP: -----";
             updateFingerprintHeaderUI();
             document.getElementById('clearChatBtn').classList.add('hidden'); disableChatUI();
-            renderLogPlaceholder(document.getElementById('chatLog'), null, "// GÜVENLİ TÜNEL BEKLENİYOR //", true);
+            renderLogPlaceholder(document.getElementById('chatLog'), null, "Uçtan uca şifreli", true);
             updateMobileLayout();
         }
-        renderContactsSidebar(); playSound('destroy'); showToast(`[${targetId}] SİSTEMDEN SİLİNDİ!`, 'warning');
+        renderContactsSidebar(); playSound('destroy'); showToast(`${targetId} kişi listenizden silindi.`, 'warning');
     });
 }
 
 // === SOHBET ALANI ===
 
 function enableChatUI() {
-    document.getElementById('messageInput').disabled = false; document.getElementById('messageInput').placeholder = "[ AĞA VERİ YAZ ]_";
+    document.getElementById('messageInput').disabled = false; document.getElementById('messageInput').placeholder = "Mesaj yazın...";
     document.getElementById('sendPacketBtn').disabled = false;
-    document.getElementById('sendPacketBtn').className = "px-4 sm:px-8 py-2 sm:py-0 bg-[#00ff66]/20 text-[#00ff66] font-black border-2 border-[#00ff66] text-[10px] sm:text-sm clip-corners transition-all duration-300 uppercase tracking-[0.2em] hover:bg-[#00ff66] hover:text-black shadow-[0_0_20px_rgba(0,255,102,0.4)] cyber-button-hover flex-shrink-0";
+    document.getElementById('sendPacketBtn').className = "px-4 sm:px-8 py-2 sm:py-0 bg-green-500/20 text-green-500 font-black border-2 border-[#00ff66] text-[10px] sm:text-sm  transition-all duration-300 uppercase tracking-normal hover:bg-green-500 hover:text-black   flex-shrink-0";
 }
 
 function disableChatUI() {
-    document.getElementById('messageInput').disabled = true; document.getElementById('messageInput').placeholder = "ANAHTAR BEKLENİYOR...";
+    document.getElementById('messageInput').disabled = true; document.getElementById('messageInput').placeholder = "Bağlantı bekleniyor...";
     document.getElementById('sendPacketBtn').disabled = true;
-    document.getElementById('sendPacketBtn').className = "px-4 sm:px-8 py-2 sm:py-0 bg-gray-900 text-gray-600 font-black border border-gray-700 text-[10px] sm:text-sm clip-corners transition-all duration-300 uppercase tracking-[0.2em] flex-shrink-0";
+    document.getElementById('sendPacketBtn').className = "px-4 sm:px-8 py-2 sm:py-0 bg-gray-900 text-gray-600 font-black border border-gray-700 text-[10px] sm:text-sm  transition-all duration-300 uppercase tracking-normal flex-shrink-0";
 }
 
 async function selectTarget(targetId) {
@@ -611,7 +786,7 @@ async function selectTarget(targetId) {
     
     playSound('success'); activeTarget = selected; unreadCounts[targetId] = 0; renderContactsSidebar();
     
-    document.getElementById('chatTargetHeader').innerText = `AJAN: ${activeTarget.id}`;
+    document.getElementById('chatTargetHeader').innerText = activeTarget.id;
     document.getElementById('chatTargetFingerprint').innerText = activeTarget.fingerprint ? `FP: ${activeTarget.fingerprint}` : `FP: BEKLENİYOR`;
     updateFingerprintHeaderUI();
     document.getElementById('clearChatBtn').classList.remove('hidden'); keyRevealed = false;
@@ -620,7 +795,7 @@ async function selectTarget(targetId) {
     if (hasSecret) enableChatUI(); 
     else {
         disableChatUI(); const success = await ensureSharedSecret(selected.id);
-        if (success) { if (activeTarget && activeTarget.id === selected.id) { enableChatUI(); showToast(`🔑 ECDH BAŞARILI!`); } renderContactsSidebar(); } 
+        if (success) { if (activeTarget && activeTarget.id === selected.id) { enableChatUI(); showToast(`Şifreli kanal kuruldu!`); } renderContactsSidebar(); } 
         else setTimeout(() => initiateEcdhHandshake(selected.id), 300);
     }
     safeEmit('check_node_status', activeTarget.id, (res) => { updateContactStatusUI(res.userId, res.isOnline); });
@@ -630,7 +805,7 @@ async function selectTarget(targetId) {
     
     if (history.length > 0) {
         const topBanner = document.createElement('div');
-        topBanner.className = 'text-green-500/50 text-center tracking-[0.1em] sm:tracking-[0.2em] uppercase font-bold text-[8px] sm:text-[10px] my-2 sm:my-4 border-b border-green-500/20 pb-1 sm:pb-2 drop-shadow-md';
+        topBanner.className = 'text-green-500/50 text-center tracking-[0.1em] sm:tracking-normal uppercase font-bold text-[8px] sm:text-[10px] my-2 sm:my-4 border-b border-green-500/20 pb-1 sm:pb-2 drop-shadow-md';
         topBanner.innerText = '/// GÜVENLİ YEREL BELLEK GERİ YÜKLENDİ (IDB) ///';
         logBox.appendChild(topBanner);
 
@@ -658,14 +833,14 @@ async function selectTarget(targetId) {
 
 function clearActiveChat() {
     if (!activeTarget) return;
-    showCustomConfirm(`BELLEK SİLME UYARISI:\nSadece ${activeTarget.id} ile olan YEREL sohbet\ngeçmişi kalıcı olarak silinecektir.\n\nOnaylıyor musunuz?`, async () => {
+    showCustomConfirm(`${activeTarget.id} ile olan sohbet geçmişi silinecektir. Bu işlem geri alınamaz.`, async () => {
         try {
             const db = await openVaultDB(); const tx = db.transaction('packets', 'readwrite'); const store = tx.objectStore('packets');
             const index = store.index('peerId'); const request = index.getAllKeys(activeTarget.id);
             request.onsuccess = () => {
                 request.result.forEach(key => store.delete(key));
                 renderLogPlaceholder(document.getElementById('chatLog'), '📭', '// BELLEK SIFIRLANDI //', false);
-                showToast("BELLEĞ BAŞARIYLA TEMİZLENDİ!", 'success'); playSound('destroy');
+                showToast("Sohbet geçmişi temizlendi.", 'success'); playSound('destroy');
             };
         } catch(e) {}
     });
@@ -687,7 +862,7 @@ function addContact(targetId) {
     if (!existing) {
         myContacts.push({ id: targetId, key: null, fingerprint: null, fingerprintVerified: false, ecdhStatus: 'pending', isOnline: false, avatar: null });
         saveContactsToVault();
-        showToast(`[+] DÜĞÜM ${targetId} EKLENDİ.`, 'success');
+        showToast(`${targetId} kişi listesine eklendi.`, 'success');
         safeEmit('join_status_rooms', [targetId]); 
         safeEmit('check_node_status', targetId, (res) => { if (res) updateContactStatusUI(res.userId, res.isOnline); });
         safeEmit('get_profiles', [targetId], (res) => {
@@ -746,13 +921,13 @@ function performSearch() {
         resultsList.replaceChildren();
         res.results.forEach(user => {
             const item = document.createElement('div');
-            item.className = 'flex items-center justify-between p-2 bg-purple-950/20 border border-purple-500/20 clip-corners-sm text-xs font-mono mb-2';
+            item.className = 'flex items-center justify-between p-2 bg-purple-950/20 border border-purple-500/20  text-xs font-mono mb-2';
 
             const left = document.createElement('div');
             left.className = 'flex items-center gap-2 min-w-0';
 
             const dot = document.createElement('span');
-            dot.className = `w-2 h-2 rounded-full ${user.isOnline ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]' : 'bg-gray-600'} flex-shrink-0`;
+            dot.className = `w-2 h-2 rounded-full ${user.isOnline ? 'bg-green-500 ' : 'bg-gray-600'} flex-shrink-0`;
             left.appendChild(dot);
 
             const avatar = document.createElement('div');
@@ -789,17 +964,17 @@ function performSearch() {
             const btn = document.createElement('button');
             if (isAlreadyAdded) {
                 btn.disabled = true;
-                btn.className = 'px-3 py-1.5 border border-purple-500/30 text-purple-500/40 text-[10px] font-black clip-corners-sm uppercase tracking-wider cursor-not-allowed';
+                btn.className = 'px-3 py-1.5 border border-purple-500/30 text-purple-500/40 text-[10px] font-black  uppercase tracking-wider cursor-not-allowed';
                 btn.innerText = 'EKLI';
             } else {
-                btn.className = 'px-3 py-1.5 bg-purple-500 text-black hover:bg-white hover:text-black font-black border border-purple-400 text-[10px] clip-corners-sm uppercase tracking-wider transition-all cursor-pointer';
+                btn.className = 'px-3 py-1.5 bg-purple-500 text-black hover:bg-white hover:text-black font-black border border-purple-400 text-[10px]  uppercase tracking-wider transition-all cursor-pointer';
                 btn.innerText = 'EKLE';
                 btn.onclick = () => {
                     const added = addContact(user.userId);
                     if (added) {
                         playSound('success');
                         btn.disabled = true;
-                        btn.className = 'px-3 py-1.5 border border-purple-500/30 text-purple-500/40 text-[10px] font-black clip-corners-sm uppercase tracking-wider cursor-not-allowed';
+                        btn.className = 'px-3 py-1.5 border border-purple-500/30 text-purple-500/40 text-[10px] font-black  uppercase tracking-wider cursor-not-allowed';
                         btn.innerText = 'EKLI';
                         renderContactsSidebar();
                     }
@@ -837,7 +1012,7 @@ function showContactRequest(data) {
     } else {
         const initial = data.senderId.charAt(4) || 'A';
         const spn = document.createElement('span');
-        spn.className = 'text-xs font-bold text-cyan-300';
+        spn.className = 'text-xs font-bold text-blue-300';
         spn.innerText = initial;
         avatarContainer.appendChild(spn);
     }
@@ -865,11 +1040,11 @@ function handleContactRequestResponse(accepted) {
 
 function showContactRequestResponse(data) {
     if (data.accepted) {
-        showToast(`[${data.senderId}] BAĞLANTI İSTEĞİNİ KABUL ETTİ!`, 'success');
+        showToast(`${data.senderId} bağlantı isteğinizi kabul etti!`, 'success');
         playSound('success');
         ensureSharedSecret(data.senderId);
     } else {
-        showToast(`[${data.senderId}] BAĞLANTI İSTEĞİNİ REDDETTİ.`, 'error');
+        showToast(`${data.senderId} bağlantı isteğinizi reddetti.`, 'error');
         playSound('destroy');
     }
 }
@@ -886,10 +1061,10 @@ function updateFingerprintHeaderUI() {
         verifyBtn.classList.remove('hidden');
         if (activeTarget.fingerprintVerified) {
             verifyBtn.innerText = "✅ DOĞRULANDI";
-            verifyBtn.className = "px-2 py-1 text-[8px] sm:text-[10px] font-bold clip-corners-sm border border-green-500 text-green-400 bg-green-500/10 cursor-pointer transition-all";
+            verifyBtn.className = "px-2 py-1 text-[8px] sm:text-[10px] font-bold  border border-green-500 text-green-400 bg-green-500/10 cursor-pointer transition-all";
         } else {
             verifyBtn.innerText = "🔐 DOĞRULA";
-            verifyBtn.className = "px-2 py-1 text-[8px] sm:text-[10px] font-bold clip-corners-sm border border-yellow-500 text-yellow-400 bg-yellow-500/10 hover:bg-yellow-500/30 hover:text-white cursor-pointer transition-all";
+            verifyBtn.className = "px-2 py-1 text-[8px] sm:text-[10px] font-bold  border border-yellow-500 text-yellow-400 bg-yellow-500/10 hover:bg-yellow-500/30 hover:text-white cursor-pointer transition-all";
         }
     } else {
         verifyBtn.classList.add('hidden');
@@ -963,20 +1138,20 @@ function verifyFingerprint() {
     
     hideFingerprintModal();
     playSound('success');
-    showToast(`[${fingerprintTargetContact.id}] PARMAK İZİ DOĞRULANDI!`, 'success');
+    showToast(`${fingerprintTargetContact.id} parmak izi doğrulandı!`, 'success');
 }
 
 function handleContactSubmit() {
     const targetId = document.getElementById('modalTargetId').value.trim().toUpperCase();
-    if (!targetId) { playSound('error'); showToast("HATA: ID BOŞ OLAMAZ!", 'error'); return; }
-    if (targetId === currentUser.userId) { playSound('error'); showToast("HATA: KENDİNİZİ EKLEYEMEZSİNİZ.", 'error'); return; }
+    if (!targetId) { playSound('error'); showToast("Lütfen bir ID girin.", 'error'); return; }
+    if (targetId === currentUser.userId) { playSound('error'); showToast("Kendinizi ekleyemezsiniz.", 'error'); return; }
     
     const added = addContact(targetId);
     if (added) {
         playSound('success');
     } else {
         playSound('error');
-        showToast("BU AJAN ZATEN EKLİDİR.", 'warning');
+        showToast("Bu kişi zaten listenizde.", 'warning');
     }
     hideContactConfigModal();
     renderContactsSidebar();
@@ -988,11 +1163,11 @@ function handleContactSubmit() {
 async function sendSecurePacket() {
     if (!activeTarget) return;
     const sharedSecret = derivedSecrets[activeTarget.id];
-    if (!sharedSecret) { playSound('error'); showToast("KRİPTO ANAHTAR BEKLENİYOR!", 'warning'); return; }
+    if (!sharedSecret) { playSound('error'); showToast("Şifreleme anahtarı bekleniyor...", 'warning'); return; }
     
     if (!activeTarget.fingerprintVerified) {
         playSound('error');
-        showToast("HATA: PARMAK İZİ DOĞRULANMAMIŞ! GÖNDERİM ENGELLENDİ.", 'error');
+        showToast("Parmak izi doğrulanmamış. Mesaj gönderilemedi.", 'error');
         return;
     }
     
@@ -1008,7 +1183,7 @@ async function sendSecurePacket() {
     try {
         if (rawText) encryptedText = await encryptGCM(rawText, activeTarget.key);
         if (hasFile) encryptedFile = await encryptGCM(activeFileBase64, activeTarget.key);
-    } catch (e) { playSound('error'); showToast("HATA: ŞİFRELEME MOTORU ÇÖKTÜ!", 'error'); return; }
+    } catch (e) { playSound('error'); showToast("Şifreleme hatası oluştu.", 'error'); return; }
 
     const packetId = crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase();
     const packet = { id: packetId, senderId: currentUser.userId, targetId: activeTarget.id, textPayload: encryptedText, filePayload: encryptedFile, ttl: ttl > 0 ? ttl : null, timestamp: new Date().getTime() };
@@ -1034,8 +1209,8 @@ async function sendSecurePacket() {
     safeEmit('stop_typing', { targetId: activeTarget.id });
     
     safeEmit('send_secure_packet', packet, (res) => { 
-        if (res && res.queued) showToast("HEDEF ÇEVRİMDIŞI. KUYRUĞA EKLENDİ.", 'warning');
-        else if (res && res.error === "RATE_LIMIT") { playSound('error'); showToast("HATA: ÇOK FAZLA MESAJ! YAVAŞLAYIN.", 'error'); }
+        if (res && res.queued) showToast("Kişi çevrimdışı, mesaj kuyruğa eklendi.", 'warning');
+        else if (res && res.error === "RATE_LIMIT") { playSound('error'); showToast("Çok hızlı mesaj gönderiyorsunuz, lütfen bekleyin.", 'error'); }
     });
     
     const pSize = new Blob([JSON.stringify(packet)]).size;
@@ -1077,12 +1252,12 @@ async function processIncomingPacket(packet, contactInfo) {
 
 function revokeMessage(packetId) {
     if (!activeTarget) return;
-    showCustomConfirm("SİBER UYARI: Bu veriyi hem kendi belleğinizden hem de\nkarşı tarafın ekranından SİLMEK üzeresiniz.\n\nOnaylıyor musunuz?", async () => {
+    showCustomConfirm("Bu mesaj hem sizden hem de karşı taraftan silinecektir. Devam etmek istiyor musunuz?", async () => {
         await removePacketFromVault(activeTarget.id, packetId);
         const msgElement = document.getElementById(`msg-${packetId}`);
-        glitchAndRemoveElement(msgElement);
+        fadeOutAndRemoveElement(msgElement);
         safeEmit('revoke_packet', { targetId: activeTarget.id, packetId: packetId, senderId: currentUser.userId });
-        showToast("İMHA PROTOKOLÜ ÇALIŞTIRILDI.", 'warning');
+        showToast("Mesaj silindi.", 'warning');
     });
 }
 
@@ -1140,46 +1315,46 @@ function appendMessageToUI(packetId, sender, text, imageSrc, isMine, isError, tt
     msgDiv.className = `flex flex-col ${isMine ? 'items-end msg-mine' : 'items-start msg-theirs'} my-2 sm:my-4 relative`;
 
     const headerSpan = document.createElement('span');
-    headerSpan.className = 'text-[8px] sm:text-[10px] block mb-1 sm:mb-1.5 font-mono tracking-[0.1em] flex items-center bg-black/60 px-1.5 sm:px-2 py-0.5 clip-corners-sm border border-gray-700/60 max-w-[90%] gap-1';
+    headerSpan.className = 'text-[8px] sm:text-[10px] block mb-1 sm:mb-1.5 font-mono tracking-[0.1em] flex items-center bg-black/60 px-1.5 sm:px-2 py-0.5  border border-gray-700/60 max-w-[90%] gap-1';
     const timeStr = msgDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second:'2-digit' });
-    const senderColor = isMine ? 'text-green-400 neon-text-green' : 'text-[#00f0ff] neon-text-cyan';
+    const senderColor = isMine ? 'text-blue-400' : 'text-[var(--text-secondary)]';
     
     if (isMine) {
         const timeSpan = document.createElement('span'); timeSpan.className = 'text-gray-500 mr-1.5 sm:mr-2 flex-shrink-0'; timeSpan.textContent = `[${timeStr}]`; headerSpan.appendChild(timeSpan);
         const senderSpan = document.createElement('span'); senderSpan.className = `font-black ${senderColor} truncate`; senderSpan.textContent = `>_ ${sender}`; headerSpan.appendChild(senderSpan);
         const revokeBtn = document.createElement('button');
-        revokeBtn.className = 'ml-2 sm:ml-3 text-red-500 hover:text-white hover:bg-red-500 font-mono text-[7px] sm:text-[9px] border border-red-500/50 px-1 sm:px-1.5 py-0.5 clip-corners-sm transition-all font-bold shadow-[0_0_8px_rgba(255,0,0,0.3)] flex-shrink-0';
-        revokeBtn.title = 'Herkesten Sil'; revokeBtn.textContent = 'İMHA ET';
+        revokeBtn.className = 'ml-2 sm:ml-3 text-red-500 hover:text-white hover:bg-red-500 font-mono text-[7px] sm:text-[9px] border border-red-500/50 px-1 sm:px-1.5 py-0.5  transition-all font-bold  flex-shrink-0';
+        revokeBtn.title = 'Herkesten Sil'; revokeBtn.textContent = 'Sil';
         revokeBtn.addEventListener('click', () => revokeMessage(packetId));
         headerSpan.appendChild(revokeBtn);
     } else {
-        const senderSpan = document.createElement('span'); senderSpan.className = `font-black ${senderColor} truncate`; senderSpan.textContent = `<_ ${sender}`; headerSpan.appendChild(senderSpan);
+        const senderSpan = document.createElement('span'); senderSpan.className = `font-black ${senderColor} truncate`; senderSpan.textContent = `${sender}`; headerSpan.appendChild(senderSpan);
         const timeSpan = document.createElement('span'); timeSpan.className = 'text-gray-500 ml-1.5 sm:ml-2 flex-shrink-0'; timeSpan.textContent = `[${timeStr}]`; headerSpan.appendChild(timeSpan);
     }
 
     if (ttl && ttl > 0) {
         const ttlBadge = document.createElement('span'); ttlBadge.id = `ttl-badge-${packetId}`;
-        ttlBadge.className = 'mx-1.5 sm:mx-2 px-1 sm:px-1.5 py-0.5 bg-red-950/80 border border-red-500 text-red-400 font-mono text-[7px] sm:text-[9px] animate-pulse font-black shadow-[0_0_10px_rgba(255,0,0,0.6)] clip-corners-sm flex-shrink-0';
+        ttlBadge.className = 'mx-1.5 sm:mx-2 px-1 sm:px-1.5 py-0.5 bg-red-950/80 border border-red-500 text-red-400 font-mono text-[7px] sm:text-[9px] animate-pulse font-black   flex-shrink-0';
         ttlBadge.textContent = `TTL:${ttl}s`;
         if (isMine) headerSpan.insertBefore(ttlBadge, headerSpan.firstChild); else headerSpan.appendChild(ttlBadge);
     }
     msgDiv.appendChild(headerSpan);
 
     if (isError === 'no_key') {
-        const errDiv = document.createElement('div'); errDiv.className = 'border-l-4 border-yellow-500 bg-yellow-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-yellow-400 my-1 max-w-[90%] sm:max-w-sm tech-font shadow-[0_0_15px_rgba(255,200,0,0.2)] clip-corners-sm font-bold tracking-wider'; errDiv.innerText = '[!] UYARI: ANAHTAR EŞLEŞMEDİ.'; msgDiv.appendChild(errDiv);
+        const errDiv = document.createElement('div'); errDiv.className = 'border-l-4 border-yellow-500 bg-yellow-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-yellow-400 my-1 max-w-[90%] sm:max-w-sm    font-bold tracking-wider'; errDiv.innerText = '[!] UYARI: ANAHTAR EŞLEŞMEDİ.'; msgDiv.appendChild(errDiv);
     } else if (isError) {
-        const errDiv = document.createElement('div'); errDiv.className = 'border-l-4 border-red-500 bg-red-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-red-400 my-1 max-w-[90%] sm:max-w-sm tech-font shadow-[0_0_15px_rgba(255,0,0,0.3)] clip-corners-sm font-bold tracking-wider'; errDiv.innerText = '[!] KRİTİK: PAKET BÜTÜNLÜĞÜ BOZUK!'; msgDiv.appendChild(errDiv);
+        const errDiv = document.createElement('div'); errDiv.className = 'border-l-4 border-red-500 bg-red-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-red-400 my-1 max-w-[90%] sm:max-w-sm    font-bold tracking-wider'; errDiv.innerText = '[!] KRİTİK: PAKET BÜTÜNLÜĞÜ BOZUK!'; msgDiv.appendChild(errDiv);
     } else {
         if (imageSrc) {
             window.receivedImages.push(imageSrc); const imageIndex = window.receivedImages.length - 1;
             const img = document.createElement('img'); img.src = imageSrc;
-            img.className = 'w-48 sm:w-56 md:w-72 max-w-[90%] h-auto max-h-48 sm:max-h-64 my-1 sm:my-2 clip-corners border-2 border-cyan-500/40 cursor-pointer hover:border-cyan-400 transition-all shadow-[0_0_20px_rgba(0,240,255,0.15)] opacity-90 hover:opacity-100 object-contain';
+            img.className = 'w-48 sm:w-56 md:w-72 max-w-[90%] h-auto max-h-48 sm:max-h-64 my-1 sm:my-2  border-2 border-cyan-500/40 cursor-pointer hover:border-cyan-400 transition-all  opacity-90 hover:opacity-100 object-contain';
             img.title = 'Görüntülemek için Tıkla'; img.onclick = () => showImageModal(imageIndex);
             msgDiv.appendChild(img);
         }
         if (text) {
             const textSpan = document.createElement('div');
-            const bubbleClass = isMine ? 'msg-bubble-mine clip-bubble-right text-green-200' : 'msg-bubble-theirs clip-bubble-left text-cyan-200';
+            const bubbleClass = isMine ? 'msg-bubble-mine bg-blue-600 text-white rounded-2xl rounded-tr-sm' : 'msg-bubble-theirs bg-surface text-gray-200 rounded-2xl rounded-tl-sm';
             textSpan.className = `px-3 sm:px-5 py-2 sm:py-3 border font-mono text-[11px] sm:text-[13px] leading-relaxed max-w-[95%] sm:max-w-[80%] text-left whitespace-pre-wrap break-words backdrop-blur-sm ${bubbleClass}`;
             textSpan.innerText = text; msgDiv.appendChild(textSpan);
         }
@@ -1211,7 +1386,7 @@ function startSelfDestructTimer(packetId, duration, targetUser) {
         if (secondsLeft <= 0) {
             clearInterval(_activeTimers[packetId]); delete _activeTimers[packetId];
             const msgElement = document.getElementById(`msg-${packetId}`);
-            if (msgElement) glitchAndRemoveElement(msgElement, () => removePacketFromVault(targetUser, packetId));
+            if (msgElement) fadeOutAndRemoveElement(msgElement, () => removePacketFromVault(targetUser, packetId));
         }
     }, 1000);
 }
@@ -1243,10 +1418,10 @@ function logPacketToSniffer(packet) {
     const hexDump = Array.from({length: 8}, () => Math.floor(Math.random()*256).toString(16).padStart(2,'0')).join(' ');
 
     const entry = document.createElement('div');
-    entry.className = 'sniffer-entry-new border-l-2 border-pink-500/50 bg-pink-950/10 pl-1.5 sm:pl-2 py-1 sm:py-1.5 mb-1 sm:mb-2 hover:bg-pink-900/30 transition-colors font-mono text-[7px] sm:text-[9px] relative overflow-hidden cursor-default';
+    entry.className = 'sniffer-entry border-l-2 border-surface bg-pink-950/10 pl-1.5 sm:pl-2 py-1 sm:py-1.5 mb-1 sm:mb-2 hover:bg-pink-900/30 transition-colors font-mono text-[7px] sm:text-[9px] relative overflow-hidden cursor-default';
 
     const headerRow = document.createElement('div'); headerRow.className = 'flex justify-between items-center mb-0.5 sm:mb-1';
-    const pktSpan = document.createElement('span'); pktSpan.className = 'text-white font-bold drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]'; pktSpan.textContent = `PKT_${packet.id.substring(0,8)}`;
+    const pktSpan = document.createElement('span'); pktSpan.className = 'text-white font-bold '; pktSpan.textContent = `PKT_${packet.id.substring(0,8)}`;
     const ttlSpan = document.createElement('span'); ttlSpan.className = 'text-[#ff0055] font-black'; ttlSpan.textContent = `TTL:${ttlLabel}`;
     headerRow.appendChild(pktSpan); headerRow.appendChild(ttlSpan);
 
@@ -1272,12 +1447,12 @@ function toggleSniffer() {
     snifferActive = !snifferActive;
     if (snifferActive) {
         sniffer.classList.remove('hidden'); toggleBtn.innerHTML = '<span class="w-1.5 h-1.5 bg-[#ff0055] rounded-full animate-pulse"></span> SNIFFER';
-        toggleBtn.className = "px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-[10px] bg-pink-950/40 border border-[#ff0055] text-[#ff0055] hover:bg-[#ff0055]/20 transition-all neon-border-pink clip-corners-sm font-bold tracking-wider flex items-center gap-1";
-        showToast("AĞ KODLAYICI AKTİF.", 'success');
+        toggleBtn.className = "px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-[10px] bg-pink-950/40 border border-[#ff0055] text-[#ff0055] hover:bg-[#ff0055]/20 transition-all border-red-500  font-bold tracking-wider flex items-center gap-1";
+        showToast("Ağ trafiği görünür.", 'success');
     } else {
         sniffer.classList.add('hidden'); toggleBtn.innerHTML = '<span class="w-1.5 h-1.5 bg-gray-500 rounded-full"></span> SNIFFER';
-        toggleBtn.className = "px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-[10px] bg-black border border-gray-600 text-gray-400 hover:bg-gray-800 transition-all clip-corners-sm font-bold tracking-wider flex items-center gap-1";
-        showToast("AĞ KODLAYICI GİZLENDİ.", 'info');
+        toggleBtn.className = "px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-[10px] bg-black border border-gray-600 text-gray-400 hover:bg-gray-800 transition-all  font-bold tracking-wider flex items-center gap-1";
+        showToast("Ağ trafiği gizlendi.", 'info');
     }
     updateMobileLayout();
 }
@@ -1294,11 +1469,11 @@ function changeFontSize(delta) {
 function copyMyId() {
     if (!currentUser) return;
     navigator.clipboard.writeText(currentUser.userId).then(() => {
-        playSound('success'); showToast("AJAN ID PANODA.");
+        playSound('success'); showToast("ID kopyalandı.");
     }).catch(() => {
         const tempInput = document.createElement("input"); tempInput.value = currentUser.userId;
         document.body.appendChild(tempInput); tempInput.select(); document.execCommand("copy"); document.body.removeChild(tempInput);
-        playSound('success'); showToast("AJAN ID PANODA.");
+        playSound('success'); showToast("ID kopyalandı.");
     });
 }
 
@@ -1309,8 +1484,8 @@ function toggleKeyReveal() {
 }
 
 function toggleAudio() {
-    audioEnabled = !audioEnabled; audioBtn.innerText = audioEnabled ? "AUDIO: ON 🔊" : "AUDIO: MUTE 🔇";
-    audioBtn.className = audioEnabled ? "px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-[10px] border border-green-500/50 text-green-400 hover:bg-green-500/20 transition-all clip-corners-sm font-bold tracking-wider" : "px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-[10px] border border-gray-600 text-gray-500 hover:bg-gray-800 transition-all clip-corners-sm font-bold tracking-wider";
+    audioEnabled = !audioEnabled; audioBtn.innerText = audioEnabled ? "🔊 Açık" : "🔇 Kapalı";
+    audioBtn.className = audioEnabled ? "px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-[10px] border border-green-500/50 text-green-400 hover:bg-green-500/20 transition-all  font-bold tracking-wider" : "px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-[10px] border border-gray-600 text-gray-500 hover:bg-gray-800 transition-all  font-bold tracking-wider";
 }
 
 // === DOSYA İŞLEMLERİ ===
@@ -1351,8 +1526,8 @@ function switchSettingsTab(tab) {
     playSound('type');
     const tProf = document.getElementById('settingsProfileTab'); const tSec = document.getElementById('settingsSecurityTab');
     const bProf = document.getElementById('tabProfileBtn'); const bSec = document.getElementById('tabSecurityBtn');
-    const activeClass = "flex-1 py-1.5 bg-cyan-500/20 border border-cyan-400 text-cyan-300 font-bold tracking-widest clip-corners-sm text-[10px] sm:text-xs transition-all";
-    const inactiveClass = "flex-1 py-1.5 bg-transparent border border-gray-600 text-gray-500 font-bold tracking-widest clip-corners-sm text-[10px] sm:text-xs hover:border-cyan-500/50 hover:text-cyan-400 transition-all";
+    const activeClass = "flex-1 py-1.5 bg-cyan-500/20 border border-cyan-400 text-blue-300 font-bold tracking-normal  text-[10px] sm:text-xs transition-all";
+    const inactiveClass = "flex-1 py-1.5 bg-transparent border border-gray-600 text-gray-500 font-bold tracking-normal  text-[10px] sm:text-xs hover:border-cyan-500/50 hover:text-blue-400 transition-all";
     
     if (tab === 'profile') {
         tProf.classList.remove('hidden'); tSec.classList.add('hidden');
@@ -1388,17 +1563,17 @@ function saveProfileSettings() {
     safeEmit('update_avatar', pendingAvatarBase64, (res) => {
         if (res && res.success) {
             playSound('success'); currentUser.avatar = pendingAvatarBase64; pendingAvatarBase64 = null;
-            updateMyAvatarUI(); showToast("KİMLİK GÜNCELLENDİ (AVATAR).", 'success'); hideSettingsModal();
+            updateMyAvatarUI(); showToast("Profil fotoğrafı güncellendi.", 'success'); hideSettingsModal();
         } else { playSound('error'); showToast(`HATA: ${res ? res.message : 'Güncellenemedi'}`, 'error'); }
     });
 }
 
 function changeUserPassword() {
     const oldP = document.getElementById('setOldPwd').value; const newP = document.getElementById('setNewPwd').value;
-    if(!oldP || !newP) { playSound('error'); showToast("HATA: ŞİFRELER BOŞ OLAMAZ!", 'error'); return; }
+    if(!oldP || !newP) { playSound('error'); showToast("Lütfen şifre alanlarını doldurun.", 'error'); return; }
     safeEmit('change_password', { oldPassword: oldP, newPassword: newP }, (res) => {
         if (res && res.success) {
-            playSound('success'); showToast("GÜVENLİK ANAHTARI DEĞİŞTİRİLDİ.", 'success');
+            playSound('success'); showToast("Şifre değiştirildi.", 'success');
             document.getElementById('setOldPwd').value = ''; document.getElementById('setNewPwd').value = ''; hideSettingsModal();
         } else { playSound('error'); showToast(`HATA: ${res ? res.message : 'Başarısız'}`, 'error'); }
     });
@@ -1406,41 +1581,17 @@ function changeUserPassword() {
 
 function deleteUserAccount() {
     const pwd = document.getElementById('setDelPwd').value;
-    if(!pwd) { playSound('error'); showToast("HATA: ONAY ŞİFRESİ GEREKLİ!"); return; }
-    showCustomConfirm("SON UYARI:\nTüm adli kayıtlarınız ve şifreli veri\ntabanınız kalıcı olarak silinecektir!\n\nDevam edilsin mi?", () => {
+    if(!pwd) { playSound('error'); showToast("Lütfen onay şifrenizi girin."); return; }
+    showCustomConfirm("Hesabınız ve tüm verileriniz kalıcı olarak silinecektir. Bu işlem geri alınamaz.", () => {
         safeEmit('delete_account', { password: pwd }, (res) => {
             if (res && res.success) {
                 playSound('destroy'); localStorage.clear(); sessionStorage.clear(); indexedDB.deleteDatabase(DB_NAME);
-                showToast("KİMLİK İMHA EDİLDİ. SİSTEM KAPATILIYOR.", 'system');
+                showToast("Hesap silindi.", 'system');
                 setTimeout(() => window.location.reload(), 2000);
             } else { playSound('error'); showToast(`HATA: ${res ? res.message : 'Silinemedi'}`); }
         });
     });
 }
-
-// === CYBERPUNK DIGITAL RAIN CANVAS ===
-
-let canvas = document.getElementById('bgCanvas'), ctx = canvas.getContext('2d');
-let animFrameId; function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
-let resizeTimer; window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(resizeCanvas, 200); }); resizeCanvas();
-const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$+-*/=%\"'#&_(),.;:?!|{}<>[]^~".split('');
-const fontSize = 14; let columns = Math.floor(canvas.width / fontSize); let drops = []; for(let x = 0; x < columns; x++) drops[x] = 1; 
-const _reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches; const _MATRIX_TARGET_FPS = 30; const _MATRIX_FRAME_MS = 1000 / _MATRIX_TARGET_FPS; let _lastMatrixFrame = 0;
-function drawMatrix(timestamp) {
-    if (_reducedMotion) return;
-    if (timestamp - _lastMatrixFrame < _MATRIX_FRAME_MS) { animFrameId = requestAnimationFrame(drawMatrix); return; }
-    _lastMatrixFrame = timestamp;
-    if(Math.floor(canvas.width / fontSize) !== columns) { columns = Math.floor(canvas.width / fontSize); drops = []; for(let x = 0; x < columns; x++) drops[x] = 1; }
-    ctx.fillStyle = 'rgba(2, 2, 5, 0.05)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#00ff66'; ctx.font = fontSize + 'px monospace';
-    for(let i = 0; i < drops.length; i++) {
-        const text = chars[Math.floor(Math.random() * chars.length)]; ctx.fillText(text, i * fontSize, drops[i] * fontSize);
-        if(drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0; drops[i]++;
-    }
-    animFrameId = requestAnimationFrame(drawMatrix);
-}
-document.addEventListener('visibilitychange', () => { if (document.hidden) cancelAnimationFrame(animFrameId); else if (!_reducedMotion) drawMatrix(); });
-if (!_reducedMotion) drawMatrix();
 
 // === MOBİL LAYOUT ===
 
@@ -1495,7 +1646,7 @@ function mobileGoBack() {
     renderContactsSidebar();
     
     // reset chat ui header & content
-    document.getElementById('chatTargetHeader').innerText = "AJAN SEÇİNİZ";
+    document.getElementById('chatTargetHeader').innerText = "Bir sohbet seçin";
     document.getElementById('chatTargetFingerprint').innerText = "FP: -----";
     document.getElementById('clearChatBtn').classList.add('hidden');
     disableChatUI();
@@ -1506,18 +1657,76 @@ window.addEventListener('resize', () => {
     updateMobileLayout();
 });
 
-// === OTOMATİK BAŞLATMA ===
+// === OTOMATİK BAŞLATMA VE OLAY BAĞLAYICILARI ===
 
-(function autoFillServerUrl() {
+function initAuthEvents() {
+    const tabLoginBtn = document.getElementById('tabLoginBtn');
+    const tabRegisterBtn = document.getElementById('tabRegisterBtn');
+    const authSwitchLink = document.getElementById('authSwitchLink');
+    const authForm = document.getElementById('authForm');
+
+    if (tabLoginBtn) {
+        tabLoginBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            switchAuthTab('login');
+        });
+    }
+
+    if (tabRegisterBtn) {
+        tabRegisterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            switchAuthTab('register');
+        });
+    }
+
+    if (authSwitchLink) {
+        authSwitchLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            switchAuthTab(currentAuthTab === 'login' ? 'register' : 'login');
+        });
+    }
+
+    if (authForm) {
+        authForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            handleAuthSubmit();
+        });
+    }
+
+    // Input değiştiğinde hataları temizleme
+    ['serverIp', 'authUsername', 'authEmail', 'authPassword', 'authPasswordConfirm'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.addEventListener('input', () => {
+                input.classList.remove('input-error');
+                const alertEl = document.getElementById('authAlert');
+                if (alertEl && alertEl.classList.contains('auth-alert-error')) {
+                    alertEl.classList.add('hidden');
+                }
+            });
+        }
+    });
+}
+
+function autoFillServerUrl() {
     const origin = window.location.origin;
     const input = document.getElementById('serverIp');
-    if (!input) return;
-    // Sayfa bir sunucudan yüklendiyse kendi origin'ini kullan,
-    // file:// veya null origin ise localhost:3000 varsayılanını kullan
-    if (origin && origin !== 'null' && !origin.startsWith('file://')) {
-        input.value = origin;
-    } else {
-        input.value = 'http://localhost:3000';
+    if (input) {
+        // Sayfa bir sunucudan yüklendiyse kendi origin'ini kullan,
+        // file:// veya null origin ise localhost:3000 varsayılanını kullan
+        if (origin && origin !== 'null' && !origin.startsWith('file://')) {
+            input.value = origin;
+        } else if (!input.value) {
+            input.value = 'http://localhost:3000';
+        }
     }
+    initAuthEvents();
     setTimeout(autoLoginAttempt, 100);
-})();
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', autoFillServerUrl);
+} else {
+    autoFillServerUrl();
+}
+

@@ -12,10 +12,18 @@ const PORT = 3000;
 
 // [FAZ 1] GÜVENLİ AKTARIM: Express Güvenlik Başlıkları (Security Headers)
 app.use((req, res, next) => {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    if (process.env.NODE_ENV === 'production') {
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
+    // Geliştirme ortamında önbelleği devre dışı bırak (F5 atıldığında yeni kod gelsin)
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+
+    if (!req.url.includes('/socket.io/')) {
+        console.log(`[HTTP ${req.method}] ${req.url}`);
+    }
     next();
 });
 
@@ -23,19 +31,16 @@ app.use((req, res, next) => {
 app.set('trust proxy', 1);
 
 // [FİX-1] Yalnızca ./public/ dizinindeki istemci dosyaları sunuluyor.
-// database.json, server.js, socket.js, package.json vb. artık HTTP üzerinden erişilemez.
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h', etag: true }));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0, etag: false }));
 
 app.get('/', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.sendFile(path.join(__dirname, 'public', 'siber_e2ee_sohbet_terminali.html'));
 });
 
 // Socket.io Ayarları
-// [FİX-14] CORS origin artık çevre değişkeniyle yapılandırılabilir.
-// Üretimde CORS_ORIGIN=https://example.com ayarlayın. Varsayılan: "*" (geliştirme).
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 const io = require('socket.io')(http, {
-    cors: { origin: CORS_ORIGIN, methods: ["GET", "POST"] },
+    cors: { origin: true, credentials: true, methods: ["GET", "POST"] },
     transports: ['websocket', 'polling']
 });
 
@@ -48,13 +53,13 @@ dbManager.initDB().then(() => {
     // 2. Çöp Toplayıcıyı Başlat (Zaman aşımına uğrayan paketleri temizler)
     dbManager.startGarbageCollector();
     
-    // 3. Sunucuyu Dinlemeye Başla
-    http.listen(PORT, () => {
+    // 3. Sunucuyu Dinlemeye Başla (0.0.0.0 ile hem localhost hem 127.0.0.1 hem yerel ağ dinlenir)
+    http.listen(PORT, '0.0.0.0', () => {
         console.log(`==================================================`);
-        console.log(`[+] AES-GCM P2P SİBER MERKEZİ AKTİF: PORT ${PORT}`);
+        console.log(`[+] AES-GCM P2P SİBER MERKEZİ AKTİF: http://localhost:${PORT}`);
+        console.log(`[+] YEREL IP ERİŞİMİ: http://127.0.0.1:${PORT}`);
         console.log(`[!] SİSTEM "CLEAN ARCHITECTURE" MODÜLLERİYLE BAŞLADI`);
         console.log(`[!] FAZ-1: JWT, RATE-LIMIT & SECURE HEADERS AKTİF`);
-        console.log(`[!] FİX: Hassas dosyalar ./public/ dışında tutuldu (DB sızıntısı önlendi)`);
         console.log(`==================================================`);
     });
 });
