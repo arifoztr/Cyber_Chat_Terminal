@@ -40,7 +40,7 @@ app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0, etag: false 
 
 app.get('/', (req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.sendFile(path.join(__dirname, 'public', 'siber_e2ee_sohbet_terminali.html'));
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // CORS Yapılandırması (Cloudflare Pages ve custom domainler için)
