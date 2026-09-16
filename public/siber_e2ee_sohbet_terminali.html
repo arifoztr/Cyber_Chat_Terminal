@@ -60,8 +60,11 @@
             <div id="authAlert" class="hidden auth-alert"></div>
 
             <form id="authForm" onsubmit="event.preventDefault(); handleAuthSubmit();" class="space-y-4">
-                <div>
-                    <label class="block text-xs text-[--text-secondary] mb-1">Sunucu Adresi</label>
+                <div id="serverIpContainer">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="block text-xs text-[--text-secondary]">Sunucu Adresi</label>
+                        <button type="button" id="serverIpToggleBtn" onclick="toggleServerConfig()" class="text-[11px] text-[--accent] hover:underline cursor-pointer hidden">Gelişmiş</button>
+                    </div>
                     <input type="text" id="serverIp" class="input-field font-mono text-sm" placeholder="http://localhost:3000" value="http://localhost:3000">
                 </div>
                 
@@ -419,6 +422,7 @@
     </footer>
 
     <!-- Scripts -->
+    <script src="config.js?v=2"></script>
     <script src="crypto.js?v=2"></script>
     <script src="db.js?v=2"></script>
     <script src="ui.js?v=2"></script>

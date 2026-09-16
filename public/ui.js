@@ -346,8 +346,11 @@ function handleAuthSubmit() {
     };
 
     // Socket bağlantı kontrolü ve başlatma
+    const configuredBackend = (window.APP_CONFIG && window.APP_CONFIG.BACKEND_URL) ? window.APP_CONFIG.BACKEND_URL.trim() : '';
     let targetUrl = serverUrl;
-    if (window.location.origin && window.location.origin !== 'null' && !window.location.origin.startsWith('file://')) {
+    if (configuredBackend && (!serverUrl || serverUrl === 'http://localhost:3000')) {
+        targetUrl = configuredBackend;
+    } else if (window.location.origin && window.location.origin !== 'null' && !window.location.origin.startsWith('file://')) {
         if (!serverUrl || serverUrl === 'http://localhost:3000') {
             targetUrl = window.location.origin;
         }
@@ -378,7 +381,7 @@ function handleAuthSubmit() {
             clearTimeout(connectionTimeout);
             restoreBtn();
             playSound('error');
-            setAuthAlert(`Sunucuya bağlanılamadı (${targetUrl}): ${err.message || 'Bağlantı hatası'}. Terminalde "node server.js" çalıştığından emin olun.`, 'error');
+            setAuthAlert(`Sunucuya bağlanılamadı (${targetUrl}): ${err.message || 'Bağlantı hatası'}. Backend servisinin açık olduğundan emin olun.`, 'error');
             showToast("Sunucuya bağlanılamadı.", 'error');
         });
     } else {
@@ -390,7 +393,10 @@ function autoLoginAttempt() {
     const token = localStorage.getItem('cyber_jwt');
     if (!token) return;
     
-    const serverUrl = document.getElementById('serverIp').value;
+    const configuredBackend = (window.APP_CONFIG && window.APP_CONFIG.BACKEND_URL) ? window.APP_CONFIG.BACKEND_URL.trim() : '';
+    const input = document.getElementById('serverIp');
+    const serverUrl = (input && input.value.trim()) || configuredBackend || (window.location.origin && !window.location.origin.startsWith('file://') ? window.location.origin : 'http://localhost:3000');
+    
     showToast("Oturum doğrulanıyor...", 'info');
     
     socket = io(serverUrl, { transports: ['polling', 'websocket'], auth: { token }, reconnectionAttempts: 20, reconnectionDelay: 2000 });
@@ -1636,16 +1642,36 @@ function initAuthEvents() {
     });
 }
 
-function autoFillServerUrl() {
-    const origin = window.location.origin;
+function toggleServerConfig() {
     const input = document.getElementById('serverIp');
     if (input) {
-        // Sayfa bir sunucudan yüklendiyse kendi origin'ini kullan,
-        // file:// veya null origin ise localhost:3000 varsayılanını kullan
-        if (origin && origin !== 'null' && !origin.startsWith('file://')) {
-            input.value = origin;
-        } else if (!input.value) {
-            input.value = 'http://localhost:3000';
+        input.classList.toggle('hidden');
+        if (!input.classList.contains('hidden')) {
+            input.focus();
+        }
+    }
+}
+
+function autoFillServerUrl() {
+    const input = document.getElementById('serverIp');
+    const toggleBtn = document.getElementById('serverIpToggleBtn');
+    const configuredBackend = (window.APP_CONFIG && window.APP_CONFIG.BACKEND_URL) 
+        ? window.APP_CONFIG.BACKEND_URL.trim() 
+        : '';
+
+    if (input) {
+        if (configuredBackend) {
+            input.value = configuredBackend;
+            // Backend tanımlı olduğunda teknik input'u varsayılan olarak gizle, toggle butonunu göster
+            input.classList.add('hidden');
+            if (toggleBtn) toggleBtn.classList.remove('hidden');
+        } else {
+            const origin = window.location.origin;
+            if (origin && origin !== 'null' && !origin.startsWith('file://')) {
+                input.value = origin;
+            } else if (!input.value) {
+                input.value = 'http://localhost:3000';
+            }
         }
     }
     initAuthEvents();

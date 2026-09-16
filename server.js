@@ -8,7 +8,7 @@ const path = require('path');
 const dbManager = require('./database');
 const setupSockets = require('./socket');
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // [FAZ 1] GÜVENLİ AKTARIM: Express Güvenlik Başlıkları (Security Headers)
 app.use((req, res, next) => {
@@ -30,6 +30,11 @@ app.use((req, res, next) => {
 // [FİX-2] Proxy Arkası IP Güveni (Nginx, Cloudflare vb.)
 app.set('trust proxy', 1);
 
+// PaaS / Uptime Monitörleri için Healthcheck Endpoint'i
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // [FİX-1] Yalnızca ./public/ dizinindeki istemci dosyaları sunuluyor.
 app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0, etag: false }));
 
@@ -38,9 +43,14 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'siber_e2ee_sohbet_terminali.html'));
 });
 
+// CORS Yapılandırması (Cloudflare Pages ve custom domainler için)
+const allowedOrigins = process.env.CORS_ORIGIN 
+    ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()) 
+    : true;
+
 // Socket.io Ayarları
 const io = require('socket.io')(http, {
-    cors: { origin: true, credentials: true, methods: ["GET", "POST"] },
+    cors: { origin: allowedOrigins, credentials: true, methods: ["GET", "POST"] },
     transports: ['websocket', 'polling']
 });
 

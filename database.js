@@ -2,9 +2,19 @@ const fs = require('fs');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 
-const dbPath = path.join(__dirname, 'database.sqlite');
+const dbPath = process.env.DB_PATH || path.join(__dirname, 'database.sqlite');
 const legacyJsonPath = path.join(__dirname, 'database.json');
 const backupJsonPath = path.join(__dirname, 'database.json.backup');
+
+// Eğer DB_PATH için özel bir dizin belirtilmişse ve dizin yoksa oluştur
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+    try {
+        fs.mkdirSync(dbDir, { recursive: true });
+    } catch (e) {
+        console.error('[!] Veritabanı dizini oluşturulamadı:', e);
+    }
+}
 
 // Sabit Limitler
 const MAX_PACKET_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 Gün
