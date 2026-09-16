@@ -110,10 +110,13 @@ module.exports = function setupSockets(io) {
             }
 
             try {
-                const { email, password, username } = data;
+                let { email, password, username } = data;
                 if (!email || !password || !username) {
                     return callback({ success: false, message: "Tüm alanlar zorunludur." });
                 }
+                email = email.trim().toLowerCase();
+                username = username.trim();
+
                 if (db.users[email]) {
                     console.log(`[!] REGİSTER: E-posta zaten kullanımda (${email})`);
                     return callback({ success: false, message: "Bu e-posta adresi zaten kullanımda." });
@@ -154,10 +157,11 @@ module.exports = function setupSockets(io) {
             }
 
             try {
-                const { email, password } = data;
+                let { email, password } = data;
                 if (!email || !password) {
                     return callback({ success: false, message: "E-posta ve şifre zorunludur." });
                 }
+                email = email.trim().toLowerCase();
                 const user = db.users[email];
                 
                 if (!user) {
@@ -197,8 +201,9 @@ module.exports = function setupSockets(io) {
 
         socket.on('verify_session', (token, callback) => {
             const payload = verifyJWT(token);
-            if (payload && db.users[payload.email]) {
-                const user = db.users[payload.email];
+            const email = payload?.email ? payload.email.trim().toLowerCase() : null;
+            if (email && db.users[email]) {
+                const user = db.users[email];
                 socket.user = user;
                 if (!onlineNodes.has(user.userId)) onlineNodes.set(user.userId, new Set());
                 onlineNodes.get(user.userId).add(socket.id);
