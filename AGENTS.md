@@ -2,7 +2,7 @@ AGENTS.md – Siber E2EE Sohbet Terminali (v10 Cyber-HUD Edition)
 📌 Proje Özeti
 Bu proje, uçtan uca şifreli (E2EE) bir P2P sohbet terminalidir. İstemciler (web tarayıcıları) arasında ECDH ile anahtar takası yapılır, tüm mesajlar ve dosyalar AES-GCM-256 ile şifrelenir. Sunucu yalnızca signaling ve relay görevi görür; şifreli içerikleri asla çözemez.
 
-Arayüz, cyberpunk / hacker estetiğinde tasarlanmıştır ve gerçek zamanlı ağ trafiği izleyicisi (sniffer), TTL ile kendini imha eden mesajlar, görsel dosya paylaşımı, çevrimdışı kuyruklama ve tamamen istemci tarafında saklanan kriptografik anahtarlar içerir.
+Arayüz, modern cyber-dark estetiğinde tasarlanmıştır ve TTL ile kendini imha eden mesajlar, görsel dosya paylaşımı, çevrimdışı kuyruklama, parmak izi doğrulama ve tamamen istemci tarafında saklanan kriptografik anahtarlar içerir.
 
 🧰 Teknoloji Yığını
 Alan  ||    Teknoloji
@@ -12,8 +12,8 @@ Backend   ||	Node.js, Express, Socket.io (server)
 Şifreleme   ||	Web Crypto API (crypto.subtle): AES-GCM, ECDH, SHA-256
 Kimlik Doğrulama    ||	JWT (bağımlılıksız, HMAC-SHA256) + bcrypt
 Veritabanı  ||	SQLite (WAL modu) + bellek-içi cache, debounced yazma
-CSS Kütüphanesi ||	Tailwind CSS (CDN) + özel cyberpunk stilleri (style.css)
-Fontlar ||	Fira Code, Share Tech Mono
+CSS Kütüphanesi ||	Tailwind CSS (CDN) + özel modern cyber stilleri (style.css)
+Fontlar ||	Inter, JetBrains Mono
 
 
 
@@ -22,7 +22,7 @@ text
 /
 ├── public/
 │   ├── siber_e2ee_sohbet_terminali.html  # Ana HTML şablonu
-│   ├── ui.js                             # UI, state yönetimi, auth, sniffer, reconnect
+│   ├── ui.js                             # UI, state yönetimi, auth, reconnect
 │   ├── socket-handlers.js                # Socket.IO olay dinleyicileri (istemci)
 │   ├── crypto.js                         # ECDH/AES kripto işlemleri (istemci)
 │   ├── db.js                             # IndexedDB yönetimi (istemci)
@@ -50,9 +50,9 @@ Bu proje "Vibe Coding" yaklaşımıyla geliştirilmektedir. Aşağıdaki kuralla
 
 -Tüm şifreleme işlemleri window.crypto.subtle API'si ile yapılmalıdır. Harici kripto kütüphaneleri kullanmayın.
 
--CSS eklemeleri Tailwind CDN sınıfları + style.css içindeki özel "cyber" sınıflarla yapılmalıdır.
+-CSS eklemeleri Tailwind CDN sınıfları + style.css içindeki özel sınıflarla yapılmalıdır.
 
--Yeni UI öğeleri mevcut neon renk paletine, monospace fontlara, büyük harf kullanımına ve glitch efektlerine uymalıdır.
+-Yeni UI öğeleri mevcut modern cyber-dark estetiğine (koyu kartlar, CSS değişkenleri, duyarlı düzen, Inter ve JetBrains Mono tipografisi) uymalıdır. Ses efektleri ve ağ dinleyici (sniffer) arayüzden çıkarılmıştır, yeni bileşenlerde bunlara referans verilmemelidir.
 
 3. Backend Katmanı
 -Sunucu yalnızca signaling ve relay görevi görür. textPayload veya filePayload içeriğini asla çözmeyin, incelemeyin veya loglamayın.
@@ -112,7 +112,7 @@ JWT, bağımlılıksız olarak HMAC-SHA256 ile imzalanmıştır. JWT_SECRET değ
 🧪 Test ve Doğrulama İpuçları
 Test Senaryosu	Nasıl Doğrulanır
 ECDH Anahtar Takası	İki taraf da giriş yaptıktan sonra derivedSecrets objesinde karşılıklı anahtar var mı kontrol edin.
-Mesaj Şifreleme	Sniffer log'unda textPayload alanının şifreli (base64) göründüğünden emin olun.
+Mesaj Şifreleme	DevTools Network/Konsol akışında textPayload alanının şifreli (base64) göründüğünden emin olun.
 Revoke (İmha)	Mesaj gönderip "İMHA ET" butonuna tıklayın. Karşı tarafta mesaj kaybolmalı.
 TTL (Zamanlı İmha)	TTL süresi dolduğunda mesaj hem DOM'dan hem de IDB'den silinmeli.
 Çevrimdışı Kuyruk	Hedef çevrimdışıyken mesaj gönderin. Hedef giriş yaptığında mesajlar gelmeli.
@@ -121,8 +121,6 @@ OPTIMIZATIONS.md ve PROGRESS.md dosyaları, gelecek planlamaları içerir. FAZ 1
 
 database.js içindeki MAX_PACKET_AGE_MS = 7 gün değeri, kuyruktaki mesajların otomatik temizlenme süresidir.
 
-Sniffer (ağ dinleyici) yalnızca metadata'yı gösterir, şifreli içerik asla görüntülenmez.
-
-Son Güncelleme: 2026-06-28
-Versiyon: v10 (Cyber-HUD Edition)
+Son Güncelleme: 2026-09-16
+Versiyon: v10 (Cyber-HUD Edition — Modern Dark UI)
 Maintainer: Vibe Coding Collective 🚀

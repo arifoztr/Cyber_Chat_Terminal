@@ -317,19 +317,6 @@ body {
   transform-origin: left;
 }
 
-/* Sniffer */
-.sniffer-sparkline {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 20px;
-}
-.spark-bar {
-  width: 3px;
-  background-color: var(--accent);
-  min-height: 2px;
-  border-radius: 1px;
-}
 
 /* FAB */
 #scrollToBottomBtn {

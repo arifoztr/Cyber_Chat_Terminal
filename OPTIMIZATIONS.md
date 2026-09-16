@@ -84,7 +84,7 @@ Tüm istemci tarafı şifreleme/şifre çözme işlemleri `window.crypto.subtle`
 ### İstemci Otomatik Yeniden Bağlanma
 - Bağlantı koptuğunda (sunucu restart, ağ hatası) istemci otomatik olarak yeniden bağlanmayı dener.
 - Maksimum 20 deneme, 2 saniye aralıklarla.
-- Yeniden bağlanma sırasında cyberpunk temalı overlay gösterilir, kullanıcı oturumu korunur.
+- Yeniden bağlanma sırasında modern siber temalı overlay gösterilir, kullanıcı oturumu korunur.
 - Başarılı yeniden bağlanmada JWT ile oturum doğrulanır, ECDH anahtarları tekrar yayınlanır.
 
 ### Çevrimiçi Durum Takibi
@@ -101,7 +101,8 @@ Sistem tarafından üretilen kullanıcı ID'leri `AGN-XXXX-XXXX` formatını tak
 ### Çift Dil Kuralı
 - Kod mimarisi (değişkenler, fonksiyonlar, API olayları): **İngilizce**
 - Kullanıcı arayüzü metinleri: **Türkçe**
-- UI eklemeleri mevcut "cyber" estetiğine uymalıdır (neon renkler, monospace fontlar, büyük harf, glitch efektleri).
+- UI eklemeleri mevcut modern cyber-dark estetiğine uymalıdır (temiz koyu yüzeyler, CSS değişkenleri, duyarlı kart yapısı, net tipografi).
+- Ses efektleri ve ağ izleyici (sniffer) arayüzden çıkarılmıştır; yeni UI bileşenlerinde gereksiz ses tetiklemeleri ve sniffer bağımlılıkları eklenmemelidir.
 
 ### Revoke Protokolü Kırılganlığı
 - `revoke_packet` olayı `packetId`, `senderId` ve `targetId` alanlarının tam eşleşmesine bağlıdır.

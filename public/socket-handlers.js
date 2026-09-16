@@ -103,7 +103,6 @@ function bindSocketEvents() {
 
     socket.off('receive_secure_packet');
     socket.on('receive_secure_packet', async (packet) => {
-        logPacketToSniffer(packet);
         let senderContact = myContacts.find(c => c.id === packet.senderId);
         if (!senderContact) {
             senderContact = { id: packet.senderId, key: null, fingerprint: null, fingerprintVerified: false, ecdhStatus: 'pending', isOnline: true };

@@ -1,7 +1,7 @@
 # PROJE İLERLEME DURUMU (PROGRESS)
 
 **Mevcut Sürüm:** v10 (Cyber-HUD Edition)
-**Proje Odak Noktası:** E2EE (Uçtan Uca Şifreleme), Asenkron ECDH, Çevrimdışı Kuyruklama ve Ağ Dinleme (Sniffer) yeteneklerine sahip P2P Terminal.
+**Proje Odak Noktası:** E2EE (Uçtan Uca Şifreleme), Asenkron ECDH, Çevrimdışı Kuyruklama ve modern arayüze sahip P2P Güvenli Sohbet Terminali.
 
 ## 🟢 MEVCUT DURUM (TAMAMLANAN ÖZELLİKLER)
 * **Kimlik ve Tünel Altyapısı:** Kullanıcı kayıt/giriş işlemleri `bcrypt` ile güvence altına alınmış, istemciler arası ECDH ile asenkron anahtar takası (Shared Secret) kurulmuştur.
@@ -9,7 +9,7 @@
 * **Çevrimdışı İletişim:** Karşı taraf çevrimdışı olduğunda paketler sunucuda kuyruğa alınmakta, oturum açıldığında teslim edilmektedir.
 * **İmha Mekanizmaları:** * Kullanıcı tarafından başlatılan "Revoke" (Herkesten Sil) protokolü entegre edilmiştir.
     * TTL (Zaman ayarlı) mesajların geri sayım bitiminde yerel kasadan ve DOM üzerinden otomatik silinmesi sağlanmıştır.
-* **Terminal Arayüzü:** Ağ paketlerini izleyen sniffer, siber güvenlik temalı UI ve görsel sıkıştırma destekli dosya gönderimi aktiftir.
+* **Terminal Arayüzü:** Modern siber koyu temalı, sadeleştirilmiş duyarlı (responsive) kart düzeni ve görsel sıkıştırma destekli dosya gönderimi aktiftir. (Ses efektleri ve ağ izleyici [sniffer] sadeleştirme kapsamında arayüzden kaldırılmıştır.)
 * **Kullanıcı Arama ve Bildirimler:** Rate-limited kullanıcı arama, karşılıklı kişi ekleme isteği/onayı ve parmak izi doğrulama rehberi entegre edilmiştir.
 
 ---

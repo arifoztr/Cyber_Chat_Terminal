@@ -37,10 +37,7 @@
                 <span id="fontScaleDisplay" class="px-3 py-1 text-xs font-medium">115%</span>
                 <button onclick="changeFontSize(0.05)" class="px-3 py-1 hover:bg-[--surface-hover] transition-colors border-l border-[--border] text-sm">A+</button>
             </div>
-            <button onclick="toggleAudio()" id="audioBtn" class="btn btn-ghost btn-sm text-[--text-secondary]">AUDIO: ON 🔊</button>
-            <button onclick="toggleSniffer()" id="snifferToggleBtn" class="hidden btn btn-ghost btn-sm text-[--accent]">
-                SNIFFER
-            </button>
+
         </div>
     </header>
 
@@ -101,59 +98,62 @@
 
         <!-- ─── CHAT TERMINAL ─── -->
         <div id="chatTerminalWrapper" class="hidden w-full h-full min-h-0">
-            <div id="chatTerminal" class="w-full h-full flex flex-col lg:grid lg:grid-cols-12 gap-4 items-stretch animate-fade-in overflow-hidden scroll-smooth">
+            <div id="chatTerminal" class="w-full h-full flex flex-col lg:flex-row gap-3 items-stretch animate-fade-in overflow-hidden">
                 
-                <!-- KİŞİ LİSTESİ -->
-                <section class="col-span-12 lg:col-span-3 card p-4 flex flex-col h-[22dvh] min-h-[140px] lg:h-auto lg:min-h-0 shrink-0">
+                <!-- KİŞİ LİSTESİ (WhatsApp Tarzı Sidebar) -->
+                <section id="chatSidebar" class="w-full lg:w-[320px] xl:w-[350px] card p-3 flex flex-col h-[35dvh] lg:h-full shrink-0 min-h-0">
                     <div class="flex flex-col flex-1 min-h-0 overflow-hidden">
                         
-                        <!-- Profil Bölümü -->
-                        <div class="pb-4 border-b border-[--border] mb-4 shrink-0">
-                            <div class="flex items-center justify-between mb-3">
-                                <div class="flex items-center gap-3 min-w-0">
-                                    <div id="myProfileAvatarContainer" class="w-10 h-10 rounded-full bg-[--surface-hover] flex items-center justify-center shrink-0 overflow-hidden">
-                                        <span class="text-[--text-primary] font-medium text-sm">OP</span>
-                                    </div>
-                                    <div class="flex flex-col min-w-0">
-                                        <span id="profileUsername" class="text-sm font-semibold truncate">User</span>
-                                        <button onclick="showSettingsModal()" class="text-left text-xs text-[--text-secondary] hover:text-[--text-primary] transition-colors mt-0.5">Ayarlar</button>
-                                    </div>
+                        <!-- Profil & Üst Bar (WP Style) -->
+                        <div class="flex items-center justify-between pb-3 border-b border-[--border] shrink-0 gap-2">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div id="myProfileAvatarContainer" class="w-10 h-10 rounded-full bg-[--surface-hover] flex items-center justify-center shrink-0 overflow-hidden border border-[--border] cursor-pointer" onclick="showSettingsModal()" title="Profil Ayarları">
+                                    <span class="text-[--text-primary] font-medium text-xs">OP</span>
                                 </div>
-                                <button onclick="disconnectFromServer()" class="btn btn-ghost btn-sm text-[--error] shrink-0" title="Çıkış Yap">⏻</button>
+                                <div class="flex flex-col min-w-0">
+                                    <span id="profileUsername" class="text-sm font-semibold truncate text-[--text-primary]">User</span>
+                                    <div class="flex items-center gap-1 cursor-pointer group" onclick="copyMyId()" title="ID'yi kopyala">
+                                        <span id="profileUserId" class="text-[11px] text-[--text-muted] font-mono truncate group-hover:text-[--text-secondary] transition-colors"></span>
+                                        <span class="text-[10px] text-[--text-muted] group-hover:text-[--accent] shrink-0">📋</span>
+                                    </div>
+                                    <span id="profileUserFingerprint" class="hidden"></span>
+                                </div>
                             </div>
 
-                            <div class="flex justify-between items-center bg-[--bg-primary] p-2 rounded-lg border border-[--border] mb-2">
-                                <span class="text-xs text-[--text-secondary] hidden sm:inline">ID:</span>
-                                <div class="flex items-center gap-2 min-w-0 flex-1 sm:justify-end">
-                                    <span id="profileUserId" class="text-xs text-[--text-primary] font-mono truncate select-all"></span>
-                                    <button onclick="copyMyId()" class="text-[--text-secondary] hover:text-[--text-primary] shrink-0 text-sm" title="ID Kopyala">📋</button>
-                                </div>
-                            </div>
-                            <div class="flex justify-between items-center bg-[--bg-primary] p-2 rounded-lg border border-[--border]">
-                                <span class="text-xs text-[--text-secondary] hidden sm:inline">FP:</span>
-                                <div class="flex items-center gap-2 min-w-0 flex-1 sm:justify-end">
-                                    <span id="profileUserFingerprint" class="text-[10px] text-[--text-muted] font-mono truncate select-all"></span>
-                                </div>
+                            <!-- WP Aksiyon Butonları -->
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button onclick="showContactConfigModal()" class="w-8 h-8 rounded-lg hover:bg-[--surface-hover] text-[--text-secondary] hover:text-[--accent] flex items-center justify-center transition-colors text-base" title="Yeni Kişi Ekle">
+                                    ➕
+                                </button>
+                                <button onclick="showSearchModal()" class="w-8 h-8 rounded-lg hover:bg-[--surface-hover] text-[--text-secondary] hover:text-[--text-primary] flex items-center justify-center transition-colors text-sm" title="Kullanıcı Ara">
+                                    🔍
+                                </button>
+                                <button onclick="showSettingsModal()" class="w-8 h-8 rounded-lg hover:bg-[--surface-hover] text-[--text-secondary] hover:text-[--text-primary] flex items-center justify-center transition-colors text-sm" title="Ayarlar">
+                                    ⚙️
+                                </button>
+                                <button onclick="disconnectFromServer()" class="w-8 h-8 rounded-lg hover:bg-[--error]/15 text-[--text-secondary] hover:text-[--error] flex items-center justify-center transition-colors text-sm" title="Çıkış Yap">
+                                    ⏻
+                                </button>
                             </div>
                         </div>
 
-                        <div class="mb-4 shrink-0 flex items-center gap-2">
-                            <button onclick="showContactConfigModal()" class="flex-1 btn btn-primary btn-sm">
-                                Kişi Ekle
-                            </button>
-                            <button onclick="showSearchModal()" class="flex-1 btn btn-ghost btn-sm border border-[--border]">
-                                Ara
-                            </button>
+                        <!-- WP Tarzı Arama Kutusu -->
+                        <div class="my-2.5 shrink-0">
+                            <div class="flex items-center bg-[--bg-primary] border border-[--border] rounded-xl px-2.5 py-1.5 focus-within:border-[--accent] transition-colors">
+                                <span class="text-xs text-[--text-muted] mr-2">🔍</span>
+                                <input type="text" id="contactSearchInput" oninput="filterContactsList(this.value)" placeholder="Aratın veya sohbet seçin..." class="w-full bg-transparent border-none outline-none text-xs text-[--text-primary] placeholder-[--text-muted]">
+                            </div>
                         </div>
 
+                        <!-- Kişi Listesi -->
                         <div class="flex-1 flex flex-col min-h-0 relative">
-                            <div id="contactsList" class="flex-1 overflow-y-auto custom-scrollbar pr-2 min-h-0"></div>
+                            <div id="contactsList" class="flex-1 overflow-y-auto custom-scrollbar pr-1 min-h-0 space-y-1"></div>
                         </div>
                     </div>
                 </section>
 
                 <!-- Chat Alanı -->
-                <section id="chatStreamContainer" class="col-span-12 lg:col-span-6 card p-4 flex flex-col transition-all duration-500 flex-1 min-h-[300px] lg:min-h-0 min-w-0 bg-[--bg-chat]">
+                <section id="chatStreamContainer" class="flex-1 card p-4 flex flex-col transition-all duration-300 min-h-[300px] lg:min-h-0 min-w-0 bg-[--bg-chat]">
                     <div class="flex flex-col flex-1 min-h-0 overflow-hidden relative">
                         <div class="flex items-center justify-between pb-3 border-b border-[--border] mb-3 shrink-0">
                             <div class="flex items-center gap-3 min-w-0">
@@ -227,32 +227,6 @@
                     </div>
                 </section>
 
-                <!-- Sniffer Bölümü -->
-                <section id="snifferContainer" class="col-span-12 lg:col-span-3 card p-4 flex flex-col h-[15dvh] min-h-[110px] lg:h-auto lg:min-h-0 shrink-0">
-                    <div class="flex flex-col h-full relative overflow-hidden">
-                        <div class="pb-2 border-b border-[--border] mb-2 flex items-center justify-between shrink-0">
-                            <h2 class="text-xs font-semibold uppercase text-[--text-secondary]">Ağ Trafiği</h2>
-                            <div class="flex items-center gap-2">
-                                <div class="sniffer-sparkline" id="snifferSparkline">
-                                    <div class="spark-bar" style="height:4px"></div>
-                                    <div class="spark-bar" style="height:4px"></div>
-                                    <div class="spark-bar" style="height:4px"></div>
-                                    <div class="spark-bar" style="height:4px"></div>
-                                    <div class="spark-bar" style="height:4px"></div>
-                                    <div class="spark-bar" style="height:4px"></div>
-                                    <div class="spark-bar" style="height:4px"></div>
-                                    <div class="spark-bar" style="height:4px"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div id="snifferLog" class="flex-1 min-h-0 overflow-y-auto p-2 bg-[--bg-primary] border border-[--border] rounded-lg custom-scrollbar text-[10px] text-[--text-secondary] font-mono space-y-1">
-                            <div class="flex flex-col items-center justify-center h-full opacity-60">
-                                <span class="text-xl mb-2">📡</span>
-                                <div class="text-center">Dinleniyor...</div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
             </div>
         </div>
     </div>

@@ -1,6 +1,6 @@
 // ============================================================
 // ui.js — Kullanıcı Arayüzü, State Yönetimi ve DOM İşlemleri
-// Toast, Render, Auth, Settings, Sniffer, Matrix Rain, Mobile
+// Toast, Render, Auth, Settings, Mobile
 // ============================================================
 
 // === POLYFILL ===
@@ -11,8 +11,6 @@ const idleCallback = window.requestIdleCallback
 // === GLOBAL STATE ===
 let socket = null;
 let activeFileBase64 = null;
-let audioEnabled = true;
-let snifferActive = true;
 let keyRevealed = false;
 let currentAuthTab = 'login'; 
 
@@ -80,23 +78,8 @@ function renderLogPlaceholder(logBox, icon, message, spinner = true) {
     </div>`;
 }
 
-// === SES SİSTEMİ ===
-
-let audioCtx = null;
-function getAudioCtx() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); return audioCtx; }
-function playSound(type) {
-    if (!audioEnabled) return;
-    try {
-        const ctx = getAudioCtx(); if (ctx.state === 'suspended') ctx.resume();
-        const osc = ctx.createOscillator(); const gain = ctx.createGain();
-        osc.connect(gain); gain.connect(ctx.destination);
-        if (type === 'type') { osc.type = 'square'; osc.frequency.setValueAtTime(800, ctx.currentTime); gain.gain.setValueAtTime(0.01, ctx.currentTime); osc.start(); osc.stop(ctx.currentTime + 0.05); } 
-        else if (type === 'transit') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1500, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.02, ctx.currentTime); osc.start(); osc.stop(ctx.currentTime + 0.3); } 
-        else if (type === 'success') { osc.type = 'sine'; osc.frequency.setValueAtTime(600, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.2); gain.gain.setValueAtTime(0.03, ctx.currentTime); osc.start(); osc.stop(ctx.currentTime + 0.2); } 
-        else if (type === 'error') { osc.type = 'square'; osc.frequency.setValueAtTime(100, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.4); gain.gain.setValueAtTime(0.05, ctx.currentTime); osc.start(); osc.stop(ctx.currentTime + 0.4); } 
-        else if (type === 'destroy') { osc.type = 'sawtooth'; osc.frequency.setValueAtTime(800, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.5); gain.gain.setValueAtTime(0.04, ctx.currentTime); osc.start(); osc.stop(ctx.currentTime + 0.5); }
-    } catch (e) {}
-}
+// === SES SİSTEMİ (DEVRE DIŞI) ===
+function playSound(type) { /* Ses özellikleri devre dışı bırakıldı */ }
 
 // === TOAST BİLDİRİM SİSTEMİ ===
 
@@ -563,7 +546,6 @@ function finishLoginSetup() {
 
     document.getElementById('authGateway').classList.add('hidden');
     document.getElementById('chatTerminalWrapper').classList.remove('hidden');
-    document.getElementById('snifferToggleBtn').classList.remove('hidden');
     
     renderContactsSidebar(); bindSocketEvents(); checkOnlineStatuses();
     migrateLocalStorageToIndexedDB();
@@ -597,11 +579,9 @@ function finishLoginSetup() {
 function handleDisconnectUI() {
     hideReconnectOverlay();
     document.getElementById('chatTerminalWrapper').classList.add('hidden'); 
-    document.getElementById('snifferToggleBtn').classList.add('hidden');
     document.getElementById('authGateway').classList.remove('hidden');
     document.getElementById('clearChatBtn').classList.add('hidden');
     renderLogPlaceholder(document.getElementById('chatLog'), null, "Bağlantı kesildi", true);
-    document.getElementById('snifferLog').innerHTML = `<div class="flex flex-col items-center justify-center h-full opacity-60"><span class="text-lg sm:text-2xl mb-1 sm:mb-2">🔌</span><div class="text-pink-500 text-center tracking-[0.1em] sm:tracking-normal uppercase text-[9px] sm:text-[10px]">Sistem çevrimdışı...</div></div>`;
     document.getElementById('packetSizeDisplay').innerText = "";
     
     Object.keys(_activeTimers).forEach(id => { clearInterval(_activeTimers[id]); delete _activeTimers[id]; });
@@ -625,11 +605,14 @@ function updateContactStatusUI(userId, isOnline) {
     const contact = myContacts.find(c => c.id === userId);
     if (contact) contact.isOnline = isOnline;
     const dot = document.getElementById(`status_dot_${userId}`);
-    if (dot) dot.className = `w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full  flex-shrink-0 ${isOnline ? 'bg-green-500 text-green-500 animate-pulse' : 'bg-gray-600 text-gray-600 opacity-50'}`;
+    if (dot) {
+        dot.className = `absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[--bg-secondary] ${isOnline ? 'bg-[--success]' : 'bg-gray-500/50'}`;
+        dot.title = isOnline ? 'Çevrimiçi' : 'Çevrimdışı';
+    }
     
     if (activeTarget && activeTarget.id === userId) {
         const headerDot = document.getElementById('chatStatusDot');
-        if (headerDot) headerDot.className = `w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full  flex-shrink-0 ${isOnline ? 'bg-green-500 text-green-500 animate-pulse' : 'bg-gray-600 text-gray-600 opacity-50'}`;
+        if (headerDot) headerDot.className = `status-dot ${isOnline ? 'status-online' : 'status-offline'} shrink-0`;
     }
 }
 
@@ -642,6 +625,12 @@ function checkOnlineStatuses() {
     });
 }
 
+let _contactSearchTerm = '';
+function filterContactsList(term) {
+    _contactSearchTerm = (term || '').trim().toLowerCase();
+    renderContactsSidebar();
+}
+
 let _renderContactsTimer = null;
 function renderContactsSidebarDebounced() {
     if (_renderContactsTimer) return;
@@ -650,89 +639,117 @@ function renderContactsSidebarDebounced() {
 
 function renderContactsSidebar() {
     const listContainer = document.getElementById('contactsList');
-    if (myContacts.length === 0) {
+    if (!listContainer) return;
+
+    let filtered = myContacts;
+    if (_contactSearchTerm) {
+        filtered = myContacts.filter(c => c.id.toLowerCase().includes(_contactSearchTerm));
+    }
+
+    if (filtered.length === 0) {
         listContainer.replaceChildren();
         const emptyDiv = document.createElement('div');
-        emptyDiv.className = 'text-cyan-700/50 text-[9px] sm:text-[10px] text-center italic mt-2 sm:mt-6 border border-dashed border-cyan-800/30 p-3 bg-black/20  font-mono tracking-normal leading-relaxed';
-        emptyDiv.innerHTML = '<div class="text-[var(--text-muted)] text-center py-4"><div class="text-2xl mb-2">👥</div><div class="text-xs">Henüz kişi eklenmemiş.</div></div>';
-        listContainer.appendChild(emptyDiv); return;
+        emptyDiv.className = 'flex flex-col items-center justify-center py-8 px-4 text-center';
+        emptyDiv.innerHTML = _contactSearchTerm
+            ? '<span class="text-2xl mb-2 opacity-50">🔍</span><div class="text-xs text-[--text-muted]">Sonuç bulunamadı.</div>'
+            : '<span class="text-3xl mb-2 opacity-50">💬</span><div class="text-xs text-[--text-secondary] font-medium">Henüz bir sohbet yok</div><div class="text-[11px] text-[--text-muted] mt-1">Yeni kişi ekleyerek güvenli sohbete başlayın.</div>';
+        listContainer.appendChild(emptyDiv);
+        return;
     }
 
     const fragment = document.createDocumentFragment();
-    myContacts.forEach(contact => {
+    filtered.forEach(contact => {
         const isActive = activeTarget && activeTarget.id === contact.id;
         const unreadCount = unreadCounts[contact.id] || 0;
         const hasSecret = !!derivedSecrets[contact.id];
-        
-        const card = document.createElement('div');
-        card.setAttribute('onclick', `selectTarget('${contact.id}')`);
-        // Aktif kart özel animasyonlu sınıf, pasif kart normal hover
-        card.className = `contact-card p-2 sm:p-3 border  cursor-pointer transition-all duration-300 flex flex-col justify-between relative overflow-hidden ${
-            isActive
-                ? 'contact-card-active border-blue-500/60'
-                : ''
+
+        const item = document.createElement('div');
+        item.setAttribute('onclick', `selectTarget('${contact.id}')`);
+        item.className = `group flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all duration-200 border relative ${
+            isActive 
+                ? 'bg-[--surface-hover] border-[--border-active] shadow-sm' 
+                : 'hover:bg-[--surface-hover]/50 border-transparent'
         }`;
 
-        const topRow = document.createElement('div'); topRow.className = 'flex justify-between items-center z-10 relative';
-        const leftWrap = document.createElement('div'); leftWrap.className = 'flex items-center gap-1.5 sm:gap-2 min-w-0';
+        // Sol: Avatar + Online Noktası (WhatsApp Tarzı)
+        const avatarWrap = document.createElement('div');
+        avatarWrap.className = 'relative w-10 h-10 shrink-0 rounded-full bg-[--surface-hover] flex items-center justify-center overflow-hidden border border-[--border]';
         
-        // Avatar
-        const avatarDiv = document.createElement('div');
-        const avatarBorder = isActive ? 'border-blue-400 shadow-sm' : 'border-gray-700';
-        avatarDiv.className = `w-6 h-6 sm:w-8 sm:h-8 rounded-full border-2 ${avatarBorder} flex items-center justify-center overflow-hidden flex-shrink-0 bg-secondary transition-all`;
         if (contact.avatar) {
-            const img = document.createElement('img'); img.src = contact.avatar; img.className = 'w-full h-full object-cover'; avatarDiv.appendChild(img);
+            const img = document.createElement('img');
+            img.src = contact.avatar;
+            img.className = 'w-full h-full object-cover';
+            avatarWrap.appendChild(img);
         } else {
-            const initial = contact.id ? contact.id.charAt(4) || 'A' : 'A';
-            const spn = document.createElement('span'); spn.className = 'text-[8px] sm:text-[10px] text-blue-300 font-bold'; spn.innerText = initial; avatarDiv.appendChild(spn);
+            const initial = (contact.id || '').replace(/^AGN-/, '').charAt(0) || 'U';
+            const spn = document.createElement('span');
+            spn.className = 'text-xs font-semibold text-[--text-primary]';
+            spn.innerText = initial;
+            avatarWrap.appendChild(spn);
         }
-        leftWrap.appendChild(avatarDiv);
 
-        const idCol = document.createElement('div'); idCol.className = 'flex flex-col min-w-0';
-        const idSpan = document.createElement('span');
-        idSpan.className = `font-black font-mono text-[9px] sm:text-[10px] truncate ${isActive ? 'text-white font-semibold' : 'text-blue-400'}`;
-        idSpan.textContent = contact.id;
+        const dot = document.createElement('span');
+        dot.id = `status_dot_${contact.id}`;
+        dot.className = `absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[--bg-secondary] ${
+            contact.isOnline ? 'bg-[--success]' : 'bg-gray-500/50'
+        }`;
+        dot.title = contact.isOnline ? 'Çevrimiçi' : 'Çevrimdışı';
+        avatarWrap.appendChild(dot);
 
-        const subLine = document.createElement('span');
-        subLine.className = `text-[7px] font-mono truncate ${hasSecret ? 'text-green-500' : 'text-yellow-600 animate-pulse'}`;
-        subLine.textContent = hasSecret ? '🔐 Şifreli' : '⏳ Bekleniyor';
-        
+        // Orta: İsim/ID + Durum Bilgisi
+        const infoCol = document.createElement('div');
+        infoCol.className = 'flex-1 min-w-0 flex flex-col justify-center';
+
+        const topRow = document.createElement('div');
+        topRow.className = 'flex items-center justify-between gap-1 mb-0.5';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'text-xs font-semibold truncate text-[--text-primary]';
+        nameSpan.textContent = contact.id;
+
+        const e2eeBadge = document.createElement('span');
+        e2eeBadge.className = `text-[10px] font-medium shrink-0 ${hasSecret ? 'text-[--success]' : 'text-[--warning]'}`;
+        e2eeBadge.textContent = hasSecret ? '🔒 E2EE' : '⏳ Bekliyor';
+
+        topRow.appendChild(nameSpan);
+        topRow.appendChild(e2eeBadge);
+
+        const botRow = document.createElement('div');
+        botRow.className = 'flex items-center justify-between gap-1';
+
         const fpSpan = document.createElement('span');
-        fpSpan.className = `text-[7px] font-mono truncate ${contact.fingerprintVerified ? 'text-green-400' : 'text-yellow-500/80 animate-pulse'}`;
-        const fpText = contact.fingerprint ? `FP: ${contact.fingerprint}` : 'FP: BEKLENİYOR';
-        const fpStatus = contact.fingerprint ? (contact.fingerprintVerified ? ' ✅' : ' ⚠️') : '';
-        fpSpan.textContent = fpText + fpStatus;
+        fpSpan.className = 'text-[10px] text-[--text-muted] font-mono truncate';
+        const fpText = contact.fingerprint ? `FP: ${contact.fingerprint.substring(0, 8)}...` : 'Anahtar bekleniyor';
+        fpSpan.textContent = fpText;
 
-        idCol.appendChild(idSpan);
-        idCol.appendChild(subLine);
-        idCol.appendChild(fpSpan);
+        const rightBadges = document.createElement('div');
+        rightBadges.className = 'flex items-center gap-1.5 shrink-0';
 
         if (unreadCount > 0) {
             const badge = document.createElement('span');
-            badge.className = 'unread-badge bg-[#ff0055] text-white text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-sm ml-1 uppercase tracking-wider font-black inline-block';
-            badge.textContent = `+${unreadCount}`;
-            idCol.appendChild(badge);
+            badge.className = 'bg-[--success] text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1';
+            badge.textContent = unreadCount;
+            rightBadges.appendChild(badge);
         }
-        leftWrap.appendChild(idCol);
-        topRow.appendChild(leftWrap);
 
-        // Sağ taraf: durum noktası + sil butonu
-        const rightActions = document.createElement('div'); rightActions.className = 'flex items-center gap-2 flex-shrink-0 ml-1';
-        
-        const statusDot = document.createElement('span'); statusDot.id = `status_dot_${contact.id}`;
-        statusDot.className = `w-2 h-2 rounded-full  flex-shrink-0 ${contact.isOnline ? 'bg-green-500 text-green-500 animate-pulse' : 'bg-gray-600 text-gray-600 opacity-40'}`;
-        statusDot.title = contact.isOnline ? 'Çevrimiçi' : 'Çevrimdışı';
-        
-        const removeBtn = document.createElement('button');
-        removeBtn.setAttribute('onclick', `removeContact('${contact.id}', event)`);
-        removeBtn.className = 'text-gray-600 hover:text-red-500 hover:border-red-500/50 border border-transparent px-0.5 py-0.5 transition-all text-[10px] font-bold rounded';
-        removeBtn.title = 'Sil'; removeBtn.textContent = '✕';
-        
-        rightActions.appendChild(statusDot); rightActions.appendChild(removeBtn);
-        topRow.appendChild(rightActions);
+        const deleteBtn = document.createElement('button');
+        deleteBtn.setAttribute('onclick', `removeContact('${contact.id}', event)`);
+        deleteBtn.className = 'opacity-0 group-hover:opacity-100 hover:text-[--error] text-xs p-0.5 text-[--text-muted] transition-all';
+        deleteBtn.title = 'Sohbeti Sil';
+        deleteBtn.textContent = '✕';
+        rightBadges.appendChild(deleteBtn);
 
-        card.appendChild(topRow); fragment.appendChild(card);
+        botRow.appendChild(fpSpan);
+        botRow.appendChild(rightBadges);
+
+        infoCol.appendChild(topRow);
+        infoCol.appendChild(botRow);
+
+        item.appendChild(avatarWrap);
+        item.appendChild(infoCol);
+        fragment.appendChild(item);
     });
+
     listContainer.replaceChildren(fragment);
 }
 
@@ -1391,72 +1408,6 @@ function startSelfDestructTimer(packetId, duration, targetUser) {
     }, 1000);
 }
 
-// === SNİFFER (AĞ İZLEYİCİ) ===
-
-const _sparkValues = [2, 2, 2, 2, 2, 2, 2, 2];
-function updateSnifferSparkline() {
-    const sparkline = document.getElementById('snifferSparkline');
-    if (!sparkline) return;
-    _sparkValues.shift();
-    _sparkValues.push(Math.floor(Math.random() * 18) + 2);
-    const bars = sparkline.querySelectorAll('.spark-bar');
-    bars.forEach((bar, i) => { bar.style.height = `${_sparkValues[i]}px`; });
-}
-
-function logPacketToSniffer(packet) {
-    const sniffer = document.getElementById('snifferLog');
-    const placeholder = sniffer.querySelector('.flex-col');
-    if (placeholder) placeholder.remove();
-
-    updateSnifferSparkline();
-
-    const fileChunk = packet.filePayload ? `[IMG_GCM]` : '';
-    const textChunk = packet.textPayload ? `${packet.textPayload.substring(0,18)}..` : '';
-    const ttlLabel  = packet.ttl ? `${packet.ttl}s` : '∞';
-
-    // Dekoratif hex dump
-    const hexDump = Array.from({length: 8}, () => Math.floor(Math.random()*256).toString(16).padStart(2,'0')).join(' ');
-
-    const entry = document.createElement('div');
-    entry.className = 'sniffer-entry border-l-2 border-surface bg-pink-950/10 pl-1.5 sm:pl-2 py-1 sm:py-1.5 mb-1 sm:mb-2 hover:bg-pink-900/30 transition-colors font-mono text-[7px] sm:text-[9px] relative overflow-hidden cursor-default';
-
-    const headerRow = document.createElement('div'); headerRow.className = 'flex justify-between items-center mb-0.5 sm:mb-1';
-    const pktSpan = document.createElement('span'); pktSpan.className = 'text-white font-bold '; pktSpan.textContent = `PKT_${packet.id.substring(0,8)}`;
-    const ttlSpan = document.createElement('span'); ttlSpan.className = 'text-[#ff0055] font-black'; ttlSpan.textContent = `TTL:${ttlLabel}`;
-    headerRow.appendChild(pktSpan); headerRow.appendChild(ttlSpan);
-
-    const routeSpan = document.createElement('div');
-    routeSpan.className = 'text-pink-400 bg-black/50 px-1 py-0.5 text-[7px] sm:text-[8px] truncate border border-pink-500/20 my-0.5 sm:my-1 font-bold';
-    routeSpan.textContent = `${packet.senderId} -> ${packet.targetId}`;
-
-    const payloadDiv = document.createElement('div');
-    payloadDiv.className = 'text-pink-300 opacity-80 break-all';
-    payloadDiv.textContent = `PAYLOAD: ${textChunk} ${fileChunk}`;
-
-    const hexDiv = document.createElement('div');
-    hexDiv.className = 'sniffer-hex mt-0.5';
-    hexDiv.textContent = hexDump;
-
-    entry.appendChild(headerRow); entry.appendChild(routeSpan); entry.appendChild(payloadDiv); entry.appendChild(hexDiv);
-    while (sniffer.children.length >= 80) sniffer.removeChild(sniffer.firstChild);
-    sniffer.appendChild(entry); sniffer.scrollTop = sniffer.scrollHeight;
-}
-
-function toggleSniffer() {
-    playSound('type'); const sniffer = document.getElementById('snifferContainer'); const toggleBtn = document.getElementById('snifferToggleBtn');
-    snifferActive = !snifferActive;
-    if (snifferActive) {
-        sniffer.classList.remove('hidden'); toggleBtn.innerHTML = '<span class="w-1.5 h-1.5 bg-[#ff0055] rounded-full animate-pulse"></span> SNIFFER';
-        toggleBtn.className = "px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-[10px] bg-pink-950/40 border border-[#ff0055] text-[#ff0055] hover:bg-[#ff0055]/20 transition-all border-red-500  font-bold tracking-wider flex items-center gap-1";
-        showToast("Ağ trafiği görünür.", 'success');
-    } else {
-        sniffer.classList.add('hidden'); toggleBtn.innerHTML = '<span class="w-1.5 h-1.5 bg-gray-500 rounded-full"></span> SNIFFER';
-        toggleBtn.className = "px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-[10px] bg-black border border-gray-600 text-gray-400 hover:bg-gray-800 transition-all  font-bold tracking-wider flex items-center gap-1";
-        showToast("Ağ trafiği gizlendi.", 'info');
-    }
-    updateMobileLayout();
-}
-
 // === YARDIMCI UI FONKSİYONLARI ===
 
 function changeFontSize(delta) {
@@ -1479,13 +1430,11 @@ function copyMyId() {
 
 function toggleKeyReveal() {
     if (!activeTarget) return; playSound('type');
-    const keyText = document.getElementById('profileKey'); keyRevealed = !keyRevealed;
-    keyText.innerText = keyRevealed ? activeTarget.key : "••••••••••••••••";
-}
-
-function toggleAudio() {
-    audioEnabled = !audioEnabled; audioBtn.innerText = audioEnabled ? "🔊 Açık" : "🔇 Kapalı";
-    audioBtn.className = audioEnabled ? "px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-[10px] border border-green-500/50 text-green-400 hover:bg-green-500/20 transition-all  font-bold tracking-wider" : "px-2 sm:px-3 py-1 sm:py-1.5 text-[9px] sm:text-[10px] border border-gray-600 text-gray-500 hover:bg-gray-800 transition-all  font-bold tracking-wider";
+    const keyText = document.getElementById('profileKey'); 
+    if (keyText) {
+        keyRevealed = !keyRevealed;
+        keyText.innerText = keyRevealed ? activeTarget.key : "••••••••••••••••";
+    }
 }
 
 // === DOSYA İŞLEMLERİ ===
@@ -1596,47 +1545,26 @@ function deleteUserAccount() {
 // === MOBİL LAYOUT ===
 
 function updateMobileLayout() {
-    const sidebar = document.querySelector('#chatTerminal > section:first-of-type');
+    const sidebar = document.getElementById('chatSidebar') || document.querySelector('#chatTerminal > section:first-of-type');
     const chatArea = document.getElementById('chatStreamContainer');
-    const sniffer = document.getElementById('snifferContainer');
     
-    if (!sidebar || !chatArea || !sniffer) return;
+    if (!sidebar || !chatArea) return;
     
     if (window.innerWidth < 1024) {
         if (activeTarget) {
             sidebar.classList.add('hidden');
             chatArea.classList.remove('hidden');
-            chatArea.classList.add('flex-1');
-            
-            if (snifferActive) {
-                sniffer.classList.remove('hidden');
-                sniffer.classList.remove('lg:col-span-3', 'h-auto', 'lg:min-h-0');
-                sniffer.classList.add('h-[15dvh]', 'min-h-[110px]');
-            } else {
-                sniffer.classList.add('hidden');
-            }
+            chatArea.classList.add('flex-1', 'h-full');
         } else {
             sidebar.classList.remove('hidden');
-            sidebar.classList.add('flex-1');
-            sidebar.classList.remove('h-[22dvh]', 'min-h-[140px]');
-            sidebar.classList.add('h-full');
-            
+            sidebar.classList.add('flex-1', 'h-full');
             chatArea.classList.add('hidden');
-            sniffer.classList.add('hidden');
         }
     } else {
-        sidebar.classList.remove('hidden', 'flex-1', 'h-full');
-        sidebar.classList.add('h-[22dvh]', 'min-h-[140px]');
-        
-        chatArea.classList.remove('hidden', 'flex-1');
-        
-        if (snifferActive) {
-            sniffer.classList.remove('hidden');
-            sniffer.classList.add('lg:col-span-3');
-            sniffer.classList.remove('h-[15dvh]', 'min-h-[110px]');
-        } else {
-            sniffer.classList.add('hidden');
-        }
+        sidebar.classList.remove('hidden', 'flex-1');
+        sidebar.classList.add('h-full');
+        chatArea.classList.remove('hidden');
+        chatArea.classList.add('flex-1', 'h-full');
     }
 }
 

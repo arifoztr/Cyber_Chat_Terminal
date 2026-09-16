@@ -16,10 +16,9 @@ Bu proje, web tarayıcıları arasında **ECDH** ile anahtar takası yapılan, t
 - 🔐 **E2EE Şifreleme:** ECDH anahtar takası + AES-GCM-256 şifreleme (Web Crypto API)
 - ⏱️ **TTL İmha:** Zaman ayarlı kendini imha eden mesajlar
 - 🗑️ **Revoke Protokolü:** Gönderilen mesajı herkesten silme
-- 📡 **Ağ Dinleyici (Sniffer):** Gerçek zamanlı metadata izleme
 - 📴 **Çevrimdışı Kuyruk:** Hedef çevrimdışıyken mesajları beklemede tutma
-- 👤 **Parmak İzi Doğrulama:** MITM saldırılarına karşı ECDH anahtar doğrulama
-- 🎨 **Cyberpunk Arayüz:** Neon renkler, glitch efektler, monospace fontlar
+- 👤 **Parmak İzi Doğrulama:** MITM saldırılarına karşı ECDH anahtar doğrulama (QR Kod destekli)
+- 🎨 **Modern Cyber-Dark Arayüz:** Sade, modern karanlık tema, özel CSS değişkenleri, duyarlı (responsive) mobil/masaüstü görünüm
 
 ---
 
@@ -32,8 +31,8 @@ Bu proje, web tarayıcıları arasında **ECDH** ile anahtar takası yapılan, t
 | **Şifreleme** | Web Crypto API (`crypto.subtle`): AES-GCM, ECDH, SHA-256 |
 | **Kimlik Doğrulama** | JWT (bağımlılıksız, HMAC-SHA256) + bcrypt |
 | **Veritabanı** | SQLite (WAL modu) + Bellek içi cache |
-| **CSS** | Tailwind CSS (CDN) + Özel cyberpunk stilleri |
-| **Fontlar** | Fira Code, Share Tech Mono |
+| **CSS** | Tailwind CSS (CDN) + Özel Modern Cyber-Dark CSS (`style.css`) |
+| **Fontlar** | Inter, JetBrains Mono |
 
 ---
 
@@ -143,7 +142,7 @@ Sunucu `http://localhost:3000` adresinde çalışmaya başlayacaktır.
 | Senaryo | Doğrulama |
 |---------|-----------|
 | ECDH Anahtar Takası | `derivedSecrets` objesinde karşılıklı anahtar var mı kontrol edin |
-| Mesaj Şifreleme | Sniffer log'unda `textPayload` alanının base64 şifreli göründüğünden emin olun |
+| Mesaj Şifreleme | Tarayıcı geliştirici konsolunda / Network akışında `textPayload` alanının base64 şifreli göründüğünden emin olun |
 | Revoke (İmha) | Mesaj gönderip "İMHA ET" butonuna tıklayın; karşı tarafta kaybolmalı |
 | TTL (Zamanlı İmha) | TTL süresi dolduğunda mesaj hem DOM'dan hem IDB'den silinmeli |
 | Çevrimdışı Kuyruk | Hedef çevrimdışıyken mesaj gönderin; hedef giriş yaptığında mesajlar gelmeli |
@@ -191,7 +190,7 @@ Bu proje "Vibe Coding" yaklaşımıyla geliştirilmektedir. Katkıda bulunurken 
 2. **UI metinleri:** Türkçe (etiketler, butonlar, toast mesajları)
 3. **Frontend:** Vanilla JavaScript — React/Vue/Svelte yasak
 4. **Kriptografi:** Sadece `window.crypto.subtle` — harici kütüphane yasak
-5. **UI teması:** Cyberpunk estetiğine uygun neon renkler, monospace fontlar, glitch efektler
+5. **UI teması:** Modern siber koyu tema standartlarına uygun (temiz koyu yüzeyler, CSS değişkenleri, duyarlı kart yapısı)
 
 ---
 
