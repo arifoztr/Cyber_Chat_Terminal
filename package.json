@@ -17,6 +17,7 @@
     "express": "^4.21.2",
     "level": "^10.0.0",
     "socket.io": "^4.8.3",
-    "sqlite3": "^6.0.1"
+    "sqlite3": "^6.0.1",
+    "@libsql/client": "^0.14.0"
   }
 }
