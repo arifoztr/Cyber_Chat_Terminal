@@ -14,6 +14,7 @@ Bu proje, web tarayıcıları arasında **ECDH** ile anahtar takası yapılan, t
 
 **Öne Çıkan Özellikler:**
 - 🔐 **E2EE Şifreleme:** ECDH anahtar takası + AES-GCM-256 şifreleme (Web Crypto API)
+- 📄 **Güvenli Dosya & PDF Paylaşımı:** Görseller ve PDF belgeleri (maks. 5 MB) uçtan uca şifrelenerek aktarılır; siber-dark kart üzerinden doğrudan indirme ve görüntüleme imkanı
 - ⏱️ **TTL İmha:** Zaman ayarlı kendini imha eden mesajlar
 - 🗑️ **Revoke Protokolü:** Gönderilen mesajı herkesten silme
 - 📴 **Çevrimdışı Kuyruk:** Hedef çevrimdışıyken mesajları beklemede tutma
@@ -130,10 +131,12 @@ Sunucu `http://localhost:3000` adresinde çalışmaya başlayacaktır.
 2. Kendi ve karşı tarafın parmak izlerini güvenli kanaldan karşılaştırın
 3. "DOĞRULANDI" butonuna tıklayın
 
-### Mesaj Gönderimi
-- Metin veya görsel (JPEG/PNG) gönderebilirsiniz
-- TTL seçeneği ile zaman ayarlı imha ayarlayabilirsiniz
-- "İMHA ET" butonu ile gönderdiğiniz mesajı herkesten silebilirsiniz
+### Mesaj ve Belge Gönderimi
+- Metin, görsel (JPEG/PNG) veya **PDF belgeleri** (maksimum 5 MB) gönderebilirsiniz
+- Gönderilen tüm belgeler uçtan uca AES-GCM ile şifrelenir; sunucu dosya içeriğini göremez
+- Alınan PDF'ler sohbet içerisinde siber-dark kart olarak render edilir; **İndir** butonu ile cihaza kaydedilebilir veya **Görüntüle** butonuyla doğrudan tarayıcıda açılabilir
+- TTL seçeneği ile zaman ayarlı kendini imha eden mesaj ve dosyalar oluşturabilirsiniz
+- "Sil" (Revoke) butonu ile gönderdiğiniz mesajı veya PDF'i herkesten silebilirsiniz
 
 ---
 

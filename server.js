@@ -48,10 +48,11 @@ const allowedOrigins = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()) 
     : true;
 
-// Socket.io Ayarları
+// Socket.io Ayarları (5MB dosya aktarımı base64 ve şifreleme ile ~7-8MB olabileceğinden buffer 10MB yapılır)
 const io = require('socket.io')(http, {
     cors: { origin: allowedOrigins, credentials: true, methods: ["GET", "POST"] },
-    transports: ['websocket', 'polling']
+    transports: ['websocket', 'polling'],
+    maxHttpBufferSize: 10 * 1024 * 1024
 });
 
 // Modüler socket olayları

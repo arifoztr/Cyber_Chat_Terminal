@@ -218,7 +218,7 @@
                             <div class="flex flex-row gap-2 items-center">
                                 <label class="cursor-pointer bg-[--surface] hover:bg-[--surface-hover] border border-[--border] text-[--text-secondary] w-10 h-10 rounded-xl flex items-center justify-center transition-colors shrink-0">
                                     <span>📎</span>
-                                    <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFileSelect(this)">
+                                    <input type="file" id="fileInput" accept="image/*,application/pdf,.pdf" class="hidden" onchange="handleFileSelect(this)">
                                 </label>
                                 <div class="flex-1 relative min-w-0">
                                     <input type="text" id="messageInput" disabled placeholder="Mesaj yazın..." onkeydown="if(event.key==='Enter') sendSecurePacket()" class="input-field w-full text-sm">

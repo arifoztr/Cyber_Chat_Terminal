@@ -11,6 +11,7 @@ const idleCallback = window.requestIdleCallback
 // === GLOBAL STATE ===
 let socket = null;
 let activeFileBase64 = null;
+let activeFileName = null;
 let keyRevealed = false;
 let currentAuthTab = 'login'; 
 
@@ -888,7 +889,7 @@ async function selectTarget(targetId) {
 
         const INITIAL_LOAD = 20; const first = history.slice(-INITIAL_LOAD); const rest  = history.slice(0, -INITIAL_LOAD);
         const decryptedFirst = await Promise.all(first.map(p => decryptPacketForDisplay(p, activeTarget)));
-        for (const data of decryptedFirst) { if (data) appendMessageToUI(data.id, data.sender, data.text, data.file, data.isMine, data.isError, data.ttl, data.timestamp); }
+        for (const data of decryptedFirst) { if (data) appendMessageToUI(data.id, data.sender, data.text, data.file, data.isMine, data.isError, data.ttl, data.timestamp, data.fileName); }
         logBox.scrollTop = logBox.scrollHeight;
         
         if (rest.length > 0) {
@@ -896,7 +897,7 @@ async function selectTarget(targetId) {
             function processRest() { 
                 if (i >= rest.length) return; 
                 decryptPacketForDisplay(rest[i++], activeTarget).then((data) => { 
-                    if(data) appendMessageToUI(data.id, data.sender, data.text, data.file, data.isMine, data.isError, data.ttl, data.timestamp);
+                    if(data) appendMessageToUI(data.id, data.sender, data.text, data.file, data.isMine, data.isError, data.ttl, data.timestamp, data.fileName);
                     idleCallback(processRest); 
                 }); 
             }
@@ -1201,9 +1202,9 @@ async function sendSecurePacket() {
     } catch (e) { playSound('error'); showToast("Şifreleme hatası oluştu.", 'error'); return; }
 
     const packetId = crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase();
-    const packet = { id: packetId, senderId: currentUser.userId, targetId: activeTarget.id, textPayload: encryptedText, filePayload: encryptedFile, ttl: ttl > 0 ? ttl : null, timestamp: new Date().getTime() };
+    const packet = { id: packetId, senderId: currentUser.userId, targetId: activeTarget.id, textPayload: encryptedText, filePayload: encryptedFile, fileName: activeFileName || null, ttl: ttl > 0 ? ttl : null, timestamp: new Date().getTime() };
     
-    appendMessageToUI(packetId, 'SEN', rawText, activeFileBase64, true, false, packet.ttl, packet.timestamp);
+    appendMessageToUI(packetId, 'SEN', rawText, activeFileBase64, true, false, packet.ttl, packet.timestamp, activeFileName);
     await savePacketToVault(activeTarget.id, packet);
     playSound('transit');
 
@@ -1243,7 +1244,10 @@ async function decryptPacketForDisplay(packet, contactInfo) {
     else {
         try {
             if (packet.textPayload) { decryptedText = await decryptGCM(packet.textPayload, cryptoKey); if (!decryptedText) hasError = true; }
-            if (packet.filePayload) { decryptedFile = await decryptGCM(packet.filePayload, cryptoKey); if (!decryptedFile.startsWith("data:image")) hasError = true; }
+            if (packet.filePayload) { 
+                decryptedFile = await decryptGCM(packet.filePayload, cryptoKey); 
+                if (!decryptedFile.startsWith("data:image") && !decryptedFile.startsWith("data:application/pdf")) hasError = true; 
+            }
         } catch(e) { hasError = true; }
     }
 
@@ -1257,12 +1261,12 @@ async function decryptPacketForDisplay(packet, contactInfo) {
             return null; 
         }
     }
-    return { id: packet.id, sender: senderLabel, text: decryptedText, file: decryptedFile, isMine, isError: hasError, ttl: remainingTtl, timestamp: packet.timestamp };
+    return { id: packet.id, sender: senderLabel, text: decryptedText, file: decryptedFile, fileName: packet.fileName || null, isMine, isError: hasError, ttl: remainingTtl, timestamp: packet.timestamp };
 }
 
 async function processIncomingPacket(packet, contactInfo) {
     const data = await decryptPacketForDisplay(packet, contactInfo);
-    if (data) appendMessageToUI(data.id, data.sender, data.text, data.file, data.isMine, data.isError, data.ttl, data.timestamp);
+    if (data) appendMessageToUI(data.id, data.sender, data.text, data.file, data.isMine, data.isError, data.ttl, data.timestamp, data.fileName);
 }
 
 function revokeMessage(packetId) {
@@ -1307,7 +1311,7 @@ function scrollChatToBottom() {
 
 let _lastDateLabel = null;
 
-function appendMessageToUI(packetId, sender, text, imageSrc, isMine, isError, ttl, timestamp) {
+function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl, timestamp, fileName = null) {
     const logBox = document.getElementById('chatLog');
     const placeholder = logBox.querySelector('.chat-placeholder');
     if (placeholder) placeholder.remove();
@@ -1362,12 +1366,55 @@ function appendMessageToUI(packetId, sender, text, imageSrc, isMine, isError, tt
     } else if (isError) {
         const errDiv = document.createElement('div'); errDiv.className = 'border-l-4 border-red-500 bg-red-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-red-400 my-1 max-w-[90%] sm:max-w-sm    font-bold tracking-wider'; errDiv.innerText = '[!] KRİTİK: PAKET BÜTÜNLÜĞÜ BOZUK!'; msgDiv.appendChild(errDiv);
     } else {
-        if (imageSrc) {
-            window.receivedImages.push(imageSrc); const imageIndex = window.receivedImages.length - 1;
-            const img = document.createElement('img'); img.src = imageSrc;
-            img.className = 'w-48 sm:w-56 md:w-72 max-w-[90%] h-auto max-h-48 sm:max-h-64 my-1 sm:my-2  border-2 border-cyan-500/40 cursor-pointer hover:border-cyan-400 transition-all  opacity-90 hover:opacity-100 object-contain';
-            img.title = 'Görüntülemek için Tıkla'; img.onclick = () => showImageModal(imageIndex);
-            msgDiv.appendChild(img);
+        if (fileSrc) {
+            if (fileSrc.startsWith('data:application/pdf')) {
+                const pdfCard = document.createElement('div');
+                pdfCard.className = 'my-1 sm:my-2 p-3 bg-black/60 border border-red-500/40 rounded-xl flex flex-col gap-2.5 max-w-[280px] sm:max-w-xs font-mono backdrop-blur-md shadow-xl hover:border-red-400 transition-colors';
+                
+                const safeFileName = fileName || 'belge.pdf';
+                const commaIdx = fileSrc.indexOf(',');
+                const approxBytes = (commaIdx !== -1 ? fileSrc.length - commaIdx - 1 : fileSrc.length) * 0.75;
+                const sizeMB = (approxBytes / (1024 * 1024)).toFixed(2);
+                
+                const cardHeader = document.createElement('div');
+                cardHeader.className = 'flex items-center gap-3 min-w-0';
+                cardHeader.innerHTML = `
+                    <div class="w-10 h-10 rounded-lg bg-red-500/20 border border-red-500/50 flex items-center justify-center text-red-400 text-xl shrink-0 shadow-inner">
+                        📄
+                    </div>
+                    <div class="flex flex-col min-w-0 flex-1">
+                        <span class="text-xs text-gray-200 font-semibold truncate" title="${safeFileName}">${safeFileName}</span>
+                        <span class="text-[10px] text-gray-400 font-mono tracking-wider">${sizeMB} MB • PDF</span>
+                    </div>
+                `;
+                pdfCard.appendChild(cardHeader);
+
+                const cardActions = document.createElement('div');
+                cardActions.className = 'flex items-center gap-2 pt-2 border-t border-gray-800/80';
+
+                const downloadBtn = document.createElement('button');
+                downloadBtn.type = 'button';
+                downloadBtn.className = 'flex-1 py-1.5 px-2 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-400 hover:text-red-300 text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer';
+                downloadBtn.innerHTML = '<span>📥</span> İndir';
+                downloadBtn.onclick = () => downloadPdf(fileSrc, safeFileName);
+                cardActions.appendChild(downloadBtn);
+
+                const viewBtn = document.createElement('button');
+                viewBtn.type = 'button';
+                viewBtn.className = 'flex-1 py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 border border-gray-700 text-gray-300 hover:text-white text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer';
+                viewBtn.innerHTML = '<span>👁</span> Görüntüle';
+                viewBtn.onclick = () => openPdfViewer(fileSrc, safeFileName);
+                cardActions.appendChild(viewBtn);
+
+                pdfCard.appendChild(cardActions);
+                msgDiv.appendChild(pdfCard);
+            } else {
+                window.receivedImages.push(fileSrc); const imageIndex = window.receivedImages.length - 1;
+                const img = document.createElement('img'); img.src = fileSrc;
+                img.className = 'w-48 sm:w-56 md:w-72 max-w-[90%] h-auto max-h-48 sm:max-h-64 my-1 sm:my-2  border-2 border-cyan-500/40 cursor-pointer hover:border-cyan-400 transition-all  opacity-90 hover:opacity-100 object-contain rounded-lg';
+                img.title = 'Görüntülemek için Tıkla'; img.onclick = () => showImageModal(imageIndex);
+                msgDiv.appendChild(img);
+            }
         }
         if (text) {
             const textSpan = document.createElement('div');
@@ -1437,27 +1484,138 @@ function toggleKeyReveal() {
     }
 }
 
-// === DOSYA İŞLEMLERİ ===
+// === DOSYA VE BELGE İŞLEMLERİ (RESİM & PDF) ===
 
-function handleFileSelect(input) {
-    const file = input.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const img = new Image();
-        img.onload = function() {
-            const canvas = document.createElement('canvas'); let width = img.width; let height = img.height; const MAX_DIM = 1200;
-            if (width > height) { if (width > MAX_DIM) { height *= MAX_DIM / width; width = MAX_DIM; } } else { if (height > MAX_DIM) { width *= MAX_DIM / height; height = MAX_DIM; } }
-            canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
-            activeFileBase64 = canvas.toDataURL('image/jpeg', 0.7); canvas.width = 0; canvas.height = 0; 
-            const sizeMB = (activeFileBase64.length * 0.75) / (1024 * 1024);
-            document.getElementById('fileName').innerText = `DATA_IMG [${sizeMB.toFixed(2)}MB]`; document.getElementById('previewContainer').classList.remove('hidden'); playSound('type');
-        }; img.src = e.target.result;
-    }; reader.readAsDataURL(file);
+function base64ToBlob(base64Data, contentType = 'application/pdf') {
+    const parts = base64Data.split(';base64,');
+    const b64 = parts.length > 1 ? parts[1] : parts[0];
+    const binaryStr = window.atob(b64);
+    const len = binaryStr.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: contentType });
 }
 
-function clearFileInput() { playSound('error'); activeFileBase64 = null; document.getElementById('previewContainer').classList.add('hidden'); document.getElementById('fileInput').value = ''; }
-function showImageModal(index) { const modal = document.getElementById('imageModal'); const modalImg = document.getElementById('modalImage'); if (window.receivedImages[index]) { playSound('success'); modalImg.src = window.receivedImages[index]; modal.classList.remove('hidden'); } }
-function hideImageModal() { playSound('type'); document.getElementById('imageModal').classList.add('hidden'); }
+function downloadPdf(fileSrc, fileName) {
+    try {
+        playSound('type');
+        const blob = base64ToBlob(fileSrc, 'application/pdf');
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName || 'belge.pdf';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
+        showToast("PDF indiriliyor...", "info");
+    } catch (e) {
+        console.error("PDF indirme hatası:", e);
+        showToast("PDF indirilemedi.", "error");
+    }
+}
+
+function openPdfViewer(fileSrc, fileName) {
+    try {
+        playSound('type');
+        const blob = base64ToBlob(fileSrc, 'application/pdf');
+        const blobUrl = URL.createObjectURL(blob);
+        window.open(blobUrl, '_blank');
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (e) {
+        console.error("PDF görüntüleme hatası:", e);
+        showToast("PDF görüntülenemedi.", "error");
+    }
+}
+
+function handleFileSelect(input) {
+    const file = input.files[0]; 
+    if (!file) return;
+    
+    // 5 MB boyut sınırı kontrolü
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+        playSound('error');
+        showToast("Dosya boyutu çok büyük (Maksimum 5 MB).", "error");
+        input.value = '';
+        return;
+    }
+
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const isImage = file.type.startsWith('image/');
+
+    if (isPdf) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            activeFileBase64 = e.target.result;
+            activeFileName = file.name;
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            document.getElementById('fileName').innerText = `📄 ${file.name} [${sizeMB}MB]`;
+            document.getElementById('previewContainer').classList.remove('hidden');
+            playSound('type');
+        };
+        reader.readAsDataURL(file);
+    } else if (isImage) {
+        activeFileName = file.name;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas'); 
+                let width = img.width; 
+                let height = img.height; 
+                const MAX_DIM = 1200;
+                if (width > height) { 
+                    if (width > MAX_DIM) { height *= MAX_DIM / width; width = MAX_DIM; } 
+                } else { 
+                    if (height > MAX_DIM) { width *= MAX_DIM / height; height = MAX_DIM; } 
+                }
+                canvas.width = width; 
+                canvas.height = height; 
+                const ctx = canvas.getContext('2d'); 
+                ctx.drawImage(img, 0, 0, width, height);
+                activeFileBase64 = canvas.toDataURL('image/jpeg', 0.7); 
+                canvas.width = 0; 
+                canvas.height = 0; 
+                const sizeMB = (activeFileBase64.length * 0.75) / (1024 * 1024);
+                document.getElementById('fileName').innerText = `DATA_IMG [${sizeMB.toFixed(2)}MB]`; 
+                document.getElementById('previewContainer').classList.remove('hidden'); 
+                playSound('type');
+            }; 
+            img.src = e.target.result;
+        }; 
+        reader.readAsDataURL(file);
+    } else {
+        playSound('error');
+        showToast("Desteklenmeyen dosya türü (Sadece resim veya PDF).", "warning");
+        input.value = '';
+    }
+}
+
+function clearFileInput() { 
+    playSound('error'); 
+    activeFileBase64 = null; 
+    activeFileName = null;
+    document.getElementById('previewContainer').classList.add('hidden'); 
+    document.getElementById('fileInput').value = ''; 
+}
+
+function showImageModal(index) { 
+    const modal = document.getElementById('imageModal'); 
+    const modalImg = document.getElementById('modalImage'); 
+    if (window.receivedImages[index]) { 
+        playSound('success'); 
+        modalImg.src = window.receivedImages[index]; 
+        modal.classList.remove('hidden'); 
+    } 
+}
+
+function hideImageModal() { 
+    playSound('type'); 
+    document.getElementById('imageModal').classList.add('hidden'); 
+}
 
 // === AYARLAR VE PROFİL ===
 
