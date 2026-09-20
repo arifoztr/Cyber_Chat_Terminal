@@ -1309,6 +1309,67 @@ function scrollChatToBottom() {
 
 // === MESAJ UI RENDERLAMA ===
 
+function renderMessageTextWithLinks(container, text, isMine) {
+    if (!text) return;
+    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = urlRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            container.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+        }
+
+        let rawUrl = match[0];
+        let trailingPunctuation = '';
+        const punctMatch = rawUrl.match(/[.,;:!?)]+$/);
+        if (punctMatch) {
+            trailingPunctuation = punctMatch[0];
+            rawUrl = rawUrl.slice(0, -trailingPunctuation.length);
+        }
+
+        let href = rawUrl;
+        if (!href.startsWith('http://') && !href.startsWith('https://')) {
+            href = 'https://' + href;
+        }
+
+        let isValid = false;
+        try {
+            const parsedUrl = new URL(href);
+            if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+                isValid = true;
+            }
+        } catch (_) {
+            isValid = false;
+        }
+
+        if (isValid && rawUrl.length > 0) {
+            const link = document.createElement('a');
+            link.href = href;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = rawUrl;
+            link.className = isMine
+                ? 'text-blue-100 hover:text-white underline underline-offset-2 decoration-blue-300/80 hover:decoration-white font-medium transition-colors break-all cursor-pointer'
+                : 'text-cyan-400 hover:text-cyan-300 underline underline-offset-2 decoration-cyan-500/80 hover:decoration-cyan-300 font-medium transition-colors break-all cursor-pointer';
+            link.addEventListener('click', (e) => e.stopPropagation());
+            container.appendChild(link);
+        } else {
+            container.appendChild(document.createTextNode(rawUrl));
+        }
+
+        if (trailingPunctuation) {
+            container.appendChild(document.createTextNode(trailingPunctuation));
+        }
+
+        lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+        container.appendChild(document.createTextNode(text.substring(lastIndex)));
+    }
+}
+
 let _lastDateLabel = null;
 
 function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl, timestamp, fileName = null) {
@@ -1420,7 +1481,7 @@ function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl
             const textSpan = document.createElement('div');
             const bubbleClass = isMine ? 'msg-bubble-mine bg-blue-600 text-white rounded-2xl rounded-tr-sm' : 'msg-bubble-theirs bg-surface text-gray-200 rounded-2xl rounded-tl-sm';
             textSpan.className = `px-3 sm:px-5 py-2 sm:py-3 border font-mono text-[11px] sm:text-[13px] leading-relaxed max-w-[95%] sm:max-w-[80%] text-left whitespace-pre-wrap break-words backdrop-blur-sm ${bubbleClass}`;
-            textSpan.innerText = text; msgDiv.appendChild(textSpan);
+            renderMessageTextWithLinks(textSpan, text, isMine); msgDiv.appendChild(textSpan);
         }
     }
 

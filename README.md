@@ -1,62 +1,73 @@
 # 🔐 Siber E2EE Sohbet Terminali (v10 Cyber-HUD Edition)
 
-> **Uçtan Uca Şifreli (E2EE) P2P Sohbet Terminali** — Sunucu sadece signaling ve relay görevi görür; şifreli içerikleri asla çözemez.
+> **Uçtan Uca Şifreli (E2EE) P2P Sohbet Terminali** — Sunucu sadece signaling ve relay görevi görür; şifreli içerikleri asla çözemez, inceleyemez veya loglayamaz.
 
-![Version](https://img.shields.io/badge/version-v10-blueviolet)
+![Version](https://img.shields.io/badge/version-v10_Cyber--HUD-blueviolet)
 ![License](https://img.shields.io/badge/license-ISC-green)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
+![SQLite](https://img.shields.io/badge/sqlite-WAL_Mode-blue)
+![Docker](https://img.shields.io/badge/docker-ready-2496ED)
 
 ---
 
 ## 📌 Proje Özeti
 
-Bu proje, web tarayıcıları arasında **ECDH** ile anahtar takası yapılan, tüm mesaj ve dosyaların **AES-GCM-256** ile şifrelendiği bir P2P sohbet terminalidir. Sunucu yalnızca signaling ve relay görevi görür — şifreli içerikleri asla çözmez, incelemez veya loglamaz.
+Bu proje, modern web tarayıcıları arasında **ECDH (Elliptic-curve Diffie–Hellman)** ile asenkron anahtar takası yapılan, tüm metin ve dosya içeriklerinin **AES-GCM-256** ile istemci tarafında şifrelendiği uçtan uca korumalı bir P2P sohbet platformudur. 
 
-**Öne Çıkan Özellikler:**
-- 🔐 **E2EE Şifreleme:** ECDH anahtar takası + AES-GCM-256 şifreleme (Web Crypto API)
-- 📄 **Güvenli Dosya & PDF Paylaşımı:** Görseller ve PDF belgeleri (maks. 5 MB) uçtan uca şifrelenerek aktarılır; siber-dark kart üzerinden doğrudan indirme ve görüntüleme imkanı
-- ⏱️ **TTL İmha:** Zaman ayarlı kendini imha eden mesajlar
-- 🗑️ **Revoke Protokolü:** Gönderilen mesajı herkesten silme
-- 📴 **Çevrimdışı Kuyruk:** Hedef çevrimdışıyken mesajları beklemede tutma
-- 👤 **Parmak İzi Doğrulama:** MITM saldırılarına karşı ECDH anahtar doğrulama (QR Kod destekli)
-- 🎨 **Modern Cyber-Dark Arayüz:** Sade, modern karanlık tema, özel CSS değişkenleri, duyarlı (responsive) mobil/masaüstü görünüm
+Sunucu mimarisi **Zero-Knowledge (Sıfır Bilgi)** prensibiyle tasarlanmıştır. Sunucu relay vazifesi görür; iletilen paketlerin şifresini çözebilecek anahtarlara hiçbir zaman sahip olamaz.
+
+### 🌟 Öne Çıkan Özellikler
+
+- 🔐 **Askeri Düzey E2EE Şifreleme:** İstemciler arası ECDH anahtar anlaşması ve her paket için rastgele IV (Initialization Vector) ile AES-GCM-256 şifreleme (Tamamen yerel Web Crypto API).
+- 🔗 **Akıllı & Güvenli Bağlantı Tıklama (Smart URL Detection):** Mesajlardaki `http://`, `https://` ve `www.` bağlantıları otomatik olarak algılanır, XSS korumalı güvenli etiketlere (`target="_blank"`, `rel="noopener noreferrer"`) dönüştürülür ve tek tıkla yeni sekmede açılır.
+- 📄 **Uçtan Uca Şifreli Dosya & PDF Aktarımı:** Görseller ve PDF belgeleri (maks. 5 MB) uçtan uca şifrelenerek güvenle gönderilir; siber kart yapısı üzerinden dahili PDF önizleme ve indirme desteği.
+- ⏱️ **TTL (Zaman Ayarlı İmha):** Belirlenen süre (örn. 5s, 30s, 60s) sonunda mesajlar hem arayüzden hem de yerel IndexedDB kasasından otomatik ve kalıcı olarak imha edilir.
+- 🗑️ **Revoke Protokolü (Herkesten Sil):** Gönderici dilediği an bir mesajı veya belgeyi iki taraftan birden silebilir.
+- 📴 **Kalıcı Çevrimdışı Kuyruk (Offline Queue):** Karşı taraf çevrimdışı olsa bile mesajlar SQLite üzerinde güvenle kuyruklanır ve kullanıcı oturum açtığında otomatik teslim edilir (7 günlük otomatik çöp toplayıcı GC).
+- 👤 **Parmak İzi (Fingerprint) Doğrulama:** Ortadaki Adam (MITM) saldırılarını engellemek amacıyla ECDH açık anahtarları üzerinden SHA-256 parmak izi ve QR kod doğrulama.
+- 🎨 **Modern Cyber-Dark Arayüz:** Sadeleştirilmiş, odaklanmayı artıran modern karanlık tema, özel CSS değişkenleri, duyarlı (responsive) mobil/masaüstü görünüm ve ayarlanabilir font ölçekleme.
+- 🌐 **Hibrit Dağıtım Desteği:** İster monolitik olarak tek sunucuda, ister **Cloudflare Pages (Frontend) + Render/Railway/VPS (Backend)** hibrit yapısında çalıştırılabilir.
 
 ---
 
 ## 🧰 Teknoloji Yığını
 
-| Alan | Teknoloji |
-|------|-----------|
-| **Frontend** | Vanilla JavaScript, Tailwind CSS (CDN), Socket.io (client) |
-| **Backend** | Node.js, Express, Socket.io (server) |
-| **Şifreleme** | Web Crypto API (`crypto.subtle`): AES-GCM, ECDH, SHA-256 |
-| **Kimlik Doğrulama** | JWT (bağımlılıksız, HMAC-SHA256) + bcrypt |
-| **Veritabanı** | SQLite (WAL modu) + Bellek içi cache |
-| **CSS** | Tailwind CSS (CDN) + Özel Modern Cyber-Dark CSS (`style.css`) |
-| **Fontlar** | Inter, JetBrains Mono |
+| Alan | Teknoloji / Standart | Açıklama |
+|------|----------------------|----------|
+| **Frontend** | Vanilla JavaScript (ES6+), Tailwind CSS (CDN) | Sıfır framework bağımlılığı, hafif ve hızlı |
+| **Backend** | Node.js, Express, Socket.IO | Asenkron, olay tabanlı sinyal ve relay sunucusu |
+| **Kriptografi** | Web Crypto API (`window.crypto.subtle`) | Tarayıcı yerel ECDH (P-256), AES-GCM-256, SHA-256 |
+| **Kimlik & Oturum** | JWT (HMAC-SHA256) + bcrypt | Bağımlılıksız token imzalama, güvenli şifre hashleme |
+| **Veritabanı** | SQLite (WAL Modu) + Bellek-içi Önbellek | Yüksek eşzamanlı okuma/yazma performansı ve debounced flush |
+| **İstemci Depolama** | IndexedDB (Vault) | Mesaj geçmişi ve kriptografik anahtarlar sadece istemcide |
+| **Tipografi** | Inter, JetBrains Mono | Okunabilir modern siber terminal estetiği |
 
 ---
 
-## 📁 Proje Yapısı
+## 📁 Proje Dizin Yapısı
 
 ```
 /
-├── public/                          # Statik dosyalar (HTTP üzerinden sunulur)
-│   ├── siber_e2ee_sohbet_terminali.html  # Ana HTML şablonu
-│   ├── style.css                    # Cyberpunk teması, animasyonlar
-│   ├── crypto.js                    # Kriptografi modülü (ECDH, AES-GCM)
-│   ├── db.js                        # IndexedDB Vault yönetimi
-│   ├── ui.js                        # UI, state yönetimi, DOM işlemleri
-│   └── socket-handlers.js           # Socket.io olay dinleyicileri
-├── database.js                      # SQLite veritabanı yönetimi
-├── database.json                    # Eski JSON veritabanı (migration için)
-├── socket.js                        # Socket.io sunucu olay işleyicileri
-├── server.js                        # Express + HTTP sunucu başlangıcı
-├── package.json                     # Bağımlılıklar
-├── AGENTS.md                        # AI asistanı için proje kılavuzu
-├── OPTIMIZATIONS.md                 # Gelecek faz planlaması
-├── PROGRESS.md                      # Mevcut durum ve roadmap
-└── README.md                        # Bu dosya
+├── public/                                # İstemci tarafı statik dosyaları
+│   ├── index.html                         # Ana web arayüzü
+│   ├── siber_e2ee_sohbet_terminali.html   # Alternatif/Doğrudan erişim şablonu
+│   ├── config.js                          # İstemci yapılandırması (Backend URL vb.)
+│   ├── style.css                          # Modern siber tema, animasyonlar ve bileşenler
+│   ├── crypto.js                          # Web Crypto API tabanlı E2EE kripto motoru
+│   ├── db.js                              # IndexedDB yerel kasa (Vault) yönetimi
+│   ├── ui.js                              # UI etkileşimi, state yönetimi, render işlemleri
+│   └── socket-handlers.js                 # Socket.IO istemci olay dinleyicileri
+├── database.js                            # SQLite veritabanı sürücüsü, önbellek ve GC
+├── database.sqlite                        # Çalışma zamanı SQLite veritabanı (WAL modu)
+├── socket.js                              # Socket.IO sunucu olay işleyicileri & relay mantığı
+├── server.js                              # Express HTTP sunucusu & güvenlik katmanı
+├── Dockerfile                             # Konteynerize dağıtım dosyası
+├── DEPLOYMENT.md                          # Hibrit bulut dağıtım kılavuzu (Cloudflare + Bulut)
+├── OPTIMIZATIONS.md                       # Güvenlik ve performans optimizasyon detayları
+├── PROGRESS.md                            # Faz durumu ve sürüm yol haritası
+├── AGENTS.md                              # AI asistanı ve geliştirici standartları kılavuzu
+├── package.json                           # Proje bağımlılıkları ve scriptler
+└── README.md                              # Proje dokümantasyonu (Bu dosya)
 ```
 
 ---
@@ -64,149 +75,136 @@ Bu proje, web tarayıcıları arasında **ECDH** ile anahtar takası yapılan, t
 ## 🚀 Kurulum ve Başlatma
 
 ### Gereksinimler
-- Node.js >= 18
-- npm veya yarn
+- **Node.js:** v18.0.0 veya üzeri
+- **npm:** v9.0.0 veya üzeri (ya da Docker)
 
-### 1. Depoyu Klonlayın
+---
 
+### Yöntem 1: Yerel Olarak Çalıştırma
+
+#### 1. Depoyu Klonlayın
 ```bash
-git clone <repo-url>
-cd siber-e2ee-sohbet-terminali
+git clone https://github.com/Arif8054/Cyber_Chat_Terminal.git
+cd Cyber_Chat_Terminal
 ```
 
-### 2. Bağımlılıkları Yükleyin
-
+#### 2. Bağımlılıkları Yükleyin
 ```bash
 npm install
 ```
 
-### 3. Çevre Değişkenlerini Ayarlayın (Opsiyonel ama Önerilir)
-
-```bash
-# .env dosyası oluşturun
-echo "JWT_SECRET=your_super_secret_key_here_min_32_chars" > .env
+#### 3. Ortam Değişkenlerini Tanımlayın (`.env`)
+Kök dizinde `.env` dosyası oluşturun:
+```env
+PORT=3000
+NODE_ENV=development
+JWT_SECRET=super_secret_jwt_passphrase_min_32_chars_long
+CORS_ORIGIN=*
 ```
+> ⚠️ **Güvenlik Notu:** Üretim ortamında `JWT_SECRET` değerini en az 32 karakterlik güçlü bir rastgele anahtarla belirleyin.
 
-> ⚠️ **Güvenlik Uyarısı:** `JWT_SECRET` tanımlanmazsa varsayılan bir anahtar kullanılır. Üretim ortamında mutlaka özel bir değer belirleyin.
-
-### 4. Sunucuyu Başlatın
-
+#### 4. Sunucuyu Başlatın
 ```bash
 npm start
 ```
-
-Sunucu `http://localhost:3000` adresinde çalışmaya başlayacaktır.
-
----
-
-## 🔐 Güvenlik Özellikleri
-
-| Özellik | Açıklama |
-|---------|----------|
-| **Zero-Knowledge Backend** | Sunucu `textPayload` veya `filePayload` içeriğini asla çözmez |
-| **Client-Side Storage** | Sohbet geçmişi, kişiler ve ECDH sırları yalnızca tarayıcıda saklanır |
-| **Native Web Crypto** | Tüm şifreleme `window.crypto.subtle` ile yapılır; harici kütüphane yok |
-| **JWT Authentication** | Bağımlılıksız HMAC-SHA256 JWT ile socket oturum yönetimi |
-| **Rate Limiting** | IP bazlı giriş/kayıt/mesaj sınırlandırması |
-| **Security Headers** | HSTS, X-Content-Type-Options, X-Frame-Options, XSS Protection |
-| **Sender Spoofing Koruması** | `packet.senderId` ile oturum açmış kullanıcı eşleştirmesi |
-| **Fingerprint Doğrulama** | ECDH anahtarları için SHA-256 parmak izi + QR kod doğrulama |
+Terminalde bağlantı adresleri listelenecektir:
+- Yerel Erişim: `http://localhost:3000`
+- Sağlık Kontrolü: `http://localhost:3000/health`
 
 ---
 
-## 🎮 Kullanım
+### Yöntem 2: Docker ile Çalıştırma
 
-### İlk Bağlantı
-1. Tarayıcıda `http://localhost:3000` açın
-2. Sunucu düğümü adresini girin (varsayılan: kendi origin)
-3. Yeni kimlik oluşturun veya mevcut kimlikle giriş yapın
+Projeyi tek bir komutla Docker üzerinden izole bir şekilde ayağa kaldırabilirsiniz:
 
-### Ajan Ekleme
-1. "YENİ AJAN BAĞLA" butonuna tıklayın
-2. Hedef Ajan ID'sini girin (`AGN-XXXX-XXXX` formatında)
-3. Sistem otomatik olarak ECDH anahtar takası başlatır
+```bash
+# İmajı derleyin
+docker build -t cyber-chat-terminal .
 
-### Parmak İzi Doğrulama
-1. Sohbet başlığındaki "🔐 DOĞRULA" butonuna tıklayın
-2. Kendi ve karşı tarafın parmak izlerini güvenli kanaldan karşılaştırın
-3. "DOĞRULANDI" butonuna tıklayın
-
-### Mesaj ve Belge Gönderimi
-- Metin, görsel (JPEG/PNG) veya **PDF belgeleri** (maksimum 5 MB) gönderebilirsiniz
-- Gönderilen tüm belgeler uçtan uca AES-GCM ile şifrelenir; sunucu dosya içeriğini göremez
-- Alınan PDF'ler sohbet içerisinde siber-dark kart olarak render edilir; **İndir** butonu ile cihaza kaydedilebilir veya **Görüntüle** butonuyla doğrudan tarayıcıda açılabilir
-- TTL seçeneği ile zaman ayarlı kendini imha eden mesaj ve dosyalar oluşturabilirsiniz
-- "Sil" (Revoke) butonu ile gönderdiğiniz mesajı veya PDF'i herkesten silebilirsiniz
+# Konteyneri kalıcı veri diziniyle başlatın
+docker run -d -p 3000:3000 -v $(pwd)/data:/app/data -e DB_PATH=/app/data/database.sqlite --name cyber-chat cyber-chat-terminal
+```
 
 ---
 
-## 🧪 Test Senaryoları
+## 🌐 Canlıya Alma (Dağıtım)
 
-| Senaryo | Doğrulama |
-|---------|-----------|
-| ECDH Anahtar Takası | `derivedSecrets` objesinde karşılıklı anahtar var mı kontrol edin |
-| Mesaj Şifreleme | Tarayıcı geliştirici konsolunda / Network akışında `textPayload` alanının base64 şifreli göründüğünden emin olun |
-| Revoke (İmha) | Mesaj gönderip "İMHA ET" butonuna tıklayın; karşı tarafta kaybolmalı |
-| TTL (Zamanlı İmha) | TTL süresi dolduğunda mesaj hem DOM'dan hem IDB'den silinmeli |
-| Çevrimdışı Kuyruk | Hedef çevrimdışıyken mesaj gönderin; hedef giriş yaptığında mesajlar gelmeli |
+Proje, hem tek bir sunucuda hem de modern hibrit mimaride çalışacak şekilde tasarlanmıştır:
+- **Frontend:** Cloudflare Pages (Ücretsiz, küresel CDN, anında statik dağıtım)
+- **Backend:** Render / Railway / VPS Docker (WebSocket ve SQLite desteği)
+
+Detaylı adım adım rehber için [DEPLOYMENT.md](DEPLOYMENT.md) dosyasını inceleyebilirsiniz.
 
 ---
 
-## ⚠️ Bilinen Sınırlamalar
+## 🔐 Güvenlik Mimarisi
 
-- **JSON Veritabanı:** Mevcut sürümde SQLite kullanılmaktadır; eski `database.json` otomatik olarak migrate edilir
-- **Bellek İçi Cache:** Yüksek trafikte debounce (50ms) ile yazma işlemleri birleştirilir
-- **Frontend State:** Global değişkenler üzerinden yapılan mutasyonlar DOM'a otomatik yansımaz; ilgili render fonksiyonlarını manuel tetikleyin
+| Güvenlik Katmanı | Uygulanan Mekanizma | Korunan Risk |
+|------------------|----------------------|--------------|
+| **Zero-Knowledge Relay** | Sunucu yalnızca şifreli zarfı (ciphertext + IV) iletir. Anahtarlar hiçbir zaman sunucuya gönderilmez. | Sunucu ihlali veya dinleme durumunda veri sızıntısı |
+| **Native Web Crypto** | Harici JS kripto kütüphaneleri kullanılmaz; tarayıcının yerleşik `window.crypto.subtle` API'si kullanılır. | Üçüncü taraf kütüphane arka kapıları (Supply Chain Attacks) |
+| **XSS Korumalı Linkleme** | URL'ler ayrıştırılırken DOM String interpolation yerine `document.createTextNode` ve protokol doğrulaması (`http:`, `https:`) kullanılır. | XSS (Cross-Site Scripting) ve sahte protokol enjeksiyonu |
+| **JWT Doğrulamalı Socket** | Her Socket bağlantısı HMAC-SHA256 JWT oturumu ile ilişkilendirilir. `packet.senderId` sunucu tarafında doğrulanır. | Kimlik sahteciliği (Sender Spoofing) |
+| **Gelişmiş Rate Limiting** | IP bazlı giriş, kayıt, mesaj gönderimi ve arama isteklerine sınır uygulanır. | Brute-force ve Hizmet Dışı Bırakma (DoS) |
+| **HTTP Güvenlik Başlıkları** | HSTS, X-Content-Type-Options: nosniff, X-Frame-Options: DENY, X-XSS-Protection. | Clickjacking, MIME-sniffing |
+| **MITM Doğrulaması** | Karşılıklı açık anahtarların SHA-256 hash'i (Parmak İzi) QR kod ve metin olarak karşılaştırılabilir. | Araya giren adam (Man-in-the-Middle) saldırıları |
 
 ---
 
-## 🗺️ Geliştirme Yol Haritası
+## 🎮 Kullanım Rehberi
 
-### FAZ 1 — Güvenlik İyileştirmeleri ✅
-- [x] JWT Entegrasyonu
-- [x] Rate Limiting
-- [x] Güvenlik Başlıkları
-- [x] Parmak İzi Doğrulama
+1. **Giriş / Kayıt:**
+   - Tarayıcınızda terminali açın.
+   - Benzersiz bir kullanıcı adı ve parola belirleyerek yeni bir ajan kimliği oluşturun (`AGN-XXXX-XXXX`).
+2. **Bağlantı Kurma (Ajan Ekleme):**
+   - "YENİ AJAN BAĞLA" butonuna tıklayıp hedef kullanıcının Ajan ID'sini girin.
+   - Karşılıklı ECDH açık anahtarları otomatik takas edilir ve ortak şifreleme sırrı (Shared Secret) türetilir.
+3. **Güvenli Mesajlaşma:**
+   - Mesaj kutusuna iletinizi yazın. Gönderilen tüm mesajlar istemcide AES-GCM ile şifrelenir.
+   - Mesaj içinde paylaşılan tüm web bağlantıları (`https://...`, `www....`) otomatik olarak tıklanabilir güvenli link haline gelir.
+4. **Şifreli PDF ve Görsel Paylaşımı:**
+   - Ataş ikonuna tıklayarak görsel veya PDF belgesi (5 MB'a kadar) seçin.
+   - Alınan PDF belgeleri siber kart şeklinde listelenir; **İndir** veya doğrudan **Görüntüle** butonlarıyla incelenebilir.
+5. **Zaman Ayarlı İmha (TTL):**
+   - TTL seçeneğiyle (örn. 10 saniye) gönderilen mesajlar süre bitiminde her iki cihazdan ve yerel kasadan otomatik silinir.
+6. **Herkesten Sil (Revoke):**
+   - Gönderdiğiniz iletinin yanındaki **Sil** butonuna basarak mesajı tüm taraflardan silebilirsiniz.
 
-### FAZ 2 — Backend Altyapı ✅
-- [x] SQLite Geçişi
-- [x] Asenkron İşlemler
-- [x] Çevrimdışı Kuyruk
-- [ ] Redis ile Kalıcı Kuyruk
+---
 
-### FAZ 3 — Kriptografik Geliştirmeler 🔄
-- [ ] İleriye Dönük Gizlilik (Forward Secrecy)
-- [ ] Dijital İmza
+## 🗺️ Geliştirme Durumu ve Yol Haritası
 
-### FAZ 4 & 5 — Deneyim ve Operasyon
-- [ ] Kapsamlı Profil Yönetimi
-- [ ] Bulut Dağıtımı
-- [ ] Loglama ve İzleme
+Mevcut sürüm: **v10 (Cyber-HUD Edition)**
+
+- [x] **FAZ 1 — Güvenlik Temelleri:** Bağımsız JWT, Rate Limiting, Güvenlik Başlıkları, Parmak İzi Doğrulama.
+- [x] **FAZ 2 — Backend & Mimari:** SQLite WAL mimarisi, Asenkron kuyruklama, 7 günlük GC, Hibrit Dağıtım (Cloudflare Pages + Docker).
+- [x] **Kullanıcı Deneyimi:** Tıklanabilir akıllı linkler, PDF görüntüleyici ve indirme kartları, modern cyber-dark teması.
+- [ ] **FAZ 3 — Kriptografik Geliştirmeler:** Double Ratchet benzeri Oturum Başına İleriye Dönük Gizlilik (Forward Secrecy), Dijital İmza ile paket bütünlüğü.
+- [ ] **FAZ 4 & 5 — Genişletilmiş Özellikler:** Kullanıcı profilleri, gelişmiş loglama ve telemetri.
+
+Ayrıntılı yol haritası için [PROGRESS.md](PROGRESS.md) ve [OPTIMIZATIONS.md](OPTIMIZATIONS.md) belgelerine göz atabilirsiniz.
 
 ---
 
 ## 🤝 Katkıda Bulunma
 
-Bu proje "Vibe Coding" yaklaşımıyla geliştirilmektedir. Katkıda bulunurken lütfen aşağıdaki kurallara uyun:
-
-1. **Kod dili:** İngilizce (değişkenler, fonksiyonlar, API olayları)
-2. **UI metinleri:** Türkçe (etiketler, butonlar, toast mesajları)
-3. **Frontend:** Vanilla JavaScript — React/Vue/Svelte yasak
-4. **Kriptografi:** Sadece `window.crypto.subtle` — harici kütüphane yasak
-5. **UI teması:** Modern siber koyu tema standartlarına uygun (temiz koyu yüzeyler, CSS değişkenleri, duyarlı kart yapısı)
+Projeye katkıda bulunurken lütfen aşağıdaki temel ilkelere sadık kalın:
+- **Dil:** Kod ve API değişkenleri İngilizce; kullanıcı arayüzü metinleri ve toast mesajları Türkçe.
+- **Mimari:** Frontend saf Vanilla JS (Framework/Bundler kullanılmaz).
+- **Kriptografi:** Yalnızca tarayıcı yerel `window.crypto.subtle` API'si.
+- **Tasarım:** Modern cyber-dark UI paleti ve Tailwind CSS.
 
 ---
 
 ## 📄 Lisans
 
-MIT License 
+Bu proje [ISC](LICENSE) lisansı altında sunulmaktadır.
 
 ---
 
 <div align="center">
 
-**Siber Güvenlik P2P Lab Konsolu** 🔒
-
+**Siber Güvenlik E2EE İletişim Terminali** 🔒  
 *"Sunucu göremez. Sunucu çözemez. Sunucu loglayamaz."*
 
 </div>
