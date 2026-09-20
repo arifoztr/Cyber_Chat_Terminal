@@ -42,7 +42,7 @@ function bindSocketEvents() {
     socket.on('ecdh_offer', async (data) => {
         let contact = myContacts.find(c => c.id === data.senderId);
         if (!contact) {
-            contact = { id: data.senderId, username: null, key: null, fingerprint: null, fingerprintVerified: false, ecdhStatus: 'pending', isOnline: true, avatar: null };
+            contact = { id: data.senderId, username: null, key: null, ecdhStatus: 'pending', isOnline: true, avatar: null };
             myContacts.push(contact); saveContactsToVault();
             safeEmit('join_status_rooms', [data.senderId]); 
             triggerDesktopNotification("Yeni kişi", `${data.senderId} bağlandı.`);
@@ -59,22 +59,11 @@ function bindSocketEvents() {
         }
         try {
             const secret = await deriveSharedSecret(data.publicKeyJwk);
-            const fp = await calculateFingerprint(data.publicKeyJwk);
             derivedSecrets[data.senderId] = secret; saveSecretsToVault();
             contact.key = secret;
-            if (contact.fingerprint !== fp) {
-                contact.fingerprint = fp;
-                contact.fingerprintVerified = false;
-            } else if (contact.fingerprintVerified === undefined) {
-                contact.fingerprintVerified = false;
-            }
             contact.ecdhStatus = 'established';
             saveContactsToVault();
             renderContactsSidebarDebounced();
-            if (activeTarget && activeTarget.id === data.senderId) {
-                document.getElementById('chatTargetFingerprint').innerText = `FP: ${fp}`;
-                updateFingerprintHeaderUI();
-            }
         } catch(e) {}
         safeEmit('ecdh_answer', { targetId: data.senderId, senderId: currentUser.userId, publicKeyJwk: myPublicKeyJwk });
     });
@@ -84,25 +73,16 @@ function bindSocketEvents() {
         if (derivedSecrets[data.senderId]) return;
         try {
             const secret = await deriveSharedSecret(data.publicKeyJwk);
-            const fp = await calculateFingerprint(data.publicKeyJwk);
             derivedSecrets[data.senderId] = secret; saveSecretsToVault();
             let contact = myContacts.find(c => c.id === data.senderId);
             if (contact) {
                 contact.key = secret;
-                if (contact.fingerprint !== fp) {
-                    contact.fingerprint = fp;
-                    contact.fingerprintVerified = false;
-                } else if (contact.fingerprintVerified === undefined) {
-                    contact.fingerprintVerified = false;
-                }
                 contact.ecdhStatus = 'established';
                 saveContactsToVault();
                 renderContactsSidebarDebounced();
             }
             
             if (activeTarget && activeTarget.id === data.senderId) { 
-                document.getElementById('chatTargetFingerprint').innerText = `FP: ${fp}`;
-                updateFingerprintHeaderUI();
                 enableChatUI(); showToast(`${data.senderId} ile şifreli bağlantı kuruldu!`, 'success'); 
             }
         } catch(e) {}
@@ -112,7 +92,7 @@ function bindSocketEvents() {
     socket.on('receive_secure_packet', async (packet) => {
         let senderContact = myContacts.find(c => c.id === packet.senderId);
         if (!senderContact) {
-            senderContact = { id: packet.senderId, username: null, key: null, fingerprint: null, fingerprintVerified: false, ecdhStatus: 'pending', isOnline: true, avatar: null };
+            senderContact = { id: packet.senderId, username: null, key: null, ecdhStatus: 'pending', isOnline: true, avatar: null };
             myContacts.push(senderContact); saveContactsToVault();
             safeEmit('join_status_rooms', [packet.senderId]);
             triggerDesktopNotification("YENİ VERİ", `${packet.senderId}`);

@@ -61,15 +61,6 @@ async function decryptGCM(base64Data, hexSecret) {
     return new TextDecoder().decode(decrypted);
 }
 
-async function calculateFingerprint(publicKeyJwk) {
-    if (!publicKeyJwk || !publicKeyJwk.x || !publicKeyJwk.y) return 'UNKNOWN';
-    try {
-        const data = new TextEncoder().encode(publicKeyJwk.x + "|" + publicKeyJwk.y);
-        const hash = await crypto.subtle.digest('SHA-256', data);
-        const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
-        return hex.substring(0, 8);
-    } catch(e) { return 'ERROR'; }
-}
 
 async function initEcdhKeys() {
     const stored = localStorage.getItem('ecdh_keypair_' + currentUser.userId);
@@ -104,27 +95,16 @@ async function ensureSharedSecret(targetId) {
             if (res && res.success && res.publicKey) {
                 try {
                     const secret = await deriveSharedSecret(res.publicKey);
-                    const fp = await calculateFingerprint(res.publicKey);
                     derivedSecrets[targetId] = secret;
                     saveSecretsToVault();
                     
                     let contact = myContacts.find(c => c.id === targetId);
                     if (contact) {
                         contact.key = secret;
-                        if (contact.fingerprint !== fp) {
-                            contact.fingerprint = fp;
-                            contact.fingerprintVerified = false;
-                        } else if (contact.fingerprintVerified === undefined) {
-                            contact.fingerprintVerified = false;
-                        }
                         contact.ecdhStatus = 'established';
                         if (res.avatar) contact.avatar = res.avatar;
                         saveContactsToVault();
                         renderContactsSidebarDebounced();
-                        if (activeTarget && activeTarget.id === targetId) {
-                            document.getElementById('chatTargetFingerprint').innerText = fp;
-                            updateFingerprintHeaderUI();
-                        }
                     }
                     resolve(true);
                 } catch(e) { resolve(false); }

@@ -554,10 +554,6 @@ function finishLoginSetup() {
 
     document.getElementById('profileUsername').innerText = currentUser.username;
     document.getElementById('profileUserId').innerText = currentUser.userId;
-    calculateFingerprint(myPublicKeyJwk).then(fp => {
-        const fpEl = document.getElementById('profileUserFingerprint');
-        if (fpEl) fpEl.innerText = fp;
-    });
     updateMyAvatarUI();
 
     document.getElementById('authGateway').classList.add('hidden');
@@ -738,8 +734,7 @@ function renderContactsSidebar() {
 
         const fpSpan = document.createElement('span');
         fpSpan.className = 'text-[10px] text-[--text-muted] font-mono truncate';
-        const fpText = contact.fingerprint ? `FP: ${contact.fingerprint.substring(0, 8)}...` : 'Anahtar bekleniyor';
-        fpSpan.textContent = contact.username ? `${contact.id} · ${fpText}` : fpText;
+        fpSpan.textContent = contact.username ? contact.id : '';
 
         const rightBadges = document.createElement('div');
         rightBadges.className = 'flex items-center gap-1.5 shrink-0';
@@ -800,12 +795,10 @@ function removeContact(targetId, event) {
 
 function updateChatHeaderUI() {
     const headerEl = document.getElementById('chatTargetHeader');
-    const fpEl = document.getElementById('chatTargetFingerprint');
     if (!headerEl) return;
     
     if (!activeTarget) {
         headerEl.textContent = "Bir sohbet seçin";
-        if (fpEl) fpEl.textContent = "FP: -----";
         return;
     }
     
@@ -824,11 +817,6 @@ function updateChatHeaderUI() {
     } else {
         headerEl.textContent = activeTarget.id;
     }
-    
-    if (fpEl) {
-        fpEl.textContent = activeTarget.fingerprint ? `FP: ${activeTarget.fingerprint}` : `FP: BEKLENİYOR`;
-    }
-    updateFingerprintHeaderUI();
 }
 
 function enableChatUI() {
@@ -954,8 +942,6 @@ function addContact(targetId, username = null) {
             id: targetId, 
             username: username || null, 
             key: null, 
-            fingerprint: null, 
-            fingerprintVerified: false, 
             ecdhStatus: 'pending', 
             isOnline: false, 
             avatar: null 
@@ -1168,97 +1154,7 @@ function showContactRequestResponse(data) {
     }
 }
 
-// === PARMAK İZİ MODALI VE DOĞRULAMA ===
 
-let fingerprintTargetContact = null;
-let qrCodeInstance = null;
-
-function updateFingerprintHeaderUI() {
-    const verifyBtn = document.getElementById('verifyFingerprintBtn');
-    if (!verifyBtn) return;
-    if (activeTarget && activeTarget.fingerprint) {
-        verifyBtn.classList.remove('hidden');
-        if (activeTarget.fingerprintVerified) {
-            verifyBtn.innerText = "✅ DOĞRULANDI";
-            verifyBtn.className = "px-2 py-1 text-[8px] sm:text-[10px] font-bold  border border-green-500 text-green-400 bg-green-500/10 cursor-pointer transition-all";
-        } else {
-            verifyBtn.innerText = "🔐 DOĞRULA";
-            verifyBtn.className = "px-2 py-1 text-[8px] sm:text-[10px] font-bold  border border-yellow-500 text-yellow-400 bg-yellow-500/10 hover:bg-yellow-500/30 hover:text-white cursor-pointer transition-all";
-        }
-    } else {
-        verifyBtn.classList.add('hidden');
-    }
-}
-
-function showFingerprintModal(contact) {
-    if (!contact) return;
-    playSound('type');
-    fingerprintTargetContact = contact;
-    
-    document.getElementById('fpModalContactId').innerText = contact.id;
-    document.getElementById('fpModalValue').innerText = contact.fingerprint || 'UNKNOWN';
-    
-    calculateFingerprint(myPublicKeyJwk).then(fp => {
-        const myFpEl = document.getElementById('fpModalMyValue');
-        if (myFpEl) myFpEl.innerText = fp;
-    });
-    
-    const qrContainer = document.getElementById('fpModalQRCode');
-    qrContainer.innerHTML = '';
-    
-    if (contact.fingerprint) {
-        try {
-            qrCodeInstance = new QRCode(qrContainer, {
-                text: contact.fingerprint,
-                width: 128,
-                height: 128,
-                colorDark: "#00f0ff",
-                colorLight: "#000000",
-                correctLevel: QRCode.CorrectLevel.M
-            });
-            setTimeout(() => {
-                const qrImg = qrContainer.querySelector('img');
-                if (qrImg) qrImg.className = "mx-auto border border-cyan-500/40 p-1 bg-black";
-                const qrCanvas = qrContainer.querySelector('canvas');
-                if (qrCanvas) qrCanvas.className = "mx-auto border border-cyan-500/40 p-1 bg-black";
-            }, 50);
-        } catch (err) {
-            console.error("QR Code generation error:", err);
-        }
-    }
-    
-    document.getElementById('fingerprintModal').classList.remove('hidden');
-}
-
-function hideFingerprintModal() {
-    playSound('type');
-    document.getElementById('fingerprintModal').classList.add('hidden');
-    fingerprintTargetContact = null;
-    qrCodeInstance = null;
-}
-
-function verifyFingerprint() {
-    if (!fingerprintTargetContact) return;
-    
-    fingerprintTargetContact.fingerprintVerified = true;
-    
-    const c = myContacts.find(x => x.id === fingerprintTargetContact.id);
-    if (c) {
-        c.fingerprintVerified = true;
-    }
-    
-    saveContactsToVault();
-    renderContactsSidebarDebounced();
-    
-    if (activeTarget && activeTarget.id === fingerprintTargetContact.id) {
-        activeTarget.fingerprintVerified = true;
-        updateFingerprintHeaderUI();
-    }
-    
-    hideFingerprintModal();
-    playSound('success');
-    showToast(`${fingerprintTargetContact.id} parmak izi doğrulandı!`, 'success');
-}
 
 function handleContactSubmit() {
     const targetId = document.getElementById('modalTargetId').value.trim().toUpperCase();

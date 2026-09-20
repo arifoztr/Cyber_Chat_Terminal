@@ -119,7 +119,6 @@
                                         <span id="profileUserId" class="text-[11px] text-[--text-muted] font-mono truncate group-hover:text-[--text-secondary] transition-colors"></span>
                                         <span class="text-[10px] text-[--text-muted] group-hover:text-[--accent] shrink-0">📋</span>
                                     </div>
-                                    <span id="profileUserFingerprint" class="hidden"></span>
                                 </div>
                             </div>
 
@@ -167,10 +166,8 @@
                                     <span id="chatStatusDot" class="status-dot status-offline shrink-0"></span>
                                     <div class="flex flex-col min-w-0">
                                         <h2 id="chatTargetHeader" class="text-sm font-semibold truncate">Bir sohbet seçin</h2>
-                                        <span id="chatTargetFingerprint" class="text-[10px] text-[--text-muted] font-mono hidden sm:block">FP: BEKLENİYOR</span>
                                     </div>
                                 </div>
-                                <button id="verifyFingerprintBtn" onclick="showFingerprintModal(activeTarget)" class="hidden btn btn-sm border border-[--border] text-xs ml-2"></button>
                             </div>
                             
                             <div class="flex items-center gap-3 shrink-0">
@@ -316,45 +313,6 @@
         </div>
     </div>
 
-    <!-- PARMAK İZİ DOĞRULAMA MODALI -->
-    <div id="fingerprintModal" class="hidden modal-overlay">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="text-lg font-semibold">Parmak İzi Doğrulama</h3>
-            </div>
-            
-            <div class="space-y-4 font-mono text-sm text-center">
-                <div class="bg-[--bg-primary] border border-[--border] p-3 rounded-lg">
-                    <span class="text-xs text-[--text-secondary] block mb-1">KOD ADI (ID)</span>
-                    <div id="fpModalContactId" class="font-semibold"></div>
-                </div>
-
-                <div class="bg-[--bg-primary] border border-[--border] p-3 rounded-lg">
-                    <span class="text-xs text-[--text-secondary] block mb-1">SİZİN PARMAK İZİNİZ</span>
-                    <div id="fpModalMyValue" class="font-bold break-all"></div>
-                </div>
-
-                <div class="bg-[--bg-primary] border border-[--border] p-3 rounded-lg">
-                    <span class="text-xs text-[--text-secondary] block mb-1">KARŞI TARAFIN PARMAK İZİ</span>
-                    <div id="fpModalValue" class="font-bold text-[--accent] break-all"></div>
-                </div>
-
-                <div class="flex flex-col items-center justify-center p-3 bg-[--bg-primary] border border-[--border] rounded-lg">
-                    <span class="text-xs text-[--text-secondary] mb-2">QR KOD</span>
-                    <div id="fpModalQRCode" class="bg-white p-2 rounded"></div>
-                </div>
-
-                <div class="bg-[--surface-hover] p-3 rounded-lg text-xs text-left text-[--text-secondary]">
-                    <p>Güvenli bir kanaldan (yüz yüze, arama) bu parmak izlerini karşılaştırın. Birebir eşleşiyorsa onaylayın.</p>
-                </div>
-            </div>
-            
-            <div class="flex gap-3 mt-6">
-                <button onclick="hideFingerprintModal()" class="flex-1 btn btn-ghost border border-[--border]">Vazgeç</button>
-                <button onclick="verifyFingerprint()" class="flex-1 btn btn-primary">Doğrulandı</button>
-            </div>
-        </div>
-    </div>
 
     <!-- KULLANICI ARAMA MODALI -->
     <div id="searchModal" class="hidden modal-overlay">
