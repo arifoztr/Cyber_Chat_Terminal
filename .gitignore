@@ -1,6 +1,7 @@
-﻿node_modules/
+node_modules/
 database.sqlite*
 database.json*
 .env
 *.log
 .DS_Store
+.vs/

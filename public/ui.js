@@ -536,8 +536,18 @@ function finishLoginSetup() {
         safeEmit('join_status_rooms', myContacts.map(c => c.id));
         safeEmit('get_profiles', myContacts.map(c => c.id), (res) => {
             if (res && res.profiles) {
-                myContacts.forEach(c => { if (res.profiles[c.id]) c.avatar = res.profiles[c.id].avatar; });
+                myContacts.forEach(c => { 
+                    if (res.profiles[c.id]) {
+                        if (res.profiles[c.id].avatar) c.avatar = res.profiles[c.id].avatar;
+                        if (res.profiles[c.id].username) c.username = res.profiles[c.id].username;
+                    }
+                });
                 saveContactsToVault(); renderContactsSidebarDebounced();
+                if (activeTarget && res.profiles[activeTarget.id]) {
+                    if (res.profiles[activeTarget.id].username) activeTarget.username = res.profiles[activeTarget.id].username;
+                    if (res.profiles[activeTarget.id].avatar) activeTarget.avatar = res.profiles[activeTarget.id].avatar;
+                    updateChatHeaderUI();
+                }
             }
         });
     }
@@ -649,7 +659,10 @@ function renderContactsSidebar() {
 
     let filtered = myContacts;
     if (_contactSearchTerm) {
-        filtered = myContacts.filter(c => c.id.toLowerCase().includes(_contactSearchTerm));
+        filtered = myContacts.filter(c => 
+            c.id.toLowerCase().includes(_contactSearchTerm) || 
+            (c.username && c.username.toLowerCase().includes(_contactSearchTerm))
+        );
     }
 
     if (filtered.length === 0) {
@@ -687,7 +700,7 @@ function renderContactsSidebar() {
             img.className = 'w-full h-full object-cover';
             avatarWrap.appendChild(img);
         } else {
-            const initial = (contact.id || '').replace(/^AGN-/, '').charAt(0) || 'U';
+            const initial = (contact.username || contact.id || '').replace(/^AGN-/, '').charAt(0).toUpperCase() || 'U';
             const spn = document.createElement('span');
             spn.className = 'text-xs font-semibold text-[--text-primary]';
             spn.innerText = initial;
@@ -711,7 +724,7 @@ function renderContactsSidebar() {
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'text-xs font-semibold truncate text-[--text-primary]';
-        nameSpan.textContent = contact.id;
+        nameSpan.textContent = contact.username ? contact.username : contact.id;
 
         const e2eeBadge = document.createElement('span');
         e2eeBadge.className = `text-[10px] font-medium shrink-0 ${hasSecret ? 'text-[--success]' : 'text-[--warning]'}`;
@@ -726,7 +739,7 @@ function renderContactsSidebar() {
         const fpSpan = document.createElement('span');
         fpSpan.className = 'text-[10px] text-[--text-muted] font-mono truncate';
         const fpText = contact.fingerprint ? `FP: ${contact.fingerprint.substring(0, 8)}...` : 'Anahtar bekleniyor';
-        fpSpan.textContent = fpText;
+        fpSpan.textContent = contact.username ? `${contact.id} · ${fpText}` : fpText;
 
         const rightBadges = document.createElement('div');
         rightBadges.className = 'flex items-center gap-1.5 shrink-0';
@@ -773,9 +786,8 @@ function removeContact(targetId, event) {
         } catch(e) {}
         if (derivedSecrets[targetId]) { delete derivedSecrets[targetId]; saveSecretsToVault(); }
         if (activeTarget && activeTarget.id === targetId) {
-            activeTarget = null; document.getElementById('chatTargetHeader').innerText = "Bir sohbet seçin";
-            document.getElementById('chatTargetFingerprint').innerText = "FP: -----";
-            updateFingerprintHeaderUI();
+            activeTarget = null;
+            updateChatHeaderUI();
             document.getElementById('clearChatBtn').classList.add('hidden'); disableChatUI();
             renderLogPlaceholder(document.getElementById('chatLog'), null, "Uçtan uca şifreli", true);
             updateMobileLayout();
@@ -785,6 +797,39 @@ function removeContact(targetId, event) {
 }
 
 // === SOHBET ALANI ===
+
+function updateChatHeaderUI() {
+    const headerEl = document.getElementById('chatTargetHeader');
+    const fpEl = document.getElementById('chatTargetFingerprint');
+    if (!headerEl) return;
+    
+    if (!activeTarget) {
+        headerEl.textContent = "Bir sohbet seçin";
+        if (fpEl) fpEl.textContent = "FP: -----";
+        return;
+    }
+    
+    headerEl.replaceChildren();
+    if (activeTarget.username) {
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'font-bold text-[--text-primary]';
+        nameSpan.textContent = activeTarget.username;
+        
+        const idSpan = document.createElement('span');
+        idSpan.className = 'text-xs font-mono text-[--text-muted] ml-1.5 font-normal';
+        idSpan.textContent = `(${activeTarget.id})`;
+        
+        headerEl.appendChild(nameSpan);
+        headerEl.appendChild(idSpan);
+    } else {
+        headerEl.textContent = activeTarget.id;
+    }
+    
+    if (fpEl) {
+        fpEl.textContent = activeTarget.fingerprint ? `FP: ${activeTarget.fingerprint}` : `FP: BEKLENİYOR`;
+    }
+    updateFingerprintHeaderUI();
+}
 
 function enableChatUI() {
     document.getElementById('messageInput').disabled = false; document.getElementById('messageInput').placeholder = "Mesaj yazın...";
@@ -809,10 +854,31 @@ async function selectTarget(targetId) {
     
     playSound('success'); activeTarget = selected; unreadCounts[targetId] = 0; renderContactsSidebar();
     
-    document.getElementById('chatTargetHeader').innerText = activeTarget.id;
-    document.getElementById('chatTargetFingerprint').innerText = activeTarget.fingerprint ? `FP: ${activeTarget.fingerprint}` : `FP: BEKLENİYOR`;
-    updateFingerprintHeaderUI();
+    updateChatHeaderUI();
     document.getElementById('clearChatBtn').classList.remove('hidden'); keyRevealed = false;
+
+    // Profil eksikse veya güncel değilse arka planda sorgula
+    if (!activeTarget.username || !activeTarget.avatar) {
+        safeEmit('get_profiles', [activeTarget.id], (res) => {
+            if (res && res.profiles && res.profiles[activeTarget.id]) {
+                const prof = res.profiles[activeTarget.id];
+                let changed = false;
+                if (prof.username && activeTarget.username !== prof.username) {
+                    activeTarget.username = prof.username;
+                    changed = true;
+                }
+                if (prof.avatar && activeTarget.avatar !== prof.avatar) {
+                    activeTarget.avatar = prof.avatar;
+                    changed = true;
+                }
+                if (changed) {
+                    saveContactsToVault();
+                    renderContactsSidebarDebounced();
+                    updateChatHeaderUI();
+                }
+            }
+        });
+    }
 
     const hasSecret = !!derivedSecrets[selected.id];
     if (hasSecret) enableChatUI(); 
@@ -856,7 +922,8 @@ async function selectTarget(targetId) {
 
 function clearActiveChat() {
     if (!activeTarget) return;
-    showCustomConfirm(`${activeTarget.id} ile olan sohbet geçmişi silinecektir. Bu işlem geri alınamaz.`, async () => {
+    const displayName = activeTarget.username ? `${activeTarget.username} (${activeTarget.id})` : activeTarget.id;
+    showCustomConfirm(`${displayName} ile olan sohbet geçmişi silinecektir. Bu işlem geri alınamaz.`, async () => {
         try {
             const db = await openVaultDB(); const tx = db.transaction('packets', 'readwrite'); const store = tx.objectStore('packets');
             const index = store.index('peerId'); const request = index.getAllKeys(activeTarget.id);
@@ -876,25 +943,37 @@ function hideContactConfigModal() { playSound('type'); document.getElementById('
 
 // === YENİ AJAN EKLEME (REUSABLE) ===
 
-function addContact(targetId) {
+function addContact(targetId, username = null) {
     if (!targetId) return false;
     targetId = targetId.toUpperCase();
     if (targetId === currentUser.userId) return false;
     
     let existing = myContacts.find(c => c.id === targetId);
     if (!existing) {
-        myContacts.push({ id: targetId, key: null, fingerprint: null, fingerprintVerified: false, ecdhStatus: 'pending', isOnline: false, avatar: null });
+        myContacts.push({ 
+            id: targetId, 
+            username: username || null, 
+            key: null, 
+            fingerprint: null, 
+            fingerprintVerified: false, 
+            ecdhStatus: 'pending', 
+            isOnline: false, 
+            avatar: null 
+        });
         saveContactsToVault();
-        showToast(`${targetId} kişi listesine eklendi.`, 'success');
+        const display = username ? `${username} (${targetId})` : targetId;
+        showToast(`${display} kişi listesine eklendi.`, 'success');
         safeEmit('join_status_rooms', [targetId]); 
         safeEmit('check_node_status', targetId, (res) => { if (res) updateContactStatusUI(res.userId, res.isOnline); });
         safeEmit('get_profiles', [targetId], (res) => {
             if (res && res.profiles && res.profiles[targetId]) {
                 const c = myContacts.find(x => x.id === targetId);
                 if (c) {
-                    c.avatar = res.profiles[targetId].avatar;
+                    if (res.profiles[targetId].avatar) c.avatar = res.profiles[targetId].avatar;
+                    if (res.profiles[targetId].username) c.username = res.profiles[targetId].username;
                     saveContactsToVault();
                     renderContactsSidebarDebounced();
+                    if (activeTarget && activeTarget.id === targetId) updateChatHeaderUI();
                 }
             }
         });
@@ -906,6 +985,13 @@ function addContact(targetId) {
         ensureSharedSecret(targetId);
         
         return true;
+    } else {
+        if (username && !existing.username) {
+            existing.username = username;
+            saveContactsToVault();
+            renderContactsSidebarDebounced();
+            if (activeTarget && activeTarget.id === targetId) updateChatHeaderUI();
+        }
     }
     return false;
 }
@@ -993,7 +1079,7 @@ function performSearch() {
                 btn.className = 'px-3 py-1.5 bg-purple-500 text-black hover:bg-white hover:text-black font-black border border-purple-400 text-[10px]  uppercase tracking-wider transition-all cursor-pointer';
                 btn.innerText = 'EKLE';
                 btn.onclick = () => {
-                    const added = addContact(user.userId);
+                    const added = addContact(user.userId, user.username);
                     if (added) {
                         playSound('success');
                         btn.disabled = true;
@@ -1048,10 +1134,11 @@ function showContactRequest(data) {
 function handleContactRequestResponse(accepted) {
     if (!pendingContactRequest) return;
     const targetId = pendingContactRequest.senderId;
+    const username = pendingContactRequest.username;
     
     safeEmit('respond_contact_request', { targetId, accepted }, (res) => {
         if (accepted) {
-            addContact(targetId);
+            addContact(targetId, username);
             renderContactsSidebar();
             selectTarget(targetId);
         }
@@ -1063,7 +1150,16 @@ function handleContactRequestResponse(accepted) {
 
 function showContactRequestResponse(data) {
     if (data.accepted) {
-        showToast(`${data.senderId} bağlantı isteğinizi kabul etti!`, 'success');
+        const c = myContacts.find(x => x.id === data.senderId);
+        if (c && data.username) {
+            c.username = data.username;
+            if (data.avatar) c.avatar = data.avatar;
+            saveContactsToVault();
+            renderContactsSidebarDebounced();
+            if (activeTarget && activeTarget.id === data.senderId) updateChatHeaderUI();
+        }
+        const name = data.username ? `${data.username} (${data.senderId})` : data.senderId;
+        showToast(`${name} bağlantı isteğinizi kabul etti!`, 'success');
         playSound('success');
         ensureSharedSecret(data.senderId);
     } else {
@@ -1351,7 +1447,9 @@ function appendMessageToUI(packetId, sender, text, imageSrc, isMine, isError, tt
         revokeBtn.addEventListener('click', () => revokeMessage(packetId));
         headerSpan.appendChild(revokeBtn);
     } else {
-        const senderSpan = document.createElement('span'); senderSpan.className = `font-black ${senderColor} truncate`; senderSpan.textContent = `${sender}`; headerSpan.appendChild(senderSpan);
+        const contact = myContacts.find(c => c.id === sender);
+        const displayName = (contact && contact.username) ? `${contact.username} (${sender})` : sender;
+        const senderSpan = document.createElement('span'); senderSpan.className = `font-black ${senderColor} truncate`; senderSpan.textContent = displayName; headerSpan.appendChild(senderSpan);
         const timeSpan = document.createElement('span'); timeSpan.className = 'text-gray-500 ml-1.5 sm:ml-2 flex-shrink-0'; timeSpan.textContent = `[${timeStr}]`; headerSpan.appendChild(timeSpan);
     }
 
@@ -1580,8 +1678,7 @@ function mobileGoBack() {
     renderContactsSidebar();
     
     // reset chat ui header & content
-    document.getElementById('chatTargetHeader').innerText = "Bir sohbet seçin";
-    document.getElementById('chatTargetFingerprint').innerText = "FP: -----";
+    updateChatHeaderUI();
     document.getElementById('clearChatBtn').classList.add('hidden');
     disableChatUI();
     renderLogPlaceholder(document.getElementById('chatLog'), null, "// GÜVENLİ TÜNEL BEKLENİYOR //", true);

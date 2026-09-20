@@ -20,8 +20,9 @@ function bindSocketEvents() {
     socket.off('user_typing');
     socket.on('user_typing', (data) => {
         if (typingDiv && activeTarget && activeTarget.id === data.senderId) {
+            const senderName = activeTarget.username ? `${activeTarget.username}` : data.senderId;
             typingDiv.innerHTML = `
-                ${data.senderId} yazıyor...
+                ${senderName} yazıyor...
                 <span class="typing-dots">
                     <span class="typing-dot"></span>
                     <span class="typing-dot"></span>
@@ -41,13 +42,19 @@ function bindSocketEvents() {
     socket.on('ecdh_offer', async (data) => {
         let contact = myContacts.find(c => c.id === data.senderId);
         if (!contact) {
-            contact = { id: data.senderId, key: null, fingerprint: null, fingerprintVerified: false, ecdhStatus: 'pending', isOnline: true };
+            contact = { id: data.senderId, username: null, key: null, fingerprint: null, fingerprintVerified: false, ecdhStatus: 'pending', isOnline: true, avatar: null };
             myContacts.push(contact); saveContactsToVault();
             safeEmit('join_status_rooms', [data.senderId]); 
             triggerDesktopNotification("Yeni kişi", `${data.senderId} bağlandı.`);
             safeEmit('check_node_status', data.senderId, (res) => { updateContactStatusUI(res.userId, res.isOnline); });
             safeEmit('get_profiles', [data.senderId], (res) => {
-                if(res && res.profiles && res.profiles[data.senderId]) { contact.avatar = res.profiles[data.senderId].avatar; saveContactsToVault(); renderContactsSidebarDebounced(); }
+                if(res && res.profiles && res.profiles[data.senderId]) { 
+                    if (res.profiles[data.senderId].avatar) contact.avatar = res.profiles[data.senderId].avatar;
+                    if (res.profiles[data.senderId].username) contact.username = res.profiles[data.senderId].username;
+                    saveContactsToVault(); 
+                    renderContactsSidebarDebounced(); 
+                    if (activeTarget && activeTarget.id === data.senderId) updateChatHeaderUI();
+                }
             });
         }
         try {
@@ -105,11 +112,20 @@ function bindSocketEvents() {
     socket.on('receive_secure_packet', async (packet) => {
         let senderContact = myContacts.find(c => c.id === packet.senderId);
         if (!senderContact) {
-            senderContact = { id: packet.senderId, key: null, fingerprint: null, fingerprintVerified: false, ecdhStatus: 'pending', isOnline: true };
+            senderContact = { id: packet.senderId, username: null, key: null, fingerprint: null, fingerprintVerified: false, ecdhStatus: 'pending', isOnline: true, avatar: null };
             myContacts.push(senderContact); saveContactsToVault();
             safeEmit('join_status_rooms', [packet.senderId]);
             triggerDesktopNotification("YENİ VERİ", `${packet.senderId}`);
             safeEmit('check_node_status', packet.senderId, (res) => { updateContactStatusUI(res.userId, res.isOnline); });
+            safeEmit('get_profiles', [packet.senderId], (res) => {
+                if (res && res.profiles && res.profiles[packet.senderId]) {
+                    if (res.profiles[packet.senderId].avatar) senderContact.avatar = res.profiles[packet.senderId].avatar;
+                    if (res.profiles[packet.senderId].username) senderContact.username = res.profiles[packet.senderId].username;
+                    saveContactsToVault();
+                    renderContactsSidebarDebounced();
+                    if (activeTarget && activeTarget.id === packet.senderId) updateChatHeaderUI();
+                }
+            });
         }
         await ensureSharedSecret(packet.senderId);
         senderContact = myContacts.find(c => c.id === packet.senderId);
@@ -119,7 +135,8 @@ function bindSocketEvents() {
             playSound('transit'); await processIncomingPacket(packet, senderContact);
         } else {
             playSound('success'); unreadCounts[packet.senderId] = (unreadCounts[packet.senderId] || 0) + 1;
-            renderContactsSidebar(); showToast(`${packet.senderId} yeni mesaj gönderdi.`, 'info');
+            const notifSender = senderContact && senderContact.username ? `${senderContact.username} (${packet.senderId})` : packet.senderId;
+            renderContactsSidebar(); showToast(`${notifSender} yeni mesaj gönderdi.`, 'info');
         }
     });
 

@@ -223,7 +223,10 @@ module.exports = function setupSockets(io) {
                 userIds.forEach(uid => {
                     const email = userIdIndex[uid];
                     if (email && db.users[email]) {
-                        profiles[uid] = { avatar: db.users[email].avatar || null };
+                        profiles[uid] = { 
+                            username: db.users[email].username || null,
+                            avatar: db.users[email].avatar || null 
+                        };
                     }
                 });
             }
