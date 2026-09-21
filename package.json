@@ -6,19 +6,25 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/server.js",
-    "dev": "node src/server.js"
+    "dev": "node src/server.js",
+    "desktop:start": "electron electron/main.js",
+    "desktop:build": "electron-builder --config electron-builder.json --win"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@libsql/client": "^0.14.0",
     "bcrypt": "^6.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "level": "^10.0.0",
     "socket.io": "^4.8.3",
-    "sqlite3": "^6.0.1",
-    "@libsql/client": "^0.14.0"
+    "sqlite3": "^6.0.1"
+  },
+  "devDependencies": {
+    "electron": "^44.4.3",
+    "electron-builder": "^26.15.3"
   }
 }

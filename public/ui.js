@@ -1516,7 +1516,8 @@ function startSelfDestructTimer(packetId, duration, targetUser) {
 function changeFontSize(delta) {
     currentScale = Math.max(0.8, Math.min(1.8, currentScale + delta));
     document.documentElement.style.setProperty('--font-scale', currentScale);
-    document.getElementById('fontScaleDisplay').innerText = Math.round(currentScale * 100) + '%';
+    const fontDisplay = document.getElementById('fontScaleDisplay');
+    if (fontDisplay) fontDisplay.innerText = Math.round(currentScale * 100) + '%';
     playSound('type');
 }
 

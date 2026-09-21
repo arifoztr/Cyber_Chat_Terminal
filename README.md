@@ -80,7 +80,34 @@ Sunucu mimarisi **Zero-Knowledge (Sıfır Bilgi)** prensibiyle tasarlanmıştır
 
 ---
 
-### Yöntem 1: Yerel Olarak Çalıştırma
+### 💻 Yöntem 1: Windows Masaüstü Uygulaması (.exe) Olarak Kurulum
+
+Cyber Chat Terminal, uzaktaki sunucuya güvenli şekilde bağlanan tam teşekküllü bir masaüstü uygulaması olarak kullanılabilir.
+
+#### 1. Hazır Kurulum Dosyaları ile Kullanım
+GitHub Releases bölümünden veya `dist/` dizininden derlenen dosyalarla:
+- **Kurulum Sihirbazı (Setup):** `Cyber Chat Terminal Setup 1.0.0.exe`  
+  Çift tıklayıp kurulum sihirbazını tamamlayın. Masaüstünüze ve Başlat Menünüze otomatik kısayol eklenir, Denetim Masası'ndan kaldırılabilir.
+- **Taşınabilir Sürüm (Portable):** `Cyber Chat Terminal 1.0.0.exe`  
+  Kurulum gerektirmez. Çift tıkladığınız anda doğrudan açılır, USB belleğe atıp her bilgisayarda çalıştırılabilir.
+
+#### 2. Kendi Masaüstü Paketlerinizi (.exe) Derlemek
+Projeyi klonladıktan sonra kendi Windows uygulamanızı oluşturmak için:
+```bash
+# 1. Bağımlılıkları yükleyin
+npm install
+
+# 2. Geliştirici modunda test etmek için:
+npm run desktop:start
+
+# 3. Windows Installer ve Portable .exe paketlerini üretmek için:
+npm run desktop:build
+```
+> Derleme tamamlandığında dosyalarınız otomatik olarak **`dist/`** klasöründe oluşturulacaktır.
+
+---
+
+### Yöntem 2: Web / Yerel Olarak Çalıştırma
 
 #### 1. Depoyu Klonlayın
 ```bash
@@ -113,7 +140,7 @@ Terminalde bağlantı adresleri listelenecektir:
 
 ---
 
-### Yöntem 2: Docker ile Çalıştırma
+### Yöntem 3: Docker ile Çalıştırma
 
 Projeyi tek bir komutla Docker üzerinden izole bir şekilde ayağa kaldırabilirsiniz:
 

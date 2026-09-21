@@ -14,6 +14,7 @@
     <script src="https://cdn.socket.io/4.8.3/socket.io.min.js"></script>
     <!-- QR Code Kütüphanesi -->
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <link rel="icon" type="image/png" href="icon.png">
     <!-- Harici CSS Dosyamız -->
     <link rel="stylesheet" href="style.css?v=2">
 </head>
@@ -21,23 +22,13 @@
     <canvas id="bgCanvas" class="hidden"></canvas>
 
     <!-- ─── HEADER ─── -->
-    <header class="card mx-2 sm:mx-4 my-2 flex items-center justify-between p-3 sm:px-6 sm:py-3 z-10 shrink-0">
+    <header class="w-full flex items-center justify-between px-4 sm:px-6 py-3.5 z-10 shrink-0">
         <div class="flex items-center gap-3">
-            <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-[--accent-light] text-[--accent]">
-                🔒
-            </div>
+            <img src="icon.png" alt="Secure Chat Logo" class="w-9 h-9 rounded-lg object-contain drop-shadow-md">
             <div>
-                <h1 class="text-lg font-semibold tracking-wide">Secure Chat</h1>
-                <span class="text-[10px] uppercase font-bold text-[--success] bg-[--success]/10 px-2 py-0.5 rounded-full mt-1 inline-block">E2EE</span>
+                <h1 class="text-lg font-semibold tracking-wide leading-tight">Secure Chat</h1>
+                <span class="text-[10px] uppercase font-bold text-[--success] bg-[--success]/10 px-2 py-0.5 rounded-full inline-block">E2EE</span>
             </div>
-        </div>
-        <div class="flex items-center gap-4">
-            <div class="flex items-center bg-[--bg-primary] border border-[--border] rounded-lg overflow-hidden">
-                <button onclick="changeFontSize(-0.05)" class="px-3 py-1 hover:bg-[--surface-hover] transition-colors border-r border-[--border] text-sm">A-</button>
-                <span id="fontScaleDisplay" class="px-3 py-1 text-xs font-medium">115%</span>
-                <button onclick="changeFontSize(0.05)" class="px-3 py-1 hover:bg-[--surface-hover] transition-colors border-l border-[--border] text-sm">A+</button>
-            </div>
-
         </div>
     </header>
 

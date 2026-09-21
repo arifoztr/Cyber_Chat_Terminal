@@ -1,0 +1,44 @@
+{
+  "appId": "com.cyberchat.terminal",
+  "productName": "Cyber Chat Terminal",
+  "copyright": "Copyright © 2025 Cyber Chat Team",
+  "directories": {
+    "output": "dist"
+  },
+  "files": [
+    "electron/**/*",
+    "public/**/*",
+    "package.json",
+    "!**/node_modules/**/*",
+    "!src/**/*",
+    "!database.sqlite*",
+    "!docs/**/*",
+    "!.git/**/*"
+  ],
+  "extraMetadata": {
+    "main": "electron/main.js"
+  },
+  "npmRebuild": false,
+  "nodeGypRebuild": false,
+  "buildDependenciesFromSource": false,
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "electron/assets/icon.png"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Cyber Chat Terminal"
+  }
+}
