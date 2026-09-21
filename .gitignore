@@ -1,7 +1,16 @@
 node_modules/
+
+# Veritabanı dosyaları (runtime)
 database.sqlite*
 database.json*
+data/
+
+# Ortam değişkenleri
 .env
+
+# Loglar
 *.log
+
+# OS
 .DS_Store
 .vs/
