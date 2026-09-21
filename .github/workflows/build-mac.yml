@@ -6,6 +6,9 @@ on:
     tags:
       - 'v*' # Yeni bir sürüm etiketi (tag) push edildiğinde otomatik çalışır (örn: v1.0.1)
 
+permissions:
+  contents: write
+
 jobs:
   build-mac:
     runs-on: macos-latest
@@ -25,8 +28,9 @@ jobs:
 
       - name: Build macOS Application (.dmg & .zip)
         env:
-          # Sertifika olmadan (unsigned) temiz build alabilmek için
+          # CI ortamında otomatik publish girişimini ve sertifika aramasını kapat
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run desktop:build:mac
 
       - name: Upload Build Artifacts

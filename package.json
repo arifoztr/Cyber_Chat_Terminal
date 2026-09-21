@@ -1,7 +1,7 @@
 {
   "name": "cyber",
   "version": "1.0.0",
-  "description": "",
+  "description": "Cyber Chat Terminal - Secure E2EE Messenger",
   "main": "src/server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -9,7 +9,7 @@
     "dev": "node src/server.js",
     "desktop:start": "electron electron/main.js",
     "desktop:build": "electron-builder --config electron-builder.json --win",
-    "desktop:build:mac": "electron-builder --config electron-builder.json --mac"
+    "desktop:build:mac": "electron-builder --config electron-builder.json --mac --publish never"
   },
   "keywords": [],
   "author": "",
