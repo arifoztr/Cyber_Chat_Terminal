@@ -1181,11 +1181,6 @@ async function sendSecurePacket() {
     const sharedSecret = derivedSecrets[activeTarget.id];
     if (!sharedSecret) { playSound('error'); showToast("Şifreleme anahtarı bekleniyor...", 'warning'); return; }
     
-    if (!activeTarget.fingerprintVerified) {
-        playSound('error');
-        showToast("Parmak izi doğrulanmamış. Mesaj gönderilemedi.", 'error');
-        return;
-    }
     
     activeTarget.key = sharedSecret; playSound('type');
     

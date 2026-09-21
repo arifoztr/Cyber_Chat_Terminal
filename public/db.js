@@ -101,9 +101,7 @@ function loadContactsFromVault() {
         const data = localStorage.getItem('cyber_contacts_' + currentUser.userId);
         myContacts = data ? JSON.parse(data) : [];
         myContacts.forEach(contact => {
-            if (contact.fingerprintVerified === undefined) {
-                contact.fingerprintVerified = false;
-            }
+            delete contact.fingerprintVerified;
         });
     }
 }
