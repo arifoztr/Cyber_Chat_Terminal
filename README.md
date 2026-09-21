@@ -38,7 +38,7 @@ Sunucu mimarisi **Zero-Knowledge (Sıfır Bilgi)** prensibiyle tasarlanmıştır
 | **Backend** | Node.js, Express, Socket.IO | Asenkron, olay tabanlı sinyal ve relay sunucusu |
 | **Kriptografi** | Web Crypto API (`window.crypto.subtle`) | Tarayıcı yerel ECDH (P-256), AES-GCM-256, SHA-256 |
 | **Kimlik & Oturum** | JWT (HMAC-SHA256) + bcrypt | Bağımlılıksız token imzalama, güvenli şifre hashleme |
-| **Veritabanı** | SQLite (WAL Modu) + Bellek-içi Önbellek | Yüksek eşzamanlı okuma/yazma performansı ve debounced flush |
+| **Veritabanı** | SQLite (WAL Modu) + Turso Bulut SQLite (@libsql/client) | Ortam değişkeniyle yerel SQLite veya bulut veritabanı seçimi; bellek-içi önbellek ve debounced flush |
 | **İstemci Depolama** | IndexedDB (Vault) | Mesaj geçmişi ve kriptografik anahtarlar sadece istemcide |
 | **Tipografi** | Inter, JetBrains Mono | Okunabilir modern siber terminal estetiği |
 
@@ -50,22 +50,32 @@ Sunucu mimarisi **Zero-Knowledge (Sıfır Bilgi)** prensibiyle tasarlanmıştır
 /
 ├── public/                                # İstemci tarafı statik dosyaları
 │   ├── index.html                         # Ana web arayüzü
-│   ├── siber_e2ee_sohbet_terminali.html   # Alternatif/Doğrudan erişim şablonu
 │   ├── config.js                          # İstemci yapılandırması (Backend URL vb.)
 │   ├── style.css                          # Modern siber tema, animasyonlar ve bileşenler
 │   ├── crypto.js                          # Web Crypto API tabanlı E2EE kripto motoru
 │   ├── db.js                              # IndexedDB yerel kasa (Vault) yönetimi
 │   ├── ui.js                              # UI etkileşimi, state yönetimi, render işlemleri
-│   └── socket-handlers.js                 # Socket.IO istemci olay dinleyicileri
-├── database.js                            # SQLite veritabanı sürücüsü, önbellek ve GC
-├── database.sqlite                        # Çalışma zamanı SQLite veritabanı (WAL modu)
-├── socket.js                              # Socket.IO sunucu olay işleyicileri & relay mantığı
-├── server.js                              # Express HTTP sunucusu & güvenlik katmanı
+│   ├── socket-handlers.js                 # Socket.IO istemci olay dinleyicileri
+│   └── icon.png                           # Uygulama simgesi
+├── src/                                   # Backend kaynak kodları
+│   ├── server.js                          # Express HTTP sunucusu & güvenlik katmanı
+│   ├── socket.js                          # Socket.IO sunucu olay işleyicileri & relay mantığı
+│   ├── database.js                        # SQLite/Turso veritabanı sürücüsü, önbellek ve GC
+│   └── database.sqlite                    # Çalışma zamanı SQLite veritabanı (WAL modu)
+├── electron/                              # Masaüstü (Electron) kabuğu
+│   ├── main.js                            # Electron ana süreç (pencere, IPC, tek örnek kilidi)
+│   ├── preload.js                         # Güvenli IPC köprüsü
+│   └── assets/                            # Uygulama simgeleri (icon.png, icon.jpg)
+├── docs/                                  # Proje belgeleri
+│   ├── DEPLOYMENT.md                      # Hibrit bulut dağıtım kılavuzu (Cloudflare + Bulut)
+│   ├── OPTIMIZATIONS.md                   # Güvenlik ve performans optimizasyon detayları
+│   ├── PROGRESS.md                        # Faz durumu ve sürüm yol haritası
+│   └── AGENTS.md                          # AI asistanı ve geliştirici standartları kılavuzu
+├── dist/                                  # Masaüstü derleme çıktıları (Setup + Portable .exe)
 ├── Dockerfile                             # Konteynerize dağıtım dosyası
-├── DEPLOYMENT.md                          # Hibrit bulut dağıtım kılavuzu (Cloudflare + Bulut)
-├── OPTIMIZATIONS.md                       # Güvenlik ve performans optimizasyon detayları
-├── PROGRESS.md                            # Faz durumu ve sürüm yol haritası
-├── AGENTS.md                              # AI asistanı ve geliştirici standartları kılavuzu
+├── electron-builder.json                  # Masaüstü paketleme yapılandırması
+├── wrangler.toml                          # Cloudflare Pages yapılandırması
+├── .env.example                           # Ortam değişkenleri şablonu
 ├── package.json                           # Proje bağımlılıkları ve scriptler
 └── README.md                              # Proje dokümantasyonu (Bu dosya)
 ```
@@ -121,18 +131,24 @@ npm install
 ```
 
 #### 3. Ortam Değişkenlerini Tanımlayın (`.env`)
-Kök dizinde `.env` dosyası oluşturun:
+Kök dizinde `.env` dosyası oluşturun (şablon için [.env.example](.env.example) dosyasına bakabilirsiniz):
 ```env
 PORT=3000
 NODE_ENV=development
 JWT_SECRET=super_secret_jwt_passphrase_min_32_chars_long
 CORS_ORIGIN=*
+DB_PATH=./database.sqlite
+# İsteğe bağlı — tanımlanırsa yerel SQLite yerine Turso bulut veritabanı kullanılır:
+# TURSO_DATABASE_URL=libsql://your-db.turso.io
+# TURSO_AUTH_TOKEN=your_turso_auth_token
 ```
 > ⚠️ **Güvenlik Notu:** Üretim ortamında `JWT_SECRET` değerini en az 32 karakterlik güçlü bir rastgele anahtarla belirleyin.
 
 #### 4. Sunucuyu Başlatın
 ```bash
-npm start
+npm start        # Üretim modu
+# veya
+npm run dev      # Geliştirme modu
 ```
 Terminalde bağlantı adresleri listelenecektir:
 - Yerel Erişim: `http://localhost:3000`
@@ -160,7 +176,7 @@ Proje, hem tek bir sunucuda hem de modern hibrit mimaride çalışacak şekilde 
 - **Frontend:** Cloudflare Pages (Ücretsiz, küresel CDN, anında statik dağıtım)
 - **Backend:** Render / Railway / VPS Docker (WebSocket ve SQLite desteği)
 
-Detaylı adım adım rehber için [DEPLOYMENT.md](DEPLOYMENT.md) dosyasını inceleyebilirsiniz.
+Detaylı adım adım rehber için [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) dosyasını inceleyebilirsiniz.
 
 ---
 
@@ -209,7 +225,7 @@ Mevcut sürüm: **v10 (Cyber-HUD Edition)**
 - [ ] **FAZ 3 — Kriptografik Geliştirmeler:** Double Ratchet benzeri Oturum Başına İleriye Dönük Gizlilik (Forward Secrecy), Dijital İmza ile paket bütünlüğü.
 - [ ] **FAZ 4 & 5 — Genişletilmiş Özellikler:** Kullanıcı profilleri, gelişmiş loglama ve telemetri.
 
-Ayrıntılı yol haritası için [PROGRESS.md](PROGRESS.md) ve [OPTIMIZATIONS.md](OPTIMIZATIONS.md) belgelerine göz atabilirsiniz.
+Ayrıntılı yol haritası için [docs/PROGRESS.md](docs/PROGRESS.md) ve [docs/OPTIMIZATIONS.md](docs/OPTIMIZATIONS.md) belgelerine göz atabilirsiniz.
 
 ---
 
