@@ -1,0 +1,49 @@
+name: Build macOS Desktop App
+
+on:
+  workflow_dispatch: # GitHub arayüzünden manuel olarak "Run workflow" butonu ile başlatma
+  push:
+    tags:
+      - 'v*' # Yeni bir sürüm etiketi (tag) push edildiğinde otomatik çalışır (örn: v1.0.1)
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build macOS Application (.dmg & .zip)
+        env:
+          # Sertifika olmadan (unsigned) temiz build alabilmek için
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm run desktop:build:mac
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macOS-CyberChatTerminal-Builds
+          path: |
+            dist/*.dmg
+            dist/*.zip
+          retention-days: 14
+
+      - name: Create GitHub Release (if tag pushed)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+            dist/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
