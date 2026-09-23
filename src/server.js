@@ -18,6 +18,21 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
+    
+    // [GÜVENLİK] Content-Security-Policy (CSP): XSS ve yetkisiz kaynak yüklemelerini önler
+    const cspPolicy = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.socket.io https://cdn.jsdelivr.net",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com data:",
+        "img-src 'self' data: blob:",
+        "connect-src 'self' ws: wss: http: https:",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'"
+    ].join('; ');
+    res.setHeader('Content-Security-Policy', cspPolicy);
+
     // Geliştirme ortamında önbelleği devre dışı bırak (F5 atıldığında yeni kod gelsin)
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
@@ -43,14 +58,29 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-// CORS Yapılandırması (Cloudflare Pages ve custom domainler için)
-const allowedOrigins = process.env.CORS_ORIGIN 
-    ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim()) 
-    : true;
+// CORS ve CSWSH (Cross-Site WebSocket Hijacking) Koruması
+function isOriginAllowed(origin, callback) {
+    // Origin başlığı yoksa (same-origin istekler, Electron file://, yerel istemciler)
+    if (!origin || origin === 'null' || origin.startsWith('file://')) {
+        return callback(null, true);
+    }
+    // .env dosyasında CORS_ORIGIN tanımlıysa sadece bu domainlere izin ver
+    if (process.env.CORS_ORIGIN) {
+        const whitelist = process.env.CORS_ORIGIN.split(',').map(o => o.trim());
+        if (whitelist.includes(origin)) return callback(null, true);
+        return callback(new Error('CORS Savunması: Yetkisiz Origin'));
+    }
+    // Tanımlı değilse yalnızca yerel ağ ve localhost kabul edilir (Rastgele harici siteler engellenir)
+    const isLocal = origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('0.0.0.0');
+    if (isLocal) {
+        return callback(null, true);
+    }
+    return callback(new Error('CSWSH Savunması: Bilinmeyen Origin bağlantısı reddedildi'));
+}
 
 // Socket.io Ayarları (5MB dosya aktarımı base64 ve şifreleme ile ~7-8MB olabileceğinden buffer 10MB yapılır)
 const io = require('socket.io')(http, {
-    cors: { origin: allowedOrigins, credentials: true, methods: ["GET", "POST"] },
+    cors: { origin: isOriginAllowed, credentials: true, methods: ["GET", "POST"] },
     transports: ['websocket', 'polling'],
     maxHttpBufferSize: 10 * 1024 * 1024
 });

@@ -5,6 +5,9 @@ const dbManager = require('./database');
 const MAX_QUEUE_SIZE = 50;
 const onlineNodes = new Map();
 
+// Timing analizi ve kullanıcı sayımı (user enumeration) saldırılarını önlemek için sahte hash
+const DUMMY_HASH = '$2b$10$7EqJtq98hPqEX7fNZaFWoO0VpIxFk3E9V2bJgN1Jt3kR0n3X2m2Xe';
+
 // [FAZ 1 - FIX] JWT GİZLİ ANAHTARI — Güvenli Fallback Hiyerarşisi
 let JWT_SECRET;
 if (process.env.JWT_SECRET) {
@@ -24,22 +27,69 @@ if (process.env.JWT_SECRET) {
     console.warn('[⚠] JWT_SECRET .env dosyasında tanımlı değil — geliştirme anahtarı kullanılıyor.');
 }
 
-// Basit Bağımlılıksız JWT Üretimi
+// [GÜVENLİK] Çıkış yapılan (revoke edilmiş) token'ların kara listesi
+const revokedTokens = new Map(); // token -> expireTimestampMs
+
+function revokeToken(token) {
+    if (!token || typeof token !== 'string') return;
+    try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+            const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
+            const expMs = payload.exp > 1e11 ? payload.exp : (payload.exp * 1000);
+            revokedTokens.set(token, expMs || (Date.now() + 24 * 3600 * 1000));
+            return;
+        }
+    } catch (e) {}
+    revokedTokens.set(token, Date.now() + 24 * 3600 * 1000);
+}
+
+// Süresi dolan iptal edilmiş token'ları hafızadan temizleme
+setInterval(() => {
+    const now = Date.now();
+    for (const [t, exp] of revokedTokens.entries()) {
+        if (now > exp) revokedTokens.delete(t);
+    }
+}, 60 * 60 * 1000);
+
+// RFC 7519 Uyumlu Güvenli JWT Üretimi (exp saniye cinsindendir)
 function signJWT(payload) {
+    const nowSec = Math.floor(Date.now() / 1000);
     const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-    const body = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() + 24 * 60 * 60 * 1000 })).toString('base64url');
+    const body = Buffer.from(JSON.stringify({
+        ...payload,
+        iat: nowSec,
+        exp: nowSec + 24 * 60 * 60 // 24 saat
+    })).toString('base64url');
     const signature = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
     return `${header}.${body}.${signature}`;
 }
 
-// Basit Bağımlılıksız JWT Doğrulaması
+// Güvenli JWT Doğrulaması (Zamanlama Saldırısı Korumalı & Kara Liste Kontrollü)
 function verifyJWT(token) {
     try {
-        const [header, body, signature] = token.split('.');
+        if (!token || typeof token !== 'string') return null;
+        if (revokedTokens.has(token)) return null; // Çıkış yapılmış token engeli
+
+        const parts = token.split('.');
+        if (parts.length !== 3) return null;
+        const [header, body, signature] = parts;
+
         const expectedSig = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
-        if (signature !== expectedSig) return null;
+        
+        // Sabit zamanlı (timing-safe) karşılaştırma — Yan kanal saldırılarını engeller
+        const sigBuf = Buffer.from(signature);
+        const expBuf = Buffer.from(expectedSig);
+        if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+            return null;
+        }
+
         const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
-        if (payload.exp < Date.now()) return null;
+        const nowSec = Math.floor(Date.now() / 1000);
+        // Hem standart saniye hem geriye dönük milisaniye kontrolü
+        const expSec = payload.exp > 1e11 ? Math.floor(payload.exp / 1000) : payload.exp;
+        if (expSec < nowSec) return null;
+
         return payload;
     } catch (e) { return null; }
 }
@@ -47,11 +97,11 @@ function verifyJWT(token) {
 // [FIX] Proxy arkasında güvenli IP çıkarma yardımcısı
 function getClientIp(socket) {
     const forwarded = socket.handshake.headers['x-forwarded-for'];
-    if (forwarded) {
-        // İlk IP gerçek istemci IP'sidir (virgülle ayrılmış liste)
-        return forwarded.split(',')[0].trim();
+    if (forwarded && typeof forwarded === 'string') {
+        const ip = forwarded.split(',')[0].trim();
+        if (ip && ip.length <= 45) return ip;
     }
-    return socket.handshake.address;
+    return socket.handshake.address || socket.conn?.remoteAddress || '127.0.0.1';
 }
 
 module.exports = function setupSockets(io) {
@@ -165,17 +215,20 @@ module.exports = function setupSockets(io) {
                 const user = db.users[email];
                 
                 if (!user) {
-                    console.log(`[!] LOGİN: Kullanıcı bulunamadı (${email})`);
-                    return callback({ success: false, message: "Kullanıcı bulunamadı." });
+                    console.log(`[!] LOGİN: Başarısız kimlik doğrulama (${email})`);
+                    // Zamanlama farkını önlemek için sahte hash karşılaştırması yap
+                    await bcrypt.compare(password, DUMMY_HASH);
+                    return callback({ success: false, message: "E-posta veya şifre hatalı." });
                 }
                 if (!user.password) {
-                    return callback({ success: false, message: "Eski tip hesap. Yeni hesap açın." });
+                    await bcrypt.compare(password, DUMMY_HASH);
+                    return callback({ success: false, message: "E-posta veya şifre hatalı." });
                 }
                 
                 const isMatch = await bcrypt.compare(password, user.password);
                 if (!isMatch) {
-                    console.log(`[!] LOGİN: Hatalı şifre (${email})`);
-                    return callback({ success: false, message: "Hatalı şifre." });
+                    console.log(`[!] LOGİN: Başarısız kimlik doğrulama (${email})`);
+                    return callback({ success: false, message: "E-posta veya şifre hatalı." });
                 }
 
                 if (!user.userId) {
@@ -200,6 +253,10 @@ module.exports = function setupSockets(io) {
         });
 
         socket.on('verify_session', (token, callback) => {
+            if (!checkRateLimit(ip, 'verify_session', 30, 60000)) {
+                if (callback) callback({ success: false, message: "RATE_LIMIT" });
+                return;
+            }
             const payload = verifyJWT(token);
             const email = payload?.email ? payload.email.trim().toLowerCase() : null;
             if (email && db.users[email]) {
@@ -214,10 +271,33 @@ module.exports = function setupSockets(io) {
             }
         });
 
+        // [GÜVENLİK] Çıkış Olayı: Token'ı anında kara listeye alarak geçersiz kılar
+        socket.on('logout', (data, callback) => {
+            const token = data?.token || socket.handshake.auth?.token;
+            if (token) {
+                revokeToken(token);
+                console.log(`[-] OTURUM KAPATILDI & TOKEN İPTAL EDİLDİ: ${socket.user?.username || socket.id}`);
+            }
+            if (socket.user) {
+                const userId = socket.user.userId;
+                const sockets = onlineNodes.get(userId);
+                if (sockets) {
+                    sockets.delete(socket.id);
+                    if (sockets.size === 0) {
+                        onlineNodes.delete(userId);
+                        io.emit('node_status_change', { userId, status: 'offline' });
+                    }
+                }
+                socket.user = null;
+            }
+            if (callback) callback({ success: true });
+        });
+
         // --- PROFİL VE HESAP YÖNETİMİ ---
         
         socket.on('get_profiles', (userIds, callback) => {
-            if (!checkRateLimit(ip, 'get_profiles', 60, 60000)) return callback({ profiles: {} });
+            if (!socket.user) return callback ? callback({ profiles: {} }) : undefined;
+            if (!checkRateLimit(ip, 'get_profiles', 60, 60000)) return callback ? callback({ profiles: {} }) : undefined;
             const profiles = {};
             if (Array.isArray(userIds)) {
                 userIds.forEach(uid => {
@@ -303,16 +383,20 @@ module.exports = function setupSockets(io) {
         });
 
         socket.on('get_public_key', (targetId, callback) => {
+            if (!socket.user) {
+                if (callback) callback({ success: false, message: "AUTH_REQUIRED" });
+                return;
+            }
             if (!checkRateLimit(ip, 'get_pubkey', 60, 60000)) {
-                return callback({ success: false, message: "SİBER SAVUNMA: Çok fazla anahtar isteği." });
+                return callback ? callback({ success: false, message: "SİBER SAVUNMA: Çok fazla anahtar isteği." }) : undefined;
             }
             const email = userIdIndex[targetId];
             const targetUser = email ? db.users[email] : null;
             if (targetUser && targetUser.publicKey) {
                 // ECDH sırasında avatarı da ilet
-                callback({ success: true, publicKey: targetUser.publicKey, avatar: targetUser.avatar });
+                if (callback) callback({ success: true, publicKey: targetUser.publicKey, avatar: targetUser.avatar });
             } else {
-                callback({ success: false, message: "Anahtar bulunamadı." });
+                if (callback) callback({ success: false, message: "Anahtar bulunamadı." });
             }
         });
 
@@ -335,6 +419,7 @@ module.exports = function setupSockets(io) {
         });
 
         socket.on('check_node_status', (userId, callback) => {
+            if (!socket.user) return callback ? callback({ userId, isOnline: false }) : undefined;
             if (!checkRateLimit(ip, 'node_status', 60, 60000)) return;
             const isOnline = onlineNodes.has(userId) && onlineNodes.get(userId).size > 0;
             if (callback) callback({ userId, isOnline });
@@ -342,6 +427,7 @@ module.exports = function setupSockets(io) {
 
         socket.on('check_node_statuses', (userIds, callback) => {
             if (!callback) return;
+            if (!socket.user) return callback({ statuses: {} });
             if (!checkRateLimit(ip, 'node_status', 60, 60000)) return callback({ statuses: {} });
             const statuses = {};
             if (Array.isArray(userIds)) {
@@ -353,17 +439,29 @@ module.exports = function setupSockets(io) {
         });
 
         socket.on('ecdh_offer', (data) => {
-            if (!socket.user) return;
+            if (!socket.user || !data || !data.targetId) return;
             if (!checkRateLimit(ip, 'ecdh', 10, 60000)) return;
+            // Sender spoofing koruması: senderId sunucu tarafından zorunlu kılınır
+            const safeData = {
+                targetId: data.targetId,
+                senderId: socket.user.userId,
+                publicKeyJwk: data.publicKeyJwk
+            };
             const targetSockets = onlineNodes.get(data.targetId);
-            if (targetSockets) targetSockets.forEach(sid => io.to(sid).emit('ecdh_offer', data));
+            if (targetSockets) targetSockets.forEach(sid => io.to(sid).emit('ecdh_offer', safeData));
         });
 
         socket.on('ecdh_answer', (data) => {
-            if (!socket.user) return;
+            if (!socket.user || !data || !data.targetId) return;
             if (!checkRateLimit(ip, 'ecdh', 10, 60000)) return;
+            // Sender spoofing koruması: senderId sunucu tarafından zorunlu kılınır
+            const safeData = {
+                targetId: data.targetId,
+                senderId: socket.user.userId,
+                publicKeyJwk: data.publicKeyJwk
+            };
             const targetSockets = onlineNodes.get(data.targetId);
-            if (targetSockets) targetSockets.forEach(sid => io.to(sid).emit('ecdh_answer', data));
+            if (targetSockets) targetSockets.forEach(sid => io.to(sid).emit('ecdh_answer', safeData));
         });
 
         socket.on('send_secure_packet', async (packet, callback) => {
@@ -453,21 +551,26 @@ module.exports = function setupSockets(io) {
         });
 
         socket.on('revoke_packet', async (data) => {
-            if (!socket.user) return;
+            if (!socket.user || !data || !data.targetId || !data.packetId) return;
             if (!checkRateLimit(ip, 'revoke', 30, 60000)) return;
-            // Sender spoofing koruması: yalnızca kendi mesajını iptal edebilir
-            if (data.senderId !== socket.user.userId) return;
-            const targetSockets = onlineNodes.get(data.targetId);
+            // Sender spoofing koruması: senderId sunucu tarafından oturum sahibi olarak sabitlenir
+            const safeData = {
+                targetId: data.targetId,
+                senderId: socket.user.userId,
+                packetId: data.packetId
+            };
+            const targetSockets = onlineNodes.get(safeData.targetId);
             
             if (targetSockets && targetSockets.size > 0) {
-                targetSockets.forEach(sid => io.to(sid).emit('packet_revoked', data));
+                targetSockets.forEach(sid => io.to(sid).emit('packet_revoked', safeData));
             } else {
-                if (db.queue[data.targetId]) {
-                    const initialLength = db.queue[data.targetId].length;
-                    db.queue[data.targetId] = db.queue[data.targetId].filter(
-                        p => p.id !== data.packetId && p.packetId !== data.packetId
+                if (db.queue[safeData.targetId]) {
+                    const initialLength = db.queue[safeData.targetId].length;
+                    // BOLA / IDOR Koruması: Sadece oturum açmış kullanıcının kendi gönderdiği paketi sil
+                    db.queue[safeData.targetId] = db.queue[safeData.targetId].filter(
+                        p => !((p.id === safeData.packetId || p.packetId === safeData.packetId) && p.senderId === socket.user.userId)
                     );
-                    if (initialLength > db.queue[data.targetId].length) await dbManager.saveDatabase();
+                    if (initialLength > db.queue[safeData.targetId].length) await dbManager.saveDatabase();
                 }
             }
         });

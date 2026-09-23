@@ -4,7 +4,7 @@
 // ============================================================
 
 const DB_NAME = 'CyberVaultDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let _idbInstance = null;
 
 function openVaultDB() {
@@ -19,6 +19,9 @@ function openVaultDB() {
                 const store = db.createObjectStore('packets', { keyPath: 'id' });
                 store.createIndex('peerId', 'peerId', { unique: false });
                 store.createIndex('timestamp', 'timestamp', { unique: false });
+            }
+            if (!db.objectStoreNames.contains('cryptoKeys')) {
+                db.createObjectStore('cryptoKeys', { keyPath: 'userId' });
             }
         };
     });
@@ -105,3 +108,44 @@ function loadContactsFromVault() {
         });
     }
 }
+
+// Kriptografik Anahtar Deposu (IndexedDB CryptoKey Vault)
+async function saveCryptoKeyToVault(userId, keyData) {
+    try {
+        const db = await openVaultDB();
+        const tx = db.transaction('cryptoKeys', 'readwrite');
+        const store = tx.objectStore('cryptoKeys');
+        store.put({ userId, ...keyData });
+        return new Promise((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
+    } catch (e) {
+        console.error('[!] saveCryptoKeyToVault hatası:', e);
+    }
+}
+
+async function loadCryptoKeyFromVault(userId) {
+    try {
+        const db = await openVaultDB();
+        if (!db.objectStoreNames.contains('cryptoKeys')) return null;
+        const tx = db.transaction('cryptoKeys', 'readonly');
+        const store = tx.objectStore('cryptoKeys');
+        const request = store.get(userId);
+        return new Promise((resolve, reject) => {
+            request.onsuccess = () => resolve(request.result || null);
+            request.onerror = () => reject(request.error);
+        });
+    } catch (e) {
+        console.error('[!] loadCryptoKeyFromVault hatası:', e);
+        return null;
+    }
+}
+
+async function removeCryptoKeyFromVault(userId) {
+    try {
+        const db = await openVaultDB();
+        if (!db.objectStoreNames.contains('cryptoKeys')) return;
+        const tx = db.transaction('cryptoKeys', 'readwrite');
+        const store = tx.objectStore('cryptoKeys');
+        store.delete(userId);
+    } catch (e) {}
+}
+

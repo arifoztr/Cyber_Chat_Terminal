@@ -607,8 +607,15 @@ function handleDisconnectUI() {
 
 function disconnectFromServer() { 
     if (socket) { 
-        playSound('error'); socket.disconnect(); showToast("Çıkış yapıldı.", 'warning'); 
-        localStorage.removeItem('cyber_jwt'); handleDisconnectUI(); 
+        playSound('error');
+        const token = localStorage.getItem('cyber_jwt');
+        if (token) {
+            try { socket.emit('logout', { token }); } catch (e) {}
+        }
+        socket.disconnect();
+        showToast("Çıkış yapıldı.", 'warning'); 
+        localStorage.removeItem('cyber_jwt');
+        handleDisconnectUI(); 
     } 
 }
 

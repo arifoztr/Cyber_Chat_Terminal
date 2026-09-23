@@ -63,22 +63,67 @@ async function decryptGCM(base64Data, hexSecret) {
 
 
 async function initEcdhKeys() {
-    const stored = localStorage.getItem('ecdh_keypair_' + currentUser.userId);
-    if (stored) {
-        try {
-            const parsed = JSON.parse(stored);
+    // 1. Önce IndexedDB'den CryptoKey nesnesi olarak yüklemeyi dene
+    try {
+        const vaultKey = await loadCryptoKeyFromVault(currentUser.userId);
+        if (vaultKey && vaultKey.privateKey && vaultKey.publicJwk) {
+            let pubKey = vaultKey.publicKey;
+            if (!pubKey) {
+                pubKey = await crypto.subtle.importKey('jwk', vaultKey.publicJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+            }
             myEcdhKeyPair = {
-                privateKey: await crypto.subtle.importKey('jwk', parsed.privateJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']),
-                publicKey:  await crypto.subtle.importKey('jwk', parsed.publicJwk,  { name: 'ECDH', namedCurve: 'P-256' }, true, [])
+                privateKey: vaultKey.privateKey,
+                publicKey: pubKey
             };
-            myPublicKeyJwk = parsed.publicJwk;
+            myPublicKeyJwk = vaultKey.publicJwk;
+            // Güvenlik: localStorage'da eski anahtar kalmışsa temizle
+            localStorage.removeItem('ecdh_keypair_' + currentUser.userId);
             return;
-        } catch(e) {}
+        }
+    } catch(e) {
+        console.warn('[!] IndexedDB anahtar okuma hatası:', e);
     }
+
+    // 2. Geriye dönük uyumluluk: localStorage'da eski anahtar varsa IndexedDB'ye taşı ve localStorage'dan sil
+    const legacyStored = localStorage.getItem('ecdh_keypair_' + currentUser.userId);
+    if (legacyStored) {
+        try {
+            const parsed = JSON.parse(legacyStored);
+            const privKey = await crypto.subtle.importKey('jwk', parsed.privateJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+            const pubKey = await crypto.subtle.importKey('jwk', parsed.publicJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+            
+            myEcdhKeyPair = { privateKey: privKey, publicKey: pubKey };
+            myPublicKeyJwk = parsed.publicJwk;
+
+            // IndexedDB'ye güvenle kaydet
+            await saveCryptoKeyToVault(currentUser.userId, {
+                privateKey: privKey,
+                publicKey: pubKey,
+                publicJwk: myPublicKeyJwk
+            });
+
+            // localStorage'dan derhal temizle (Artık düz metin JWK tutulmaz)
+            localStorage.removeItem('ecdh_keypair_' + currentUser.userId);
+            console.log('[+] Eski ECDH anahtarı IndexedDB kasasına taşındı ve localStorage temizlendi.');
+            return;
+        } catch(e) {
+            console.warn('[!] Eski anahtar taşıma hatası:', e);
+        }
+    }
+
+    // 3. Hiç anahtar yoksa yeni ECDH çifti oluştur ve doğrudan IndexedDB'ye kaydet
     myEcdhKeyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
     myPublicKeyJwk = await crypto.subtle.exportKey('jwk', myEcdhKeyPair.publicKey);
-    const privateJwk = await crypto.subtle.exportKey('jwk', myEcdhKeyPair.privateKey);
-    localStorage.setItem('ecdh_keypair_' + currentUser.userId, JSON.stringify({ publicJwk: myPublicKeyJwk, privateJwk }));
+    
+    await saveCryptoKeyToVault(currentUser.userId, {
+        privateKey: myEcdhKeyPair.privateKey,
+        publicKey: myEcdhKeyPair.publicKey,
+        publicJwk: myPublicKeyJwk
+    });
+
+    // Garanti olarak localStorage'da herhangi bir kalıntı olmadığından emin ol
+    localStorage.removeItem('ecdh_keypair_' + currentUser.userId);
+    console.log('[+] Yeni ECDH anahtar çifti IndexedDB kasasında güvenle oluşturuldu.');
 }
 
 async function deriveSharedSecret(theirPublicJwk) {
