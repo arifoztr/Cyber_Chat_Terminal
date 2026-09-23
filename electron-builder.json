@@ -83,6 +83,6 @@
       }
     ],
     "icon": "electron/assets/icon.png",
-    "category": "Network;Chat;InstantMessaging"
+    "category": "Network"
   }
 }
