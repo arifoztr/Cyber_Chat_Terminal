@@ -9,7 +9,8 @@
     "dev": "node src/server.js",
     "desktop:start": "electron electron/main.js",
     "desktop:build": "electron-builder --config electron-builder.json --win",
-    "desktop:build:mac": "electron-builder --config electron-builder.json --mac --publish never"
+    "desktop:build:mac": "electron-builder --config electron-builder.json --mac --publish never",
+    "desktop:build:linux": "electron-builder --config electron-builder.json --linux --publish never"
   },
   "keywords": [],
   "author": "",

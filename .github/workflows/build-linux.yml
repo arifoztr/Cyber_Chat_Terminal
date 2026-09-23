@@ -1,0 +1,51 @@
+name: Build Linux Desktop App
+
+on:
+  workflow_dispatch: # GitHub arayüzünden manuel olarak "Run workflow" butonu ile başlatma
+  push:
+    tags:
+      - 'v*' # Yeni bir sürüm etiketi (tag) push edildiğinde otomatik çalışır (örn: v1.0.1)
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Linux Application (.AppImage & .deb)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run desktop:build:linux
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Linux-CyberChatTerminal-Builds
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+          retention-days: 14
+
+      - name: Create GitHub Release (if tag pushed)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.AppImage
+            dist/*.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
