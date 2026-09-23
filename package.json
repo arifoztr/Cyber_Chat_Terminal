@@ -13,7 +13,7 @@
     "desktop:build:linux": "electron-builder --config electron-builder.json --linux --publish never"
   },
   "keywords": [],
-  "author": "",
+  "author": "Arif8054 <arifoz5354@gmail.com>",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
