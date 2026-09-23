@@ -117,7 +117,85 @@ npm run desktop:build
 
 ---
 
-### Yöntem 2: Web / Yerel Olarak Çalıştırma
+### 🐧 Yöntem 2: Linux Masaüstü Uygulaması (`.deb` / `.AppImage`) Olarak Kurulum
+
+Cyber Chat Terminal, GitHub Actions tarafından otomatik derlenen **`.deb`** (Debian/Ubuntu) ve **`.AppImage`** paketleriyle Linux'ta yerel masaüstü uygulaması olarak çalıştırılabilir.
+
+#### Paketi İndirme
+
+GitHub reposundaki **[Releases](https://github.com/Arif8054/Cyber_Chat_Terminal/releases)** sayfasını açın ve en güncel sürümden `cyber_x.x.x_amd64.deb` veya `Cyber Chat Terminal-x.x.x.AppImage` dosyasını indirin.
+
+> [!NOTE]
+> Paketler her yeni `v*` etiketi push edildiğinde **Build Linux Desktop App** workflow'u tarafından otomatik olarak derlenir ve Release'e eklenir. El ile derlemek için aşağıdaki [Kaynak Koddan Derleme](#kaynak-koddan-linux-paketi-derleme) adımlarına bakın.
+
+---
+
+#### `.deb` Paketi ile Kurulum (Debian / Ubuntu / Mint)
+
+**Adım 1 — Paketi Kur**
+
+İndirilen `.deb` dosyasının bulunduğu dizinde terminali açın:
+
+```bash
+sudo dpkg -i cyber_1.0.0_amd64.deb
+```
+
+**Adım 2 — Eksik Bağımlılıkları Tamamla** *(gerekirse)*
+
+`dpkg` kurulumu sırasında eksik paket hatası alırsanız (örn. `libxss1`) şu komutla otomatik olarak tamamlayın:
+
+```bash
+sudo apt-get install -f -y
+```
+
+**Adım 3 — Uygulamayı Başlat**
+
+```bash
+cyber
+```
+
+Uygulama ayrıca uygulama menüsünden (masaüstü kısayolu) da açılabilir.
+
+---
+
+#### `.AppImage` ile Kurulum (Tüm Linux Dağıtımları)
+
+`.AppImage` dosyası kurulum gerektirmez; doğrudan çalıştırılabilir:
+
+```bash
+chmod +x "Cyber Chat Terminal-1.0.0.AppImage"
+./"Cyber Chat Terminal-1.0.0.AppImage"
+```
+
+> [!TIP]
+> AppImage çalıştırılırken `FUSE` hatası alırsanız şu komutu çalıştırın:
+> ```bash
+> sudo apt-get install -y libfuse2
+> ```
+
+---
+
+#### Kaynak Koddan Linux Paketi Derleme
+
+Kendi `.deb` ve `.AppImage` paketlerinizi oluşturmak için:
+
+```bash
+# 1. Bağımlılıkları yükle
+sudo apt-get install -y libfuse2
+npm install
+
+# 2. Geliştirici modunda test et
+npm run desktop:start
+
+# 3. Linux paketlerini derle (.AppImage + .deb → dist/ klasörüne)
+npm run desktop:build:linux
+```
+
+> Derleme tamamlandığında dosyalar otomatik olarak **`dist/`** klasörüne oluşturulacaktır.
+
+---
+
+### Yöntem 3: Web / Yerel Olarak Çalıştırma
 
 #### 1. Depoyu Klonlayın
 ```bash
@@ -156,7 +234,7 @@ Terminalde bağlantı adresleri listelenecektir:
 
 ---
 
-### Yöntem 3: Docker ile Çalıştırma
+### Yöntem 4: Docker ile Çalıştırma
 
 Projeyi tek bir komutla Docker üzerinden izole bir şekilde ayağa kaldırabilirsiniz:
 
