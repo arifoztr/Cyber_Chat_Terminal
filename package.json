@@ -2,6 +2,7 @@
   "name": "cyber",
   "version": "1.0.0",
   "description": "Cyber Chat Terminal - Secure E2EE Messenger",
+  "desktopName": "com.cyberchat.terminal",
   "main": "src/server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

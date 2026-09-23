@@ -73,7 +73,6 @@
   },
   "linux": {
     "maintainer": "Arif8054 <arifoz5354@gmail.com>",
-    "desktopName": "cyber-chat-terminal",
     "target": [
       {
         "target": "AppImage",
