@@ -128,8 +128,22 @@ async function initEcdhKeys() {
 
 async function deriveSharedSecret(theirPublicJwk) {
     const theirKey = await crypto.subtle.importKey('jwk', theirPublicJwk, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
-    const bits = await crypto.subtle.deriveBits({ name: 'ECDH', public: theirKey }, myEcdhKeyPair.privateKey, 256);
-    return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2,'0')).join('');
+    const rawBits = await crypto.subtle.deriveBits({ name: 'ECDH', public: theirKey }, myEcdhKeyPair.privateKey, 256);
+    
+    // [GÜVENLİK FIX] NIST SP 800-56A: Ham ECDH çıktısını HKDF ile AES anahtarına dönüştür
+    // Adım 1: Ham bitleri HKDF giriş anahtar materyali (IKM) olarak import et
+    const hkdfKey = await crypto.subtle.importKey('raw', rawBits, 'HKDF', false, ['deriveBits']);
+    
+    // Adım 2: Sabit salt ve bağlam etiketi ile 256-bit AES anahtarı türet
+    const salt = new TextEncoder().encode('CyberChat-E2EE-v1');
+    const info = new TextEncoder().encode('AES-GCM-256-SharedKey');
+    const derivedBits = await crypto.subtle.deriveBits(
+        { name: 'HKDF', hash: 'SHA-256', salt: salt, info: info },
+        hkdfKey,
+        256
+    );
+    
+    return Array.from(new Uint8Array(derivedBits)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
 async function ensureSharedSecret(targetId) {
@@ -139,6 +153,20 @@ async function ensureSharedSecret(targetId) {
         safeEmit('get_public_key', targetId, async (res) => {
             if (res && res.success && res.publicKey) {
                 try {
+                    // [GÜVENLİK FIX - SEC-05] Açık anahtar parmak izi kontrolü (MITM tespiti)
+                    const fingerprint = await generateKeyFingerprint(res.publicKey);
+                    const storedFp = localStorage.getItem('cyber_fp_' + currentUser.userId + '_' + targetId);
+                    
+                    if (storedFp && storedFp !== fingerprint) {
+                        // ⚠️ ANAHTAR DEĞİŞMİŞ — Kullanıcıyı uyar
+                        console.warn(`[!] GÜVENLİK UYARISI: ${targetId} açık anahtarı değişmiş!`);
+                        if (typeof showToast === 'function') {
+                            showToast(`⚠️ ${targetId} açık anahtarı değişti! Olası MITM saldırısı. Güvenlik numaranızı doğrulayın.`, 'warning');
+                        }
+                    }
+                    // Parmak izini kaydet/güncelle
+                    localStorage.setItem('cyber_fp_' + currentUser.userId + '_' + targetId, fingerprint);
+                    
                     const secret = await deriveSharedSecret(res.publicKey);
                     derivedSecrets[targetId] = secret;
                     saveSecretsToVault();
@@ -168,3 +196,85 @@ function initiateEcdhHandshake(targetId) {
 // Kriptografik sırların oturum deposuna kaydı / yüklenmesi
 function saveSecretsToVault() { if (currentUser) sessionStorage.setItem('derived_secrets_' + currentUser.userId, JSON.stringify(derivedSecrets)); }
 function loadSecretsFromVault() { if (currentUser) { const data = sessionStorage.getItem('derived_secrets_' + currentUser.userId); derivedSecrets = data ? JSON.parse(data) : {}; } }
+
+// ============================================================
+// [GÜVENLİK FIX - SEC-05] Açık Anahtar Parmak İzi ve Güvenlik Numarası
+// MITM (Ortadaki Adam) saldırılarını tespit etmek için kullanıcıların
+// birbirlerinin açık anahtarlarını bant dışı doğrulamasını sağlar.
+// ============================================================
+
+/**
+ * Bir JWK açık anahtarı için SHA-256 parmak izi üretir.
+ * Çıktı: "A1B2 C3D4 E5F6 7890 ..." şeklinde okunabilir hex grupları
+ */
+async function generateKeyFingerprint(publicKeyJwk) {
+    if (!publicKeyJwk) return null;
+    const keyBytes = new TextEncoder().encode(JSON.stringify(publicKeyJwk));
+    const hashBuffer = await crypto.subtle.digest('SHA-256', keyBytes);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hexStr = hashArray.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+    // 4'lü gruplar halinde formatla (okunabilirlik için)
+    return hexStr.match(/.{1,4}/g).join(' ');
+}
+
+/**
+ * İki kullanıcı arasında Güvenlik Numarası (Safety Number) üretir.
+ * Her iki tarafın açık anahtarlarının SHA-256 hash'i birleştirilip
+ * tekrar hash'lenir. Her iki tarafta da aynı numara çıkmalıdır.
+ * Signal protokolündeki "Safety Number" prensibiyle aynıdır.
+ */
+async function generateSafetyNumber(myPubKeyJwk, theirPubKeyJwk) {
+    if (!myPubKeyJwk || !theirPubKeyJwk) return null;
+    // Sıralama: her iki tarafta da aynı sonucu üretmek için deterministik sırala
+    const myStr = JSON.stringify(myPubKeyJwk);
+    const theirStr = JSON.stringify(theirPubKeyJwk);
+    const combined = [myStr, theirStr].sort().join('|');
+    const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(combined));
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    // İlk 30 baytı 5'li sayısal gruplara dönüştür (60 haneli güvenlik numarası)
+    const numStr = hashArray.slice(0, 30).map(b => b.toString(10).padStart(3, '0')).join('');
+    return numStr.match(/.{1,5}/g).join(' ');
+}
+
+/**
+ * Belirtilen kişi için açık anahtar parmak izini alır ve önbelleğe kaydeder.
+ * Anahtar değişikliği tespit edildiğinde kullanıcıya uyarı verir.
+ */
+async function verifyContactFingerprint(targetId) {
+    return new Promise((resolve) => {
+        safeEmit('get_public_key', targetId, async (res) => {
+            if (!res || !res.success || !res.publicKey) {
+                resolve({ verified: false, reason: 'Açık anahtar alınamadı.' });
+                return;
+            }
+            const fingerprint = await generateKeyFingerprint(res.publicKey);
+            const storedFp = localStorage.getItem('cyber_fp_' + currentUser.userId + '_' + targetId);
+            
+            if (!storedFp) {
+                // İlk kez görülen anahtar — kaydet
+                localStorage.setItem('cyber_fp_' + currentUser.userId + '_' + targetId, fingerprint);
+                resolve({ verified: true, fingerprint, firstTime: true });
+            } else if (storedFp === fingerprint) {
+                // Bilinen anahtar — doğrulandı
+                resolve({ verified: true, fingerprint, firstTime: false });
+            } else {
+                // ⚠️ ANAHTAR DEĞİŞMİŞ — Olası MITM saldırısı!
+                resolve({ 
+                    verified: false, 
+                    fingerprint, 
+                    previousFingerprint: storedFp,
+                    reason: 'UYARI: Bu kişinin açık anahtarı değişmiş! Olası Ortadaki Adam (MITM) saldırısı.' 
+                });
+            }
+        });
+    });
+}
+
+/**
+ * Anahtar değişikliğini kabul ettikten sonra yeni parmak izini kaydet
+ */
+function acceptNewFingerprint(targetId, fingerprint) {
+    if (currentUser && targetId && fingerprint) {
+        localStorage.setItem('cyber_fp_' + currentUser.userId + '_' + targetId, fingerprint);
+    }
+}

@@ -48,7 +48,8 @@ function showCustomConfirm(message, onConfirmCallback) {
     const btnYes = document.getElementById('cyberConfirmBtnYes');
     const btnNo = document.getElementById('cyberConfirmBtnNo');
     
-    msgEl.innerHTML = message.replace(/\\n/g, '<br>');
+    // [GÜVENLİK FIX] innerHTML yerine textContent — XSS engellenir
+    msgEl.textContent = message;
     modal.classList.remove('hidden');
 
     const cleanUp = () => {
@@ -143,7 +144,7 @@ function setAuthAlert(message, type = 'error') {
     if (!alertEl) return;
     if (!message) {
         alertEl.className = 'hidden auth-alert';
-        alertEl.innerHTML = '';
+        alertEl.textContent = '';
         return;
     }
     const icons = {
@@ -152,7 +153,14 @@ function setAuthAlert(message, type = 'error') {
         success: '✅'
     };
     alertEl.className = `auth-alert auth-alert-${type}`;
-    alertEl.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${message}</span>`;
+    // [GÜVENLİK FIX] innerHTML yerine güvenli DOM API — sunucu mesajlarından XSS engellenir
+    alertEl.textContent = '';
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = icons[type] || 'ℹ️';
+    const msgSpan = document.createElement('span');
+    msgSpan.textContent = message;
+    alertEl.appendChild(iconSpan);
+    alertEl.appendChild(msgSpan);
     alertEl.classList.remove('hidden');
 }
 
@@ -1441,15 +1449,23 @@ function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl
                 
                 const cardHeader = document.createElement('div');
                 cardHeader.className = 'flex items-center gap-3 min-w-0';
-                cardHeader.innerHTML = `
-                    <div class="w-10 h-10 rounded-lg bg-red-500/20 border border-red-500/50 flex items-center justify-center text-red-400 text-xl shrink-0 shadow-inner">
-                        📄
-                    </div>
-                    <div class="flex flex-col min-w-0 flex-1">
-                        <span class="text-xs text-gray-200 font-semibold truncate" title="${safeFileName}">${safeFileName}</span>
-                        <span class="text-[10px] text-gray-400 font-mono tracking-wider">${sizeMB} MB • PDF</span>
-                    </div>
-                `;
+                // [GÜVENLİK FIX] innerHTML yerine güvenli DOM API — dosya adı XSS engellenir
+                const iconWrap = document.createElement('div');
+                iconWrap.className = 'w-10 h-10 rounded-lg bg-red-500/20 border border-red-500/50 flex items-center justify-center text-red-400 text-xl shrink-0 shadow-inner';
+                iconWrap.textContent = '📄';
+                cardHeader.appendChild(iconWrap);
+                const infoWrap = document.createElement('div');
+                infoWrap.className = 'flex flex-col min-w-0 flex-1';
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'text-xs text-gray-200 font-semibold truncate';
+                nameSpan.title = safeFileName;
+                nameSpan.textContent = safeFileName;
+                infoWrap.appendChild(nameSpan);
+                const sizeSpan = document.createElement('span');
+                sizeSpan.className = 'text-[10px] text-gray-400 font-mono tracking-wider';
+                sizeSpan.textContent = sizeMB + ' MB • PDF';
+                infoWrap.appendChild(sizeSpan);
+                cardHeader.appendChild(infoWrap);
                 pdfCard.appendChild(cardHeader);
 
                 const cardActions = document.createElement('div');
@@ -1458,14 +1474,14 @@ function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl
                 const downloadBtn = document.createElement('button');
                 downloadBtn.type = 'button';
                 downloadBtn.className = 'flex-1 py-1.5 px-2 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-400 hover:text-red-300 text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer';
-                downloadBtn.innerHTML = '<span>📥</span> İndir';
+                downloadBtn.textContent = '📥 İndir';
                 downloadBtn.onclick = () => downloadPdf(fileSrc, safeFileName);
                 cardActions.appendChild(downloadBtn);
 
                 const viewBtn = document.createElement('button');
                 viewBtn.type = 'button';
                 viewBtn.className = 'flex-1 py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 border border-gray-700 text-gray-300 hover:text-white text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer';
-                viewBtn.innerHTML = '<span>👁</span> Görüntüle';
+                viewBtn.textContent = '👁 Görüntüle';
                 viewBtn.onclick = () => openPdfViewer(fileSrc, safeFileName);
                 cardActions.appendChild(viewBtn);
 

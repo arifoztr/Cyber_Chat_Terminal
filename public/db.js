@@ -98,13 +98,28 @@ async function removePacketFromVault(peerId, packetId) {
 }
 
 // Kişi listesinin yerel depoya kaydı / yüklenmesi
-function saveContactsToVault() { if(currentUser) localStorage.setItem('cyber_contacts_' + currentUser.userId, JSON.stringify(myContacts)); }
+// [GÜVENLİK FIX] Simetrik anahtarlar (contact.key) artık localStorage'a yazılmaz — sızıntı riski ortadan kalkar
+function saveContactsToVault() {
+    if(currentUser) {
+        const sanitized = myContacts.map(c => {
+            const clone = { ...c };
+            delete clone.key; // Simetrik anahtar diske YAZILMAZ — sadece bellekte tutulur
+            return clone;
+        });
+        localStorage.setItem('cyber_contacts_' + currentUser.userId, JSON.stringify(sanitized));
+    }
+}
 function loadContactsFromVault() {
     if(currentUser) {
         const data = localStorage.getItem('cyber_contacts_' + currentUser.userId);
         myContacts = data ? JSON.parse(data) : [];
         myContacts.forEach(contact => {
             delete contact.fingerprintVerified;
+            // Anahtar, derivedSecrets'tan (sessionStorage) yeniden yüklenir
+            if (derivedSecrets[contact.id]) {
+                contact.key = derivedSecrets[contact.id];
+                contact.ecdhStatus = 'established';
+            }
         });
     }
 }

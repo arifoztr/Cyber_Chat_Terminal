@@ -17,8 +17,8 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js'),
             nodeIntegration: false,
             contextIsolation: true,
-            sandbox: false,
-            webSecurity: false // Yerel file:// protokolünden https backend'e CORS/Socket bağlantısını pürüzsüzleştirmek için
+            sandbox: true,
+            webSecurity: true // [GÜVENLİK FIX] SOP zorunlu kılınır — XSS ile yerel dosya/iç ağ erişimi engellenir
         }
     });
 

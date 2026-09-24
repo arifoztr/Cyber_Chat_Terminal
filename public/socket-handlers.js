@@ -21,20 +21,25 @@ function bindSocketEvents() {
     socket.on('user_typing', (data) => {
         if (typingDiv && activeTarget && activeTarget.id === data.senderId) {
             const senderName = activeTarget.username ? `${activeTarget.username}` : data.senderId;
-            typingDiv.innerHTML = `
-                ${senderName} yazıyor...
-                <span class="typing-dots">
-                    <span class="typing-dot"></span>
-                    <span class="typing-dot"></span>
-                    <span class="typing-dot"></span>
-                </span>`;
+            // [GÜVENLİK FIX] innerHTML yerine güvenli DOM API — XSS engellenir
+            typingDiv.textContent = '';
+            const textNode = document.createTextNode(senderName + ' yazıyor... ');
+            typingDiv.appendChild(textNode);
+            const dotsSpan = document.createElement('span');
+            dotsSpan.className = 'typing-dots';
+            for (let i = 0; i < 3; i++) {
+                const dot = document.createElement('span');
+                dot.className = 'typing-dot';
+                dotsSpan.appendChild(dot);
+            }
+            typingDiv.appendChild(dotsSpan);
         }
     });
 
     socket.off('user_typing_stop');
     socket.on('user_typing_stop', (data) => {
         if (typingDiv && activeTarget && activeTarget.id === data.senderId) {
-            typingDiv.innerHTML = '';
+            typingDiv.textContent = '';
         }
     });
 

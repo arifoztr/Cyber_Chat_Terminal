@@ -195,7 +195,7 @@ module.exports = function setupSockets(io) {
                 });
             } catch (error) {
                 console.error('[!] register hatası:', error);
-                if (callback) callback({ success: false, message: "Sunucu hatası: " + error.message });
+                if (callback) callback({ success: false, message: "Sunucu hatası oluştu. Lütfen tekrar deneyin." });
             }
         });
 
@@ -248,7 +248,7 @@ module.exports = function setupSockets(io) {
                 if (callback) callback({ success: true, token, user: { email: user.email, username: user.username, userId: user.userId, avatar: user.avatar } });
             } catch (error) {
                 console.error('[!] login hatası:', error);
-                if (callback) callback({ success: false, message: "Sunucu hatası: " + error.message });
+                if (callback) callback({ success: false, message: "Sunucu hatası oluştu. Lütfen tekrar deneyin." });
             }
         });
 
