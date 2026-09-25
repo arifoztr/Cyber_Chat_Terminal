@@ -127,9 +127,12 @@ function bindSocketEvents() {
 
     socket.off('packet_revoked');
     socket.on('packet_revoked', async (data) => {
-        await removePacketFromVault(data.senderId, data.packetId);
-        const msgElement = document.getElementById(`msg-${data.packetId}`);
-        if (msgElement) fadeOutAndRemoveElement(msgElement, () => showToast(`Bir mesaj silindi.`, 'warning'));
+        if (!data || !data.senderId || !data.packetId) return;
+        const deleted = await removePacketFromVault(data.senderId, data.packetId);
+        if (deleted) {
+            const msgElement = document.getElementById(`msg-${data.packetId}`);
+            if (msgElement) fadeOutAndRemoveElement(msgElement, () => showToast(`Bir mesaj silindi.`, 'warning'));
+        }
     });
 
     socket.off('contact_request');

@@ -8,23 +8,18 @@ const onlineNodes = new Map();
 // Timing analizi ve kullanıcı sayımı (user enumeration) saldırılarını önlemek için sahte hash
 const DUMMY_HASH = '$2b$10$7EqJtq98hPqEX7fNZaFWoO0VpIxFk3E9V2bJgN1Jt3kR0n3X2m2Xe';
 
-// [FAZ 1 - FIX] JWT GİZLİ ANAHTARI — Güvenli Fallback Hiyerarşisi
+// [GÜVENLİK FIX - SEC-12] JWT Gizli Anahtarı — Sabit anahtar kaldırıldı, CSPRNG ile rastgele anahtar üretimi
 let JWT_SECRET;
-if (process.env.JWT_SECRET) {
-    JWT_SECRET = process.env.JWT_SECRET;
-} else if (process.env.NODE_ENV === 'production') {
-    // Üretim ortamında .env yoksa rastgele geçici anahtar üret ve uyar
-    JWT_SECRET = require('crypto').randomBytes(32).toString('hex');
-    console.error('╔══════════════════════════════════════════════════════════╗');
-    console.error('║  [!] KRİTİK: JWT_SECRET ortam değişkeni tanımlı değil! ║');
-    console.error('║  Geçici rastgele anahtar üretildi.                      ║');
-    console.error('║  Sunucu yeniden başlatılırsa mevcut oturumlar geçersiz   ║');
-    console.error('║  olacaktır. Lütfen .env dosyasına JWT_SECRET ekleyin.    ║');
-    console.error('╚══════════════════════════════════════════════════════════╝');
+if (process.env.JWT_SECRET && process.env.JWT_SECRET.trim().length >= 32) {
+    JWT_SECRET = process.env.JWT_SECRET.trim();
 } else {
-    // Yalnızca geliştirme ortamında sabit anahtar kullanılır
-    JWT_SECRET = 'CYBER_HUD_DEV_SECRET_KEY_DO_NOT_USE_IN_PROD';
-    console.warn('[⚠] JWT_SECRET .env dosyasında tanımlı değil — geliştirme anahtarı kullanılıyor.');
+    JWT_SECRET = crypto.randomBytes(32).toString('hex');
+    console.warn('╔══════════════════════════════════════════════════════════════════════╗');
+    console.warn('║  [!] GÜVENLİK UYARISI: JWT_SECRET .env dosyasında tanımlı değil!     ║');
+    console.warn('║  Güvenli rastgele 256-bit anahtar üretildi (Sabit anahtar kaldırıldı)║');
+    console.warn('║  Sunucu yeniden başladığında oturumların korunması için .env         ║');
+    console.warn('║  dosyasına en az 32 karakterlik bir JWT_SECRET ekleyin.              ║');
+    console.warn('╚══════════════════════════════════════════════════════════════════════╝');
 }
 
 // [GÜVENLİK] Çıkış yapılan (revoke edilmiş) token'ların kara listesi
@@ -94,14 +89,39 @@ function verifyJWT(token) {
     } catch (e) { return null; }
 }
 
-// [FIX] Proxy arkasında güvenli IP çıkarma yardımcısı
+// [GÜVENLİK FIX - SEC-07] Güvenli IP Çıkarma — Sahte X-Forwarded-For Başlığı ile Rate Limit Atlama Savunması
 function getClientIp(socket) {
-    const forwarded = socket.handshake.headers['x-forwarded-for'];
-    if (forwarded && typeof forwarded === 'string') {
-        const ip = forwarded.split(',')[0].trim();
-        if (ip && ip.length <= 45) return ip;
+    const directIp = socket.handshake.address || socket.conn?.remoteAddress || '';
+    
+    // Doğrudan bağlantı bir döngü (loopback) veya özel ağ adresinden mi geliyor?
+    const isLoopbackOrPrivate = directIp.includes('127.0.0.1') || 
+                                directIp.includes('::1') || 
+                                directIp.includes('::ffff:127.0.0.1') ||
+                                directIp.startsWith('10.') || 
+                                directIp.startsWith('172.16.') || 
+                                directIp.startsWith('192.168.');
+
+    // Yalnızca yapılandırılmış proxy ortamında veya yerel ters vekil arkasındaysa başlığa güven
+    const trustProxy = process.env.TRUST_PROXY === 'true' || 
+                       process.env.TRUST_PROXY === '1' || 
+                       process.env.NODE_ENV === 'production' || 
+                       isLoopbackOrPrivate;
+
+    if (trustProxy) {
+        // Cloudflare önceliği
+        const cfIp = socket.handshake.headers['cf-connecting-ip'];
+        if (cfIp && typeof cfIp === 'string') {
+            const trimmed = cfIp.trim();
+            if (trimmed.length <= 45) return trimmed;
+        }
+        const forwarded = socket.handshake.headers['x-forwarded-for'];
+        if (forwarded && typeof forwarded === 'string') {
+            const ip = forwarded.split(',')[0].trim();
+            if (ip && ip.length <= 45) return ip;
+        }
     }
-    return socket.handshake.address || socket.conn?.remoteAddress || '127.0.0.1';
+    
+    return directIp || '127.0.0.1';
 }
 
 module.exports = function setupSockets(io) {
@@ -153,7 +173,7 @@ module.exports = function setupSockets(io) {
         console.log(`[+] YENİ BİR DÜĞÜM BAĞLANDI: ${socket.id} (IP: ${ip})`);
 
         socket.on('register', async (data, callback) => {
-            console.log(`[>> REGİSTER İSTEĞİ ALINDI] email: ${data?.email}, user: ${data?.username}, ip: ${ip}`);
+            console.log(`[>> REGİSTER İSTEĞİ ALINDI] email: ${data?.email ? data.email.replace(/(.{2})(.*)(@.*)/, '$1***$3') : 'yok'}, ip: ${ip}`);
             if (!checkRateLimit(ip, 'register', 20, 60000)) {
                 console.warn(`[!] REGİSTER RATE LIMIT AŞILDI: ${ip}`);
                 return callback({ success: false, message: "SİBER SAVUNMA: Çok fazla kayıt denemesi. Lütfen bir dakika bekleyin." });
@@ -164,16 +184,37 @@ module.exports = function setupSockets(io) {
                 if (!email || !password || !username) {
                     return callback({ success: false, message: "Tüm alanlar zorunludur." });
                 }
-                email = email.trim().toLowerCase();
-                username = username.trim();
+                email = String(email).trim().toLowerCase();
+                username = String(username).trim();
+
+                // [GÜVENLİK FIX - SEC-14] Prototype Pollution Koruması & E-posta Doğrulaması
+                const forbiddenKeys = ['__proto__', 'constructor', 'prototype'];
+                if (forbiddenKeys.includes(email) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    return callback({ success: false, message: "Geçersiz e-posta adresi formatı." });
+                }
+
+                // [GÜVENLİK FIX - SEC-15] Parola Güvenlik Politikası
+                if (typeof password !== 'string' || password.length < 8 || password.length > 72) {
+                    return callback({ success: false, message: "Şifre en az 8, en fazla 72 karakter uzunluğunda olmalıdır." });
+                }
+
+                // Kullanıcı adı uzunluk ve güvenlik sınırı
+                if (username.length < 2 || username.length > 32) {
+                    return callback({ success: false, message: "Kullanıcı adı 2-32 karakter uzunluğunda olmalıdır." });
+                }
 
                 if (db.users[email]) {
-                    console.log(`[!] REGİSTER: E-posta zaten kullanımda (${email})`);
+                    console.log(`[!] REGİSTER: E-posta zaten kullanımda (${email.replace(/(.{2})(.*)(@.*)/, '$1***$3')})`);
                     return callback({ success: false, message: "Bu e-posta adresi zaten kullanımda." });
                 }
                 
                 const hashedPassword = await bcrypt.hash(password, 10);
-                const userId = 'AGN-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000);
+
+                // [GÜVENLİK FIX - SEC-16] Kriptografik Olarak Güvenli CSPRNG ile Çakışmasız ID Üretimi
+                let userId;
+                do {
+                    userId = 'AGN-' + crypto.randomInt(1000, 10000) + '-' + crypto.randomInt(1000, 10000);
+                } while (userIdIndex[userId]);
                 
                 db.users[email] = { email, username, password: hashedPassword, userId: userId, publicKey: null, avatar: null };
                 userIdIndex[userId] = email;
@@ -200,7 +241,7 @@ module.exports = function setupSockets(io) {
         });
 
         socket.on('login', async (data, callback) => {
-            console.log(`[>> LOGİN İSTEĞİ ALINDI] email: ${data?.email}, ip: ${ip}`);
+            console.log(`[>> LOGİN İSTEĞİ ALINDI] email: ${data?.email ? String(data.email).replace(/(.{2})(.*)(@.*)/, '$1***$3') : 'yok'}, ip: ${ip}`);
             if (!checkRateLimit(ip, 'login', 30, 60000)) {
                 console.warn(`[!] LOGİN RATE LIMIT AŞILDI: ${ip}`);
                 return callback({ success: false, message: "SİBER SAVUNMA: Çok fazla giriş denemesi. Lütfen bir dakika bekleyin." });
@@ -331,6 +372,9 @@ module.exports = function setupSockets(io) {
             
             try {
                 const { oldPassword, newPassword } = data;
+                if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 72) {
+                    return callback({ success: false, message: "Yeni şifre en az 8, en fazla 72 karakter olmalıdır." });
+                }
                 const user = db.users[socket.user.email];
                 
                 const isMatch = await bcrypt.compare(oldPassword, user.password);

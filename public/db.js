@@ -87,14 +87,40 @@ async function loadHistoryFromVault(peerId) {
     } catch (e) { return []; }
 }
 
+// [GÜVENLİK FIX - SEC-10] BOLA / IDOR Korumalı Paket Silme
 async function removePacketFromVault(peerId, packetId) {
-    if (!currentUser) return;
+    if (!currentUser || !packetId) return false;
     try {
         const db = await openVaultDB();
         const tx = db.transaction('packets', 'readwrite');
         const store = tx.objectStore('packets');
-        store.delete(packetId);
-    } catch (e) {}
+        
+        return new Promise((resolve) => {
+            const getReq = store.get(packetId);
+            getReq.onsuccess = () => {
+                const pkt = getReq.result;
+                if (!pkt) return resolve(false);
+
+                // Silme talebinde bulunan kişi gerçekten paketin göndericisi mi veya konuşmanın tarafı mı?
+                const isAuthorized = (
+                    pkt.senderId === peerId || 
+                    pkt.peerId === peerId || 
+                    (peerId === currentUser.userId && pkt.ownerId === currentUser.userId)
+                );
+
+                if (isAuthorized) {
+                    store.delete(packetId);
+                    resolve(true);
+                } else {
+                    console.warn('[!] BOLA Engeli: Yetkisiz paket iptal/silme teşebbüsü engellendi:', packetId);
+                    resolve(false);
+                }
+            };
+            getReq.onerror = () => resolve(false);
+        });
+    } catch (e) {
+        return false;
+    }
 }
 
 // Kişi listesinin yerel depoya kaydı / yüklenmesi

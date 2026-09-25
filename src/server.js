@@ -17,7 +17,7 @@ app.use((req, res, next) => {
     }
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('X-XSS-Protection', '0'); // Modern tarayıcı standardı: Eski hatalı XSS filtresi kapatılır, CSP devralır
     
     // [GÜVENLİK] Content-Security-Policy (CSP): XSS ve yetkisiz kaynak yüklemelerini önler
     const cspPolicy = [
@@ -58,23 +58,30 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-// CORS ve CSWSH (Cross-Site WebSocket Hijacking) Koruması
+// [GÜVENLİK FIX - SEC-08] Sıkılaştırılmış CORS ve CSWSH Koruması
 function isOriginAllowed(origin, callback) {
-    // Origin başlığı yoksa (same-origin istekler, Electron file://, yerel istemciler)
-    if (!origin || origin === 'null' || origin.startsWith('file://')) {
+    // Same-origin istekler veya Electron file:// protokolü
+    if (!origin || origin.startsWith('file://')) {
         return callback(null, true);
+    }
+    // Sandboxed iframe veya data URI kaynaklı 'null' origin'leri engelle (CSWSH Savunması)
+    if (origin === 'null') {
+        return callback(new Error('CSWSH Savunması: "null" origin bağlantısı reddedildi'));
     }
     // .env dosyasında CORS_ORIGIN tanımlıysa sadece bu domainlere izin ver
     if (process.env.CORS_ORIGIN) {
-        const whitelist = process.env.CORS_ORIGIN.split(',').map(o => o.trim());
+        const whitelist = process.env.CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean);
         if (whitelist.includes(origin)) return callback(null, true);
         return callback(new Error('CORS Savunması: Yetkisiz Origin'));
     }
-    // Tanımlı değilse yalnızca yerel ağ ve localhost kabul edilir (Rastgele harici siteler engellenir)
-    const isLocal = origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('0.0.0.0');
-    if (isLocal) {
-        return callback(null, true);
-    }
+    // Tanımlı değilse yalnızca yerel host adreslerine katı hostname denetimiyle izin ver
+    try {
+        const parsed = new URL(origin);
+        const allowedHosts = ['localhost', '127.0.0.1', '0.0.0.0'];
+        if (allowedHosts.includes(parsed.hostname)) {
+            return callback(null, true);
+        }
+    } catch (_) {}
     return callback(new Error('CSWSH Savunması: Bilinmeyen Origin bağlantısı reddedildi'));
 }
 
