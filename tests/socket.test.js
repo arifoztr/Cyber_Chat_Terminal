@@ -563,15 +563,21 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             onlineNodes.set(testUser.userId, new Set([socket.id]));
         });
 
-        it('get_profiles: returns profiles for given userIds', async () => {
+        it('get_profiles: returns profiles for given userIds and caps at 50 (SEC-22)', async () => {
             const cb = vi.fn();
-            await socket._trigger('get_profiles', ['AGN-PROF-01', 'AGN-NONEXISTENT'], cb);
+            await socket._trigger('get_profiles', ['AGN-PROF-01', 'AGN-NONEXISTENT', null, 123], cb);
 
             expect(cb).toHaveBeenCalledWith({
                 profiles: {
                     'AGN-PROF-01': { username: 'ProfUser', avatar: 'https://avatar.png' }
                 }
             });
+
+            // Enforces maximum 50 userIds limit
+            const largeIdList = Array.from({ length: 100 }, (_, i) => `AGN-TEST-${i}`);
+            const cbLarge = vi.fn();
+            await socket._trigger('get_profiles', largeIdList, cbLarge);
+            expect(cbLarge).toHaveBeenCalled();
 
             // Unauthenticated
             socket.user = null;
@@ -790,14 +796,21 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             expect(cb).toHaveBeenCalledWith({ queued: true });
             expect(db.queue['AGN-BOB']).toHaveLength(MAX_QUEUE_SIZE);
             expect(db.queue['AGN-BOB'][db.queue['AGN-BOB'].length - 1].id).toBe('pkt-overflow');
+
+            // Expired TTL packet should be rejected immediately (SEC-18)
+            const cbExpired = vi.fn();
+            const expiredPacket = { id: 'pkt-expired', targetId: 'AGN-BOB', senderId: 'AGN-ALICE', ciphertext: 'expired', ttl: 5, timestamp: Date.now() - 10000 };
+            await aliceSocket._trigger('send_secure_packet', expiredPacket, cbExpired);
+            expect(cbExpired).toHaveBeenCalledWith({ queued: false, error: 'EXPIRED' });
         });
 
-        it('client_ready: flushes pending queue upon reconnect and filters expired packets', async () => {
+        it('client_ready: flushes pending queue upon reconnect and filters expired packets (SEC-18)', async () => {
             const db = dbManager.getDB();
             const now = Date.now();
             db.queue['AGN-ALICE'] = [
                 { id: 'fresh-1', timestamp: now, ciphertext: 'c1' },
-                { id: 'expired-1', timestamp: now - (dbManager.MAX_PACKET_AGE_MS + 5000), ciphertext: 'c2' }
+                { id: 'expired-1', timestamp: now - (dbManager.MAX_PACKET_AGE_MS + 5000), ciphertext: 'c2' },
+                { id: 'ttl-expired-1', timestamp: now - 15000, ttl: 10, ciphertext: 'c3' }
             ];
 
             await aliceSocket._trigger('client_ready');
@@ -880,6 +893,10 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
             // Empty search
             await aliceSocket._trigger('search_users', '', cb);
+            expect(cb).toHaveBeenCalledWith({ results: [] });
+
+            // 1-character search blocked against enumeration (SEC-22)
+            await aliceSocket._trigger('search_users', 'a', cb);
             expect(cb).toHaveBeenCalledWith({ results: [] });
 
             // Unauthenticated

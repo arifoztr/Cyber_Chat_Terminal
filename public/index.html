@@ -4,16 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Secure Chat — E2EE Messenger</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS (Local Vendor) -->
+    <script src="vendor/tailwindcss.js"></script>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
-    <!-- Socket.io İstemci Kütüphanesi -->
-    <script src="https://cdn.socket.io/4.8.3/socket.io.min.js"></script>
-    <!-- QR Code Kütüphanesi -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <!-- Socket.io İstemci Kütüphanesi (Local Vendor) -->
+    <script src="vendor/socket.io.min.js"></script>
+    <!-- QR Code Kütüphanesi (Local Vendor) -->
+    <script src="vendor/qrcode.min.js"></script>
     <link rel="icon" type="image/png" href="icon.png">
     <!-- Harici CSS Dosyamız -->
     <link rel="stylesheet" href="style.css?v=2">
@@ -43,18 +43,18 @@
 
             <!-- Sekme Seçici -->
             <div class="flex gap-2 mb-6 bg-[--bg-primary] p-1 rounded-xl border border-[--border]">
-                <button type="button" id="tabLoginBtn" onclick="switchAuthTab('login')" class="flex-1 py-2 bg-[--accent-light] text-[--accent] rounded-lg font-medium transition-colors text-sm">Giriş Yap</button>
-                <button type="button" id="tabRegisterBtn" onclick="switchAuthTab('register')" class="flex-1 py-2 bg-transparent text-[--text-secondary] rounded-lg font-medium hover:bg-[--surface-hover] transition-colors text-sm">Kayıt Ol</button>
+                <button type="button" id="tabLoginBtn" class="flex-1 py-2 bg-[--accent-light] text-[--accent] rounded-lg font-medium transition-colors text-sm">Giriş Yap</button>
+                <button type="button" id="tabRegisterBtn" class="flex-1 py-2 bg-transparent text-[--text-secondary] rounded-lg font-medium hover:bg-[--surface-hover] transition-colors text-sm">Kayıt Ol</button>
             </div>
 
             <!-- Form İçi Durum / Hata Bildirim Kutusu -->
             <div id="authAlert" class="hidden auth-alert"></div>
 
-            <form id="authForm" onsubmit="event.preventDefault(); handleAuthSubmit();" class="space-y-4">
+            <form id="authForm" class="space-y-4">
                 <div id="serverIpContainer">
                     <div class="flex items-center justify-between mb-1">
                         <label class="block text-xs text-[--text-secondary]">Sunucu Adresi</label>
-                        <button type="button" id="serverIpToggleBtn" onclick="toggleServerConfig()" class="text-[11px] text-[--accent] hover:underline cursor-pointer hidden">Gelişmiş</button>
+                        <button type="button" id="serverIpToggleBtn" class="text-[11px] text-[--accent] hover:underline cursor-pointer hidden">Gelişmiş</button>
                     </div>
                     <input type="text" id="serverIp" class="input-field font-mono text-sm" placeholder="http://localhost:3000" value="http://localhost:3000">
                 </div>
@@ -84,7 +84,7 @@
 
             <div id="authSwitchFooter" class="text-center mt-5 pt-4 border-t border-[--border] text-xs text-[--text-secondary]">
                 <span id="authSwitchPrompt">Hesabınız yok mu?</span>
-                <button type="button" id="authSwitchLink" onclick="switchAuthTab(currentAuthTab === 'login' ? 'register' : 'login')" class="ml-1 text-[--accent] hover:underline font-semibold cursor-pointer">
+                <button type="button" id="authSwitchLink" class="ml-1 text-[--accent] hover:underline font-semibold cursor-pointer">
                     Kayıt Olun
                 </button>
             </div>
@@ -101,12 +101,12 @@
                         <!-- Profil & Üst Bar (WP Style) -->
                         <div class="flex items-center justify-between pb-3 border-b border-[--border] shrink-0 gap-2">
                             <div class="flex items-center gap-2.5 min-w-0">
-                                <div id="myProfileAvatarContainer" class="w-10 h-10 rounded-full bg-[--surface-hover] flex items-center justify-center shrink-0 overflow-hidden border border-[--border] cursor-pointer" onclick="showSettingsModal()" title="Profil Ayarları">
+                                <div id="myProfileAvatarContainer" class="w-10 h-10 rounded-full bg-[--surface-hover] flex items-center justify-center shrink-0 overflow-hidden border border-[--border] cursor-pointer" title="Profil Ayarları">
                                     <span class="text-[--text-primary] font-medium text-xs">OP</span>
                                 </div>
                                 <div class="flex flex-col min-w-0">
                                     <span id="profileUsername" class="text-sm font-semibold truncate text-[--text-primary]">User</span>
-                                    <div class="flex items-center gap-1 cursor-pointer group" onclick="copyMyId()" title="ID'yi kopyala">
+                                    <div id="profileCopyIdContainer" class="flex items-center gap-1 cursor-pointer group" title="ID'yi kopyala">
                                         <span id="profileUserId" class="text-[11px] text-[--text-muted] font-mono truncate group-hover:text-[--text-secondary] transition-colors"></span>
                                         <span class="text-[10px] text-[--text-muted] group-hover:text-[--accent] shrink-0">📋</span>
                                     </div>
@@ -115,16 +115,16 @@
 
                             <!-- WP Aksiyon Butonları -->
                             <div class="flex items-center gap-1 shrink-0">
-                                <button onclick="showContactConfigModal()" class="w-8 h-8 rounded-lg hover:bg-[--surface-hover] text-[--text-secondary] hover:text-[--accent] flex items-center justify-center transition-colors text-base" title="Yeni Kişi Ekle">
+                                <button id="showContactConfigBtn" class="w-8 h-8 rounded-lg hover:bg-[--surface-hover] text-[--text-secondary] hover:text-[--accent] flex items-center justify-center transition-colors text-base" title="Yeni Kişi Ekle">
                                     ➕
                                 </button>
-                                <button onclick="showSearchModal()" class="w-8 h-8 rounded-lg hover:bg-[--surface-hover] text-[--text-secondary] hover:text-[--text-primary] flex items-center justify-center transition-colors text-sm" title="Kullanıcı Ara">
+                                <button id="showSearchModalBtn" class="w-8 h-8 rounded-lg hover:bg-[--surface-hover] text-[--text-secondary] hover:text-[--text-primary] flex items-center justify-center transition-colors text-sm" title="Kullanıcı Ara">
                                     🔍
                                 </button>
-                                <button onclick="showSettingsModal()" class="w-8 h-8 rounded-lg hover:bg-[--surface-hover] text-[--text-secondary] hover:text-[--text-primary] flex items-center justify-center transition-colors text-sm" title="Ayarlar">
+                                <button id="showSettingsBtn" class="w-8 h-8 rounded-lg hover:bg-[--surface-hover] text-[--text-secondary] hover:text-[--text-primary] flex items-center justify-center transition-colors text-sm" title="Ayarlar">
                                     ⚙️
                                 </button>
-                                <button onclick="disconnectFromServer()" class="w-8 h-8 rounded-lg hover:bg-[--error]/15 text-[--text-secondary] hover:text-[--error] flex items-center justify-center transition-colors text-sm" title="Çıkış Yap">
+                                <button id="disconnectBtn" class="w-8 h-8 rounded-lg hover:bg-[--error]/15 text-[--text-secondary] hover:text-[--error] flex items-center justify-center transition-colors text-sm" title="Çıkış Yap">
                                     ⏻
                                 </button>
                             </div>
@@ -134,7 +134,7 @@
                         <div class="my-2.5 shrink-0">
                             <div class="flex items-center bg-[--bg-primary] border border-[--border] rounded-xl px-2.5 py-1.5 focus-within:border-[--accent] transition-colors">
                                 <span class="text-xs text-[--text-muted] mr-2">🔍</span>
-                                <input type="text" id="contactSearchInput" oninput="filterContactsList(this.value)" placeholder="Aratın veya sohbet seçin..." class="w-full bg-transparent border-none outline-none text-xs text-[--text-primary] placeholder-[--text-muted]">
+                                <input type="text" id="contactSearchInput" placeholder="Aratın veya sohbet seçin..." class="w-full bg-transparent border-none outline-none text-xs text-[--text-primary] placeholder-[--text-muted]">
                             </div>
                         </div>
 
@@ -150,7 +150,7 @@
                     <div class="flex flex-col flex-1 min-h-0 overflow-hidden relative">
                         <div class="flex items-center justify-between pb-3 border-b border-[--border] mb-3 shrink-0">
                             <div class="flex items-center gap-3 min-w-0">
-                                <button onclick="mobileGoBack()" id="chatMobileBackBtn" class="lg:hidden btn btn-ghost btn-sm">
+                                <button id="chatMobileBackBtn" class="lg:hidden btn btn-ghost btn-sm">
                                     ← Geri
                                 </button>
                                 <div class="flex items-center gap-2 min-w-0">
@@ -162,7 +162,7 @@
                             </div>
                             
                             <div class="flex items-center gap-3 shrink-0">
-                                <button onclick="clearActiveChat()" id="clearChatBtn" class="hidden btn btn-ghost btn-sm text-[--error]">Temizle</button>
+                                <button id="clearChatBtn" class="hidden btn btn-ghost btn-sm text-[--error]">Temizle</button>
                                 <span id="packetSizeDisplay" class="text-xs text-[--text-secondary] hidden md:block font-mono bg-[--surface] px-2 py-1 rounded-md"></span>
                             </div>
                         </div>
@@ -179,7 +179,7 @@
                                     <div class="text-xs text-[--text-muted]">Bir sohbet seçin</div>
                                 </div>
                             </div>
-                            <button id="scrollToBottomBtn" onclick="scrollChatToBottom()" title="En Alta Git">
+                            <button id="scrollToBottomBtn" title="En Alta Git">
                                 ↓
                                 <span class="fab-new-msg" id="fabNewMsgDot"></span>
                             </button>
@@ -199,19 +199,19 @@
                                 </div>
                                 <div id="previewContainer" class="hidden flex-1 max-w-xs bg-[--surface] p-1.5 rounded-lg border border-[--border] flex items-center justify-between min-w-0">
                                     <span id="fileName" class="text-xs text-[--text-primary] font-mono truncate px-2"></span>
-                                    <button onclick="clearFileInput()" class="btn btn-ghost btn-sm text-[--error] shrink-0 p-1">İptal</button>
+                                    <button id="clearFileInputBtn" class="btn btn-ghost btn-sm text-[--error] shrink-0 p-1">İptal</button>
                                 </div>
                             </div>
 
                             <div class="flex flex-row gap-2 items-center">
                                 <label class="cursor-pointer bg-[--surface] hover:bg-[--surface-hover] border border-[--border] text-[--text-secondary] w-10 h-10 rounded-xl flex items-center justify-center transition-colors shrink-0">
                                     <span>📎</span>
-                                    <input type="file" id="fileInput" accept="image/*,application/pdf,.pdf" class="hidden" onchange="handleFileSelect(this)">
+                                    <input type="file" id="fileInput" accept="image/*,application/pdf,.pdf" class="hidden">
                                 </label>
                                 <div class="flex-1 relative min-w-0">
-                                    <input type="text" id="messageInput" disabled placeholder="Mesaj yazın..." onkeydown="if(event.key==='Enter') sendSecurePacket()" class="input-field w-full text-sm">
+                                    <input type="text" id="messageInput" disabled placeholder="Mesaj yazın..." class="input-field w-full text-sm">
                                 </div>
-                                <button onclick="sendSecurePacket()" id="sendPacketBtn" disabled class="btn btn-primary w-10 h-10 p-0 shrink-0 rounded-xl flex items-center justify-center">➤</button>
+                                <button id="sendPacketBtn" disabled class="btn btn-primary w-10 h-10 p-0 shrink-0 rounded-xl flex items-center justify-center">➤</button>
                                 <div id="packetSendLine" class="hidden packet-send-line"></div>
                             </div>
                         </div>
@@ -227,12 +227,12 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3 class="text-lg font-semibold">Ayarlar</h3>
-                <button onclick="hideSettingsModal()" class="text-[--text-muted] hover:text-[--text-primary] text-xl">&times;</button>
+                <button id="closeSettingsBtn" class="text-[--text-muted] hover:text-[--text-primary] text-xl">&times;</button>
             </div>
             
             <div class="flex gap-2 mb-4">
-                <button id="tabProfileBtn" onclick="switchSettingsTab('profile')" class="flex-1 py-1.5 bg-[--accent-light] text-[--accent] rounded-lg font-medium text-sm transition-colors">Profil</button>
-                <button id="tabSecurityBtn" onclick="switchSettingsTab('security')" class="flex-1 py-1.5 bg-transparent text-[--text-secondary] rounded-lg font-medium text-sm hover:bg-[--surface-hover] transition-colors">Güvenlik</button>
+                <button id="tabProfileBtn" class="flex-1 py-1.5 bg-[--accent-light] text-[--accent] rounded-lg font-medium text-sm transition-colors">Profil</button>
+                <button id="tabSecurityBtn" class="flex-1 py-1.5 bg-transparent text-[--text-secondary] rounded-lg font-medium text-sm hover:bg-[--surface-hover] transition-colors">Güvenlik</button>
             </div>
 
             <!-- Profil Sekmesi -->
@@ -243,10 +243,10 @@
                     </div>
                     <label class="cursor-pointer btn btn-ghost border border-[--border] text-sm">
                         Fotoğraf Seç
-                        <input type="file" accept="image/*" class="hidden" onchange="handleSettingsAvatarSelect(this)">
+                        <input type="file" id="settingsAvatarInput" accept="image/*" class="hidden">
                     </label>
                 </div>
-                <button onclick="saveProfileSettings()" class="w-full btn btn-primary">Kaydet</button>
+                <button id="saveProfileBtn" class="w-full btn btn-primary">Kaydet</button>
             </div>
 
             <!-- Güvenlik Sekmesi -->
@@ -255,14 +255,14 @@
                     <h4 class="text-sm font-medium mb-3">Şifre Değiştir</h4>
                     <input type="password" id="setOldPwd" placeholder="Mevcut Şifre" class="input-field mb-2 text-sm">
                     <input type="password" id="setNewPwd" placeholder="Yeni Şifre" class="input-field mb-3 text-sm">
-                    <button onclick="changeUserPassword()" class="w-full btn btn-ghost border border-[--border] text-sm">Güncelle</button>
+                    <button id="changePasswordBtn" class="w-full btn btn-ghost border border-[--border] text-sm">Güncelle</button>
                 </div>
 
                 <div class="p-4 bg-[--error]/10 rounded-xl border border-[--error]/30">
                     <h4 class="text-sm font-medium text-[--error] mb-2">Hesabı Sil</h4>
                     <p class="text-xs text-[--text-secondary] mb-3">Bu işlem kalıcıdır. P2P bağlantılarınız, kriptografik anahtarlarınız ve tüm verileriniz silinir.</p>
                     <input type="password" id="setDelPwd" placeholder="Şifreniz" class="input-field mb-3 text-sm">
-                    <button onclick="deleteUserAccount()" class="w-full btn btn-danger text-sm">Hesabı Sil</button>
+                    <button id="deleteAccountBtn" class="w-full btn btn-danger text-sm">Hesabı Sil</button>
                 </div>
             </div>
         </div>
@@ -286,7 +286,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3 class="text-lg font-semibold">Kişi Ekle</h3>
-                <button onclick="hideContactConfigModal()" class="text-[--text-muted] hover:text-[--text-primary] text-xl">&times;</button>
+                <button id="closeContactConfigBtn" class="text-[--text-muted] hover:text-[--text-primary] text-xl">&times;</button>
             </div>
             <div class="space-y-4">
                 <div>
@@ -298,8 +298,8 @@
                 </div>
             </div>
             <div class="flex gap-3 mt-6">
-                <button onclick="hideContactConfigModal()" class="flex-1 btn btn-ghost border border-[--border]">İptal</button>
-                <button onclick="handleContactSubmit()" class="flex-1 btn btn-primary">Ekle</button>
+                <button id="cancelContactConfigBtn" class="flex-1 btn btn-ghost border border-[--border]">İptal</button>
+                <button id="submitContactConfigBtn" class="flex-1 btn btn-primary">Ekle</button>
             </div>
         </div>
     </div>
@@ -310,10 +310,10 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3 class="text-lg font-semibold">Kullanıcı Ara</h3>
-                <button onclick="hideSearchModal()" class="text-[--text-muted] hover:text-[--text-primary] text-xl">&times;</button>
+                <button id="closeSearchModalBtn" class="text-[--text-muted] hover:text-[--text-primary] text-xl">&times;</button>
             </div>
             <div class="space-y-4">
-                <input type="text" id="searchQuery" oninput="performSearch()" placeholder="Kullanıcı adı veya ID..." class="input-field text-sm">
+                <input type="text" id="searchQuery" placeholder="Kullanıcı adı veya ID..." class="input-field text-sm">
                 <div id="searchResultsList" class="max-h-60 overflow-y-auto space-y-2 custom-scrollbar"></div>
             </div>
         </div>
@@ -329,16 +329,16 @@
             <p id="crModalId" class="text-sm font-mono text-[--text-secondary] mb-4"></p>
             <p class="text-sm mb-6">Size şifreli bir bağlantı isteği gönderdi.</p>
             <div class="flex gap-3">
-                <button onclick="handleContactRequestResponse(false)" class="flex-1 btn btn-ghost text-[--error] border border-[--error]/30">Reddet</button>
-                <button onclick="handleContactRequestResponse(true)" class="flex-1 btn btn-primary">Kabul Et</button>
+                <button id="crModalRejectBtn" class="flex-1 btn btn-ghost text-[--error] border border-[--error]/30">Reddet</button>
+                <button id="crModalAcceptBtn" class="flex-1 btn btn-primary">Kabul Et</button>
             </div>
         </div>
     </div>
 
     <!-- GÖRSEL MODALI -->
-    <div id="imageModal" class="hidden modal-overlay z-[70] p-4 flex-col cursor-pointer" onclick="hideImageModal()">
-        <img id="modalImage" src="" class="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl mb-4" onclick="event.stopPropagation()">
-        <button class="btn btn-ghost bg-[--surface] border border-[--border] text-sm" onclick="hideImageModal()">Kapat</button>
+    <div id="imageModal" class="hidden modal-overlay z-[70] p-4 flex-col cursor-pointer">
+        <img id="modalImage" src="" class="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl mb-4">
+        <button id="closeImageModalBtn" class="btn btn-ghost bg-[--surface] border border-[--border] text-sm">Kapat</button>
     </div>
 
     <!-- TOAST -->
@@ -362,7 +362,7 @@
                 <span class="status-dot status-offline animate-pulse"></span>
                 <span id="reconnectStatus" class="text-sm text-[--text-secondary]">Sunucuya bağlanılıyor...</span>
             </div>
-            <button onclick="forceReconnect()" class="btn btn-ghost border border-[--border] text-sm mt-2">Tekrar Bağlan</button>
+            <button id="reconnectBtn" class="btn btn-ghost border border-[--border] text-sm mt-2">Tekrar Bağlan</button>
         </div>
     </div>
 

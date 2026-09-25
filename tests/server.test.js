@@ -118,6 +118,19 @@ describe('Server & Express Infrastructure Tests', () => {
             expect(next).toHaveBeenCalled();
         });
 
+        it('should enforce strict CSP script-src without unsafe-inline (SEC-13)', () => {
+            const { req, res } = createMockReqRes('/test');
+            const next = vi.fn();
+            const middleware = app._router.stack.find(s => s.name === '<anonymous>' && s.handle.length === 3).handle;
+            middleware(req, res, next);
+            expect(res.setHeader).toHaveBeenCalledWith('Content-Security-Policy', expect.stringContaining("script-src 'self'"));
+            const cspCall = res.setHeader.mock.calls.find(c => c[0] === 'Content-Security-Policy');
+            const csp = cspCall[1];
+            const scriptSrcPart = csp.split(';').find(p => p.trim().startsWith('script-src'));
+            expect(scriptSrcPart).not.toContain('unsafe-inline');
+            expect(scriptSrcPart).not.toContain('cdn.tailwindcss.com');
+        });
+
         it('should not set HSTS when NODE_ENV is development', () => {
             process.env.NODE_ENV = 'development';
             const { req, res } = createMockReqRes('/test');

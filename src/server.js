@@ -19,10 +19,11 @@ app.use((req, res, next) => {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '0'); // Modern tarayıcı standardı: Eski hatalı XSS filtresi kapatılır, CSP devralır
     
-    // [GÜVENLİK] Content-Security-Policy (CSP): XSS ve yetkisiz kaynak yüklemelerini önler
+    // [GÜVENLİK FIX - SEC-13] Sıkılaştırılmış Content-Security-Policy:
+    // 'unsafe-inline' ve harici CDN alan adları script-src direktifinden tamamen kaldırıldı.
     const cspPolicy = [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.socket.io https://cdn.jsdelivr.net",
+        "script-src 'self'",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com data:",
         "img-src 'self' data: blob:",

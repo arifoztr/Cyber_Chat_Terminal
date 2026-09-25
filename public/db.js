@@ -56,6 +56,11 @@ async function migrateLocalStorageToIndexedDB() {
 
 async function savePacketToVault(peerId, packet) {
     if (!currentUser) return;
+    // [GÜVENLİK FIX - SEC-18] Süresi dolmuş TTL paketlerini kasaya kaydetme
+    if (packet.ttl && typeof packet.ttl === 'number') {
+        const elapsed = Date.now() - (packet.timestamp || Date.now());
+        if (elapsed >= (packet.ttl * 1000)) return;
+    }
     try {
         const db = await openVaultDB();
         const tx = db.transaction('packets', 'readwrite');
@@ -71,21 +76,56 @@ async function loadHistoryFromVault(peerId) {
     if (!currentUser) return [];
     try {
         const db = await openVaultDB();
-        const tx = db.transaction('packets', 'readonly');
+        const tx = db.transaction('packets', 'readwrite');
         const store = tx.objectStore('packets');
         const index = store.index('peerId');
         const request = index.getAll(peerId);
         return new Promise((resolve, reject) => {
             request.onsuccess = () => {
                 let packets = request.result || [];
-                packets = packets.filter(p => p.ownerId === currentUser.userId);
-                packets.sort((a, b) => a.timestamp - b.timestamp);
-                resolve(packets);
+                const now = Date.now();
+                const validPackets = [];
+                for (const p of packets) {
+                    if (p.ownerId !== currentUser.userId) continue;
+                    // [GÜVENLİK FIX - SEC-18] Kasa yüklemesinde süresi dolmuş TTL mesajlarını temizle
+                    if (p.ttl && typeof p.ttl === 'number' && (now - (p.timestamp || 0)) >= (p.ttl * 1000)) {
+                        store.delete(p.id);
+                        continue;
+                    }
+                    validPackets.push(p);
+                }
+                validPackets.sort((a, b) => a.timestamp - b.timestamp);
+                resolve(validPackets);
             };
             request.onerror = () => reject(request.error);
         });
     } catch (e) { return []; }
 }
+
+// [GÜVENLİK FIX - SEC-18] Arka Plan Kasa Temizliği: Süresi dolan TTL mesajlarını temizler
+async function purgeExpiredVaultPackets() {
+    if (!currentUser) return;
+    try {
+        const db = await openVaultDB();
+        const tx = db.transaction('packets', 'readwrite');
+        const store = tx.objectStore('packets');
+        const req = store.openCursor();
+        const now = Date.now();
+        req.onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+                const pkt = cursor.value;
+                if (pkt && pkt.ttl && typeof pkt.ttl === 'number') {
+                    if ((now - (pkt.timestamp || 0)) >= (pkt.ttl * 1000)) {
+                        cursor.delete();
+                    }
+                }
+                cursor.continue();
+            }
+        };
+    } catch (_) {}
+}
+setInterval(purgeExpiredVaultPackets, 10000);
 
 // [GÜVENLİK FIX - SEC-10] BOLA / IDOR Korumalı Paket Silme
 async function removePacketFromVault(peerId, packetId) {

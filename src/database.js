@@ -139,11 +139,18 @@ async function syncMemoryToTurso() {
     }
 
     const emails = Object.keys(db.users);
-    if (emails.length > 0) {
-        const placeholders = emails.map(() => '?').join(',');
-        statements.push({ sql: `DELETE FROM users WHERE email NOT IN (${placeholders})`, args: emails });
-    } else {
+    if (emails.length === 0) {
         statements.push({ sql: 'DELETE FROM users', args: [] });
+    } else {
+        // [GÜVENLİK FIX - SEC-17] Değişken Limiti Koruması:
+        // NOT IN (?, ?, ...) yerine DB'de olup bellekte olmayan silinmiş kullanıcılar tespit edilir.
+        const existingRows = await tursoAll('SELECT email FROM users');
+        const currentEmails = new Set(emails);
+        for (const r of existingRows) {
+            if (!currentEmails.has(r.email)) {
+                statements.push({ sql: 'DELETE FROM users WHERE email = ?', args: [r.email] });
+            }
+        }
     }
 
     statements.push({ sql: 'DELETE FROM queue', args: [] });
@@ -182,11 +189,19 @@ async function syncMemoryToSqlite() {
             );
         }
         const emails = Object.keys(db.users);
-        if (emails.length > 0) {
-            const placeholders = emails.map(() => '?').join(',');
-            await sqliteRun(`DELETE FROM users WHERE email NOT IN (${placeholders})`, emails);
+        if (emails.length === 0) {
+            await sqliteRun('DELETE FROM users');
         } else {
-            await sqliteRun(`DELETE FROM users`);
+            // [GÜVENLİK FIX - SEC-17] SQLite Değişken Limiti Aşımı Koruması:
+            // NOT IN (?, ?, ...) sorgusu 999 sınırına takılabileceğinden,
+            // veritabanındaki kullanıcılar taranarak yalnızca silinenler kaldırılır.
+            const existingRows = await sqliteAll('SELECT email FROM users');
+            const currentEmails = new Set(emails);
+            for (const row of existingRows) {
+                if (!currentEmails.has(row.email)) {
+                    await sqliteRun('DELETE FROM users WHERE email = ?', [row.email]);
+                }
+            }
         }
         await sqliteRun(`DELETE FROM queue`);
         for (const targetId in db.queue) {

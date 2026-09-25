@@ -156,6 +156,16 @@ module.exports = function setupSockets(io) {
         }
     }, 60000);
 
+    // [GÜVENLİK FIX - SEC-18] Sunucu Tarafı TTL ve Paket Yaşam Döngüsü Denetimi
+    function isPacketExpired(p) {
+        if (!p || !p.timestamp) return false;
+        const age = Date.now() - p.timestamp;
+        if (p.ttl && typeof p.ttl === 'number' && p.ttl > 0) {
+            return age >= (p.ttl * 1000);
+        }
+        return age >= dbManager.MAX_PACKET_AGE_MS;
+    }
+
     // [FAZ 1] Socket Middleware ile Otomatik JWT Doğrulaması
     io.use((socket, next) => {
         const token = socket.handshake.auth?.token;
@@ -341,7 +351,11 @@ module.exports = function setupSockets(io) {
             if (!checkRateLimit(ip, 'get_profiles', 60, 60000)) return callback ? callback({ profiles: {} }) : undefined;
             const profiles = {};
             if (Array.isArray(userIds)) {
-                userIds.forEach(uid => {
+                // [GÜVENLİK FIX - SEC-22] Sınırsız Kullanıcı Numaralandırma Savunması:
+                // Bir defada en fazla 50 kullanıcı profili sorgulanabilir.
+                const safeUserIds = userIds.slice(0, 50);
+                safeUserIds.forEach(uid => {
+                    if (typeof uid !== 'string' || uid.length > 50) return;
                     const email = userIdIndex[uid];
                     if (email && db.users[email]) {
                         profiles[uid] = { 
@@ -449,9 +463,9 @@ module.exports = function setupSockets(io) {
             const userId = socket.user.userId;
 
             if (db.queue[userId] && db.queue[userId].length > 0) {
-                const validPackets = db.queue[userId].filter(
-                    p => !p.timestamp || (Date.now() - p.timestamp) < dbManager.MAX_PACKET_AGE_MS
-                );
+                // [GÜVENLİK FIX - SEC-18] Sunucu tarafı katı TTL denetimi:
+                // Süresi dolmuş TTL ve bayat paketler elenir, yalnızca geçerli paketler iletilir.
+                const validPackets = db.queue[userId].filter(p => !isPacketExpired(p));
 
                 if (validPackets.length > 0) {
                     validPackets.forEach(packet => { io.to(socket.id).emit('receive_secure_packet', packet); });
@@ -517,15 +531,20 @@ module.exports = function setupSockets(io) {
             // Sender spoofing koruması: senderId, oturum açmış kullanıcıyla eşleşmeli
             if (packet.senderId !== socket.user.userId) { if (callback) callback({ queued: false, error: "SENDER_MISMATCH" }); return; }
 
+            // [GÜVENLİK FIX - SEC-18] Süresi dolmuş TTL paketlerini reddet/kuyruğa alma
+            if (isPacketExpired(packet)) {
+                if (callback) callback({ queued: false, error: "EXPIRED" });
+                return;
+            }
+
             const targetSockets = onlineNodes.get(packet.targetId);
             if (targetSockets && targetSockets.size > 0) {
                 targetSockets.forEach(sid => io.to(sid).emit('receive_secure_packet', packet));
                 if (callback) callback({ queued: false });
             } else {
                 if (!db.queue[packet.targetId]) db.queue[packet.targetId] = [];
-                db.queue[packet.targetId] = db.queue[packet.targetId].filter(
-                    p => !p.timestamp || (Date.now() - p.timestamp) < dbManager.MAX_PACKET_AGE_MS
-                );
+                // [GÜVENLİK FIX - SEC-18] Kuyrukta bekleyen süresi dolmuş paketleri filtrele
+                db.queue[packet.targetId] = db.queue[packet.targetId].filter(p => !isPacketExpired(p));
 
                 if (db.queue[packet.targetId].length >= MAX_QUEUE_SIZE) {
                     db.queue[packet.targetId].shift(); 
@@ -540,9 +559,11 @@ module.exports = function setupSockets(io) {
         socket.on('search_users', (query, callback) => {
             if (!checkRateLimit(ip, 'search', 30, 60000)) return callback({ results: [] });
             if (!socket.user) return callback({ results: [] });
+            if (typeof query !== 'string') return callback({ results: [] });
             const results = [];
-            const searchTerm = (query || '').toLowerCase().trim();
-            if (!searchTerm) return callback({ results: [] });
+            const searchTerm = query.toLowerCase().trim();
+            // [GÜVENLİK FIX - SEC-22] Tek karakterli / jokerli brute-force ve toplu numara taramasını engelleme
+            if (!searchTerm || searchTerm.length < 2) return callback({ results: [] });
             for (const email in db.users) {
                 const user = db.users[email];
                 if (user.userId === socket.user.userId) continue;

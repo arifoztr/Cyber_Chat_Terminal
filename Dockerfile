@@ -18,9 +18,15 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY src ./src
 COPY public ./public
 
+# Güvenlik (SEC-20): En az yetki prensibi — node kullanıcısına sahiplik devri ve non-root çalıştırma
+RUN chown -R node:node /app
+
+USER node
+
 EXPOSE 3000
 
 ENV NODE_ENV=production
 ENV PORT=3000
 
 CMD ["node", "src/server.js"]
+

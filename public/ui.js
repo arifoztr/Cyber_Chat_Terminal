@@ -1016,8 +1016,8 @@ function hideSearchModal() {
 function performSearch() {
     const query = document.getElementById('searchQuery').value.trim();
     const resultsList = document.getElementById('searchResultsList');
-    if (!query) {
-        resultsList.innerHTML = 'Arama yapmak için bir şeyler yazın...';
+    if (!query || query.length < 2) {
+        resultsList.innerHTML = 'Arama yapmak için en az 2 karakter girin...';
         return;
     }
     safeEmit('search_users', query, (res) => {
@@ -1522,17 +1522,60 @@ function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl
 
 const _activeTimers = {};
 function startSelfDestructTimer(packetId, duration, targetUser) {
-    if (_activeTimers[packetId]) clearInterval(_activeTimers[packetId]);
-    let secondsLeft = duration; const badge = document.getElementById(`ttl-badge-${packetId}`);
-    _activeTimers[packetId] = setInterval(() => {
-        secondsLeft--; if (badge) badge.innerText = `TTL:${secondsLeft}s`;
-        if (secondsLeft <= 0) {
-            clearInterval(_activeTimers[packetId]); delete _activeTimers[packetId];
-            const msgElement = document.getElementById(`msg-${packetId}`);
-            if (msgElement) fadeOutAndRemoveElement(msgElement, () => removePacketFromVault(targetUser, packetId));
+    if (_activeTimers[packetId]) {
+        if (_activeTimers[packetId].interval) clearInterval(_activeTimers[packetId].interval);
+        if (_activeTimers[packetId].timeout) clearTimeout(_activeTimers[packetId].timeout);
+        delete _activeTimers[packetId];
+    }
+    const expiresAt = Date.now() + (duration * 1000);
+    const badge = document.getElementById(`ttl-badge-${packetId}`);
+
+    const destroyMessage = () => {
+        if (_activeTimers[packetId]) {
+            if (_activeTimers[packetId].interval) clearInterval(_activeTimers[packetId].interval);
+            if (_activeTimers[packetId].timeout) clearTimeout(_activeTimers[packetId].timeout);
+            delete _activeTimers[packetId];
+        }
+        const msgElement = document.getElementById(`msg-${packetId}`);
+        if (msgElement) {
+            fadeOutAndRemoveElement(msgElement, () => removePacketFromVault(targetUser, packetId));
+        } else {
+            removePacketFromVault(targetUser, packetId);
+        }
+    };
+
+    // [GÜVENLİK FIX - SEC-18] Kesin süre bitimi için garantili timeout
+    const timeout = setTimeout(destroyMessage, duration * 1000);
+
+    const interval = setInterval(() => {
+        const remainingMs = expiresAt - Date.now();
+        const secondsLeft = Math.max(0, Math.ceil(remainingMs / 1000));
+        if (badge) badge.innerText = `TTL:${secondsLeft}s`;
+        if (remainingMs <= 0) {
+            destroyMessage();
         }
     }, 1000);
+
+    _activeTimers[packetId] = { interval, timeout, expiresAt, targetUser };
 }
+
+// [GÜVENLİK FIX - SEC-18] Sekme arka plandan döndüğünde süresi dolmuş tüm TTL mesajlarını derhal imha et
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        const now = Date.now();
+        for (const packetId of Object.keys(_activeTimers)) {
+            const timerObj = _activeTimers[packetId];
+            if (timerObj && timerObj.expiresAt <= now) {
+                if (timerObj.interval) clearInterval(timerObj.interval);
+                if (timerObj.timeout) clearTimeout(timerObj.timeout);
+                delete _activeTimers[packetId];
+                const msgElement = document.getElementById(`msg-${packetId}`);
+                if (msgElement) fadeOutAndRemoveElement(msgElement, () => removePacketFromVault(timerObj.targetUser, packetId));
+                else removePacketFromVault(timerObj.targetUser, packetId);
+            }
+        }
+    }
+});
 
 // === YARDIMCI UI FONKSİYONLARI ===
 
@@ -1883,6 +1926,78 @@ function toggleServerConfig() {
     }
 }
 
+// [GÜVENLİK FIX - SEC-13] Tüm DOM Olay Bağlayıcıları (Inline Event Handler Yerine CSP Uyumlu addEventListener)
+function initAppEvents() {
+    const bindClick = (id, fn) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('click', fn);
+    };
+
+    bindClick('serverIpToggleBtn', toggleServerConfig);
+    bindClick('myProfileAvatarContainer', showSettingsModal);
+    bindClick('profileCopyIdContainer', copyMyId);
+    bindClick('showContactConfigBtn', showContactConfigModal);
+    bindClick('showSearchModalBtn', showSearchModal);
+    bindClick('showSettingsBtn', showSettingsModal);
+    bindClick('disconnectBtn', disconnectFromServer);
+    bindClick('chatMobileBackBtn', mobileGoBack);
+    bindClick('clearChatBtn', clearActiveChat);
+    bindClick('scrollToBottomBtn', scrollChatToBottom);
+    bindClick('clearFileInputBtn', clearFileInput);
+    bindClick('sendPacketBtn', sendSecurePacket);
+    bindClick('closeSettingsBtn', hideSettingsModal);
+    bindClick('tabProfileBtn', () => switchSettingsTab('profile'));
+    bindClick('tabSecurityBtn', () => switchSettingsTab('security'));
+    bindClick('saveProfileBtn', saveProfileSettings);
+    bindClick('changePasswordBtn', changeUserPassword);
+    bindClick('deleteAccountBtn', deleteUserAccount);
+    bindClick('closeContactConfigBtn', hideContactConfigModal);
+    bindClick('cancelContactConfigBtn', hideContactConfigModal);
+    bindClick('submitContactConfigBtn', handleContactSubmit);
+    bindClick('closeSearchModalBtn', hideSearchModal);
+    bindClick('crModalRejectBtn', () => handleContactRequestResponse(false));
+    bindClick('crModalAcceptBtn', () => handleContactRequestResponse(true));
+    bindClick('closeImageModalBtn', hideImageModal);
+    bindClick('reconnectBtn', forceReconnect);
+
+    const contactSearch = document.getElementById('contactSearchInput');
+    if (contactSearch) {
+        contactSearch.addEventListener('input', (e) => filterContactsList(e.target.value));
+    }
+
+    const searchQueryInput = document.getElementById('searchQuery');
+    if (searchQueryInput) {
+        searchQueryInput.addEventListener('input', performSearch);
+    }
+
+    const fileInputEl = document.getElementById('fileInput');
+    if (fileInputEl) {
+        fileInputEl.addEventListener('change', (e) => handleFileSelect(e.target));
+    }
+
+    const settingsAvatarEl = document.getElementById('settingsAvatarInput');
+    if (settingsAvatarEl) {
+        settingsAvatarEl.addEventListener('change', (e) => handleSettingsAvatarSelect(e.target));
+    }
+
+    const msgInput = document.getElementById('messageInput');
+    if (msgInput) {
+        msgInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendSecurePacket();
+        });
+    }
+
+    const imageModalEl = document.getElementById('imageModal');
+    if (imageModalEl) {
+        imageModalEl.addEventListener('click', hideImageModal);
+    }
+
+    const modalImgEl = document.getElementById('modalImage');
+    if (modalImgEl) {
+        modalImgEl.addEventListener('click', (e) => e.stopPropagation());
+    }
+}
+
 function autoFillServerUrl() {
     const input = document.getElementById('serverIp');
     const toggleBtn = document.getElementById('serverIpToggleBtn');
@@ -1906,6 +2021,7 @@ function autoFillServerUrl() {
         }
     }
     initAuthEvents();
+    initAppEvents();
     setTimeout(autoLoginAttempt, 100);
 }
 
