@@ -3,8 +3,10 @@ dist
 coverage
 tests
 electron
+docs
 database.sqlite*
 database.json*
+test_temp.sqlite*
 .git
 .github
 .vscode
@@ -16,3 +18,4 @@ npm-debug.log*
 *.bat
 vitest.config.mjs
 electron-builder.json
+wrangler.toml
