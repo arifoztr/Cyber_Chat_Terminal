@@ -95,22 +95,26 @@ const io = require('socket.io')(http, {
 // Modüler socket olayları
 setupSockets(io);
 
-// 1. Önce Veritabanını Başlat
-dbManager.initDB().then(() => {
-    
-    // 2. Çöp Toplayıcıyı Başlat (Zaman aşımına uğrayan paketleri temizler)
-    dbManager.startGarbageCollector();
-    
-    // 3. Sunucuyu Dinlemeye Başla (0.0.0.0 ile hem localhost hem 127.0.0.1 hem yerel ağ dinlenir)
-    http.listen(PORT, '0.0.0.0', () => {
-        console.log(`==================================================`);
-        console.log(`[+] AES-GCM P2P SİBER MERKEZİ AKTİF: http://localhost:${PORT}`);
-        console.log(`[+] YEREL IP ERİŞİMİ: http://127.0.0.1:${PORT}`);
-        console.log(`[!] SİSTEM "CLEAN ARCHITECTURE" MODÜLLERİYLE BAŞLADI`);
-        console.log(`[!] FAZ-1: JWT, RATE-LIMIT & SECURE HEADERS AKTİF`);
-        console.log(`==================================================`);
+// Sunucu başlatma fonksiyonu
+function startServer(port = PORT) {
+    return dbManager.initDB().then(() => {
+        // 2. Çöp Toplayıcıyı Başlat (Zaman aşımına uğrayan paketleri temizler)
+        dbManager.startGarbageCollector();
+        
+        // 3. Sunucuyu Dinlemeye Başla
+        return new Promise((resolve) => {
+            const server = http.listen(port, '0.0.0.0', () => {
+                console.log(`==================================================`);
+                console.log(`[+] AES-GCM P2P SİBER MERKEZİ AKTİF: http://localhost:${port}`);
+                console.log(`[+] YEREL IP ERİŞİMİ: http://127.0.0.1:${port}`);
+                console.log(`[!] SİSTEM "CLEAN ARCHITECTURE" MODÜLLERİYLE BAŞLADI`);
+                console.log(`[!] FAZ-1: JWT, RATE-LIMIT & SECURE HEADERS AKTİF`);
+                console.log(`==================================================`);
+                resolve(server);
+            });
+        });
     });
-});
+}
 
 // Sunucu güvenli kapanış (Graceful Shutdown) mekanizması
 async function gracefulShutdown(signal) {
@@ -119,5 +123,17 @@ async function gracefulShutdown(signal) {
     process.exit(0);
 }
 
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+if (require.main === module) {
+    startServer();
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+}
+
+module.exports = {
+    app,
+    http,
+    io,
+    isOriginAllowed,
+    gracefulShutdown,
+    startServer
+};

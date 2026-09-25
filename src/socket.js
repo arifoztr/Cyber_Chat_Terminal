@@ -54,7 +54,7 @@ function signJWT(payload) {
     const body = Buffer.from(JSON.stringify({
         ...payload,
         iat: nowSec,
-        exp: nowSec + 24 * 60 * 60 // 24 saat
+        exp: payload.exp || (nowSec + 24 * 60 * 60) // 24 saat
     })).toString('base64url');
     const signature = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
     return `${header}.${body}.${signature}`;
@@ -661,4 +661,21 @@ module.exports = function setupSockets(io) {
         });
 
     });
+
+    return {
+        checkRateLimit,
+        rateLimits,
+        onlineNodes
+    };
 };
+
+module.exports._internals = {
+    signJWT,
+    verifyJWT,
+    revokeToken,
+    getClientIp,
+    revokedTokens,
+    onlineNodes,
+    DUMMY_HASH,
+    MAX_QUEUE_SIZE
+};

@@ -96,13 +96,13 @@ function sqliteAll(sql, params = []) {
 
 // ── UNIFIED WRAPPERS (USE_TURSO'ya göre yönlendirir) ────────────────
 async function queryRun(sql, params = []) {
-    return USE_TURSO ? tursoRun(sql, params) : sqliteRun(sql, params);
+    return (USE_TURSO || tursoClient) ? tursoRun(sql, params) : sqliteRun(sql, params);
 }
 async function queryGet(sql, params = []) {
-    return USE_TURSO ? tursoGet(sql, params) : sqliteGet(sql, params);
+    return (USE_TURSO || tursoClient) ? tursoGet(sql, params) : sqliteGet(sql, params);
 }
 async function queryAll(sql, params = []) {
-    return USE_TURSO ? tursoAll(sql, params) : sqliteAll(sql, params);
+    return (USE_TURSO || tursoClient) ? tursoAll(sql, params) : sqliteAll(sql, params);
 }
 
 // ── INDEX YENİDEN İNŞA ──────────────────────────────────────────────
@@ -207,7 +207,7 @@ async function syncMemoryToSqlite() {
 
 // ── ANA SYNC FONKSİYONU (mod seçici) ────────────────────────────────
 async function syncMemoryToSql() {
-    if (USE_TURSO) {
+    if (USE_TURSO || tursoClient) {
         await syncMemoryToTurso();
     } else {
         await syncMemoryToSqlite();
@@ -391,7 +391,7 @@ async function initSqlite() {
 
 // ── ANA BAŞLATMA (mod seçici) ────────────────────────────────────────
 async function initDB() {
-    if (USE_TURSO) {
+    if (USE_TURSO || tursoClient) {
         await initTurso();
     } else {
         await initSqlite();
@@ -425,5 +425,27 @@ module.exports = {
     rebuildUserIdIndex,
     initDB,
     startGarbageCollector,
-    MAX_PACKET_AGE_MS
+    MAX_PACKET_AGE_MS,
+    _internals: {
+        sqliteRun,
+        sqliteGet,
+        sqliteAll,
+        tursoRun,
+        tursoGet,
+        tursoAll,
+        queryRun,
+        queryGet,
+        queryAll,
+        syncMemoryToTurso,
+        syncMemoryToSqlite,
+        syncMemoryToSql,
+        initTurso,
+        initSqlite,
+        setSqliteDb: (instance) => { sqliteDb = instance; },
+        getSqliteDb: () => sqliteDb,
+        setTursoClient: (client) => { tursoClient = client; },
+        getTursoClient: () => tursoClient,
+        legacyJsonPath,
+        backupJsonPath
+    }
 };

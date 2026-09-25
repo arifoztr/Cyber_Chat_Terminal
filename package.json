@@ -5,7 +5,9 @@
   "desktopName": "com.cyberchat.terminal",
   "main": "src/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "start": "node src/server.js",
     "dev": "node src/server.js",
     "desktop:start": "electron electron/main.js",
@@ -27,7 +29,9 @@
     "sqlite3": "^6.0.1"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^5.0.2",
     "electron": "^44.4.3",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "vitest": "^5.0.2"
   }
 }

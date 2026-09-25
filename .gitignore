@@ -15,4 +15,7 @@ data/
 .DS_Store
 .vs/
 dist/
+coverage/
+tests/test_temp.sqlite*
+
 

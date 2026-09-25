@@ -30,11 +30,13 @@ function bufferToBase64(buffer) {      //Buffer bilgisayarın hafızasında dura
     for (let i = 0; i < bytes.length; i += 8192) {
         chunks.push(String.fromCharCode(...bytes.subarray(i, i + 8192)));
     }
-    return window.btoa(chunks.join('')); 
+    const btoaFn = (typeof window !== 'undefined' && window.btoa) ? window.btoa : (typeof btoa !== 'undefined' ? btoa : (b => Buffer.from(b, 'binary').toString('base64')));
+    return btoaFn(chunks.join('')); 
 }
 
 function base64ToBuffer(base64) {
-    const raw = atob(base64);
+    const atobFn = (typeof window !== 'undefined' && window.atob) ? window.atob : (typeof atob !== 'undefined' ? atob : (b => Buffer.from(b, 'base64').toString('binary')));
+    const raw = atobFn(base64);
     return Uint8Array.from(raw, c => c.charCodeAt(0));
 }
 
@@ -277,4 +279,32 @@ function acceptNewFingerprint(targetId, fingerprint) {
     if (currentUser && targetId && fingerprint) {
         localStorage.setItem('cyber_fp_' + currentUser.userId + '_' + targetId, fingerprint);
     }
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        hexToBytes,
+        getAesGcmKey,
+        bufferToBase64,
+        base64ToBuffer,
+        encryptGCM,
+        decryptGCM,
+        deriveSharedSecret,
+        generateKeyFingerprint,
+        generateSafetyNumber,
+        initEcdhKeys,
+        ensureSharedSecret,
+        initiateEcdhHandshake,
+        saveSecretsToVault,
+        loadSecretsFromVault,
+        verifyContactFingerprint,
+        acceptNewFingerprint,
+        _aesKeyCache,
+        setMyEcdhKeyPair: (pair) => { myEcdhKeyPair = pair; },
+        getMyEcdhKeyPair: () => myEcdhKeyPair,
+        setMyPublicKeyJwk: (jwk) => { myPublicKeyJwk = jwk; },
+        getMyPublicKeyJwk: () => myPublicKeyJwk,
+        setDerivedSecrets: (secrets) => { derivedSecrets = secrets; },
+        getDerivedSecrets: () => derivedSecrets
+    };
 }
