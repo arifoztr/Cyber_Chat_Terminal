@@ -56,7 +56,20 @@ function showCustomConfirm(message, onConfirmCallback) {
         modal.classList.add('hidden');
         btnYes.onclick = null;
         btnNo.onclick = null;
+        document.removeEventListener('keydown', handleKeyDown);
+        modal.removeEventListener('click', handleBackdropClick);
     };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Escape') cleanUp();
+    };
+
+    const handleBackdropClick = (e) => {
+        if (e.target === modal) cleanUp();
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    modal.addEventListener('click', handleBackdropClick);
 
     btnYes.onclick = () => { playSound('success'); cleanUp(); onConfirmCallback(); };
     btnNo.onclick = () => { playSound('type'); cleanUp(); };
@@ -695,12 +708,16 @@ function renderContactsSidebar() {
         const hasSecret = !!derivedSecrets[contact.id];
 
         const item = document.createElement('div');
-        item.setAttribute('onclick', `selectTarget('${contact.id}')`);
         item.className = `group flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all duration-200 border relative ${
             isActive 
                 ? 'bg-[--surface-hover] border-[--border-active] shadow-sm' 
                 : 'hover:bg-[--surface-hover]/50 border-transparent'
         }`;
+        // [GÜVENLİK FIX] CSP uyumlu olay dinleyici — inline onclick engellenir
+        item.addEventListener('click', (event) => {
+            if (event.target.closest('button')) return;
+            selectTarget(contact.id);
+        });
 
         // Sol: Avatar + Online Noktası (WhatsApp Tarzı)
         const avatarWrap = document.createElement('div');
@@ -763,10 +780,16 @@ function renderContactsSidebar() {
         }
 
         const deleteBtn = document.createElement('button');
-        deleteBtn.setAttribute('onclick', `removeContact('${contact.id}', event)`);
-        deleteBtn.className = 'opacity-0 group-hover:opacity-100 hover:text-[--error] text-xs p-0.5 text-[--text-muted] transition-all';
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'w-6 h-6 flex items-center justify-center rounded-md hover:bg-[--error]/15 text-[--text-muted] hover:text-[--error] text-xs transition-all cursor-pointer opacity-70 md:opacity-0 md:group-hover:opacity-100 shrink-0';
         deleteBtn.title = 'Sohbeti Sil';
+        deleteBtn.setAttribute('aria-label', 'Sohbeti Sil');
         deleteBtn.textContent = '✕';
+        deleteBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            event.preventDefault();
+            removeContact(contact.id, event);
+        });
         rightBadges.appendChild(deleteBtn);
 
         botRow.appendChild(fpSpan);
@@ -784,26 +807,53 @@ function renderContactsSidebar() {
 }
 
 function removeContact(targetId, event) {
-    event.stopPropagation();
-    showCustomConfirm(`${targetId} kişisine ait tüm sohbet geçmişi ve şifreleme anahtarları silinecektir. Bu işlem geri alınamaz.`, async () => {
-        myContacts = myContacts.filter(c => c.id !== targetId); saveContactsToVault();
-        try {
-            const db = await openVaultDB();
-            const tx = db.transaction('packets', 'readwrite');
-            const store = tx.objectStore('packets');
-            const index = store.index('peerId');
-            const request = index.getAllKeys(targetId);
-            request.onsuccess = () => { request.result.forEach(key => store.delete(key)); };
-        } catch(e) {}
-        if (derivedSecrets[targetId]) { delete derivedSecrets[targetId]; saveSecretsToVault(); }
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    const contact = myContacts.find(c => c.id === targetId);
+    const displayName = contact && contact.username ? `${contact.username} (${targetId})` : targetId;
+    
+    showCustomConfirm(`${displayName} kişisine ait tüm sohbet geçmişi ve şifreleme anahtarları silinecektir. Bu işlem geri alınamaz.`, async () => {
+        // 1. myContacts listesinden kaldır ve kasaya kaydet
+        myContacts = myContacts.filter(c => c.id !== targetId);
+        saveContactsToVault();
+
+        // 2. Okunmamış sayaçları temizle
+        if (unreadCounts[targetId]) delete unreadCounts[targetId];
+
+        // 3. Kasadaki (IndexedDB) tüm mesajları sil
+        await clearPeerPacketsFromVault(targetId);
+
+        // 4. Varsa legacy localStorage geçmişini temizle
+        if (currentUser) {
+            try {
+                localStorage.removeItem(`cyber_history_idx_${currentUser.userId}_${targetId}`);
+            } catch (_) {}
+        }
+
+        // 5. Türetilmiş ECDH şifreleme anahtarlarını sil
+        if (derivedSecrets[targetId]) {
+            delete derivedSecrets[targetId];
+            saveSecretsToVault();
+        }
+
+        // 6. Eğer aktif sohbet buysa ekranı sıfırla
         if (activeTarget && activeTarget.id === targetId) {
             activeTarget = null;
             updateChatHeaderUI();
-            document.getElementById('clearChatBtn').classList.add('hidden'); disableChatUI();
-            renderLogPlaceholder(document.getElementById('chatLog'), null, "Uçtan uca şifreli", true);
+            const clearChatBtn = document.getElementById('clearChatBtn');
+            if (clearChatBtn) clearChatBtn.classList.add('hidden');
+            disableChatUI();
+            const chatLog = document.getElementById('chatLog');
+            if (chatLog) renderLogPlaceholder(chatLog, '🔒', 'Bir sohbet seçin', false);
             updateMobileLayout();
         }
-        renderContactsSidebar(); playSound('destroy'); showToast(`${targetId} kişi listenizden silindi.`, 'warning');
+
+        // 7. Sidebar'ı yeniden çiz ve bildirim ver
+        renderContactsSidebar();
+        playSound('destroy');
+        showToast(`${displayName} kişi listenizden ve sohbet geçmişinizden silindi.`, 'warning');
     });
 }
 
@@ -926,17 +976,18 @@ async function selectTarget(targetId) {
 
 function clearActiveChat() {
     if (!activeTarget) return;
+    const targetId = activeTarget.id;
     const displayName = activeTarget.username ? `${activeTarget.username} (${activeTarget.id})` : activeTarget.id;
     showCustomConfirm(`${displayName} ile olan sohbet geçmişi silinecektir. Bu işlem geri alınamaz.`, async () => {
-        try {
-            const db = await openVaultDB(); const tx = db.transaction('packets', 'readwrite'); const store = tx.objectStore('packets');
-            const index = store.index('peerId'); const request = index.getAllKeys(activeTarget.id);
-            request.onsuccess = () => {
-                request.result.forEach(key => store.delete(key));
-                renderLogPlaceholder(document.getElementById('chatLog'), '📭', '// BELLEK SIFIRLANDI //', false);
-                showToast("Sohbet geçmişi temizlendi.", 'success'); playSound('destroy');
-            };
-        } catch(e) {}
+        await clearPeerPacketsFromVault(targetId);
+        if (currentUser) {
+            try {
+                localStorage.removeItem(`cyber_history_idx_${currentUser.userId}_${targetId}`);
+            } catch (_) {}
+        }
+        renderLogPlaceholder(document.getElementById('chatLog'), '📭', '// BELLEK SIFIRLANDI //', false);
+        showToast("Sohbet geçmişi temizlendi.", 'success');
+        playSound('destroy');
     });
 }
 

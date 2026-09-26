@@ -163,6 +163,31 @@ async function removePacketFromVault(peerId, packetId) {
     }
 }
 
+// Belirli bir kişiye ait tüm mesaj paketlerini kasadan (IndexedDB) kalıcı olarak silme
+async function clearPeerPacketsFromVault(peerId) {
+    if (!peerId) return false;
+    try {
+        const db = await openVaultDB();
+        const tx = db.transaction('packets', 'readwrite');
+        const store = tx.objectStore('packets');
+        const index = store.index('peerId');
+        return new Promise((resolve) => {
+            const request = index.getAllKeys(peerId);
+            request.onsuccess = () => {
+                const keys = request.result || [];
+                for (const key of keys) {
+                    store.delete(key);
+                }
+            };
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+        });
+    } catch (e) {
+        console.error('[!] clearPeerPacketsFromVault hatası:', e);
+        return false;
+    }
+}
+
 // Kişi listesinin yerel depoya kaydı / yüklenmesi
 // [GÜVENLİK FIX] Simetrik anahtarlar (contact.key) artık localStorage'a yazılmaz — sızıntı riski ortadan kalkar
 function saveContactsToVault() {
