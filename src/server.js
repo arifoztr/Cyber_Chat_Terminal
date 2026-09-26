@@ -10,6 +10,9 @@ const setupSockets = require('./socket');
 
 const PORT = process.env.PORT || 3000;
 
+// [GÜVENLİK FIX - SEC-24 / Prompt 4.1] Bilgi Sızıntısını Önlemek için X-Powered-By Kapatılır
+app.disable('x-powered-by');
+
 // [FAZ 1] GÜVENLİ AKTARIM: Express Güvenlik Başlıkları (Security Headers)
 app.use((req, res, next) => {
     if (process.env.NODE_ENV === 'production') {
@@ -18,6 +21,8 @@ app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '0'); // Modern tarayıcı standardı: Eski hatalı XSS filtresi kapatılır, CSP devralır
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     
     // [GÜVENLİK FIX - SEC-13] Sıkılaştırılmış Content-Security-Policy:
     // 'unsafe-inline' ve harici CDN alan adları script-src direktifinden tamamen kaldırıldı.
@@ -46,6 +51,32 @@ app.use((req, res, next) => {
 // [FİX-2] Proxy Arkası IP Güveni (Nginx, Cloudflare vb.)
 app.set('trust proxy', 1);
 
+// [GÜVENLİK FIX - SEC-27 / Prompt 2.3] HTTP DoS & Abuse Koruması için Bellek İçi Hız Sınırlandırıcı (120 req/dk)
+const httpRateLimits = new Map();
+app.use((req, res, next) => {
+    if (req.url.startsWith('/socket.io/')) return next();
+    const ip = req.ip || req.connection?.remoteAddress || '127.0.0.1';
+    const now = Date.now();
+    const record = httpRateLimits.get(ip);
+    if (!record || now > record.resetAt) {
+        httpRateLimits.set(ip, { count: 1, resetAt: now + 60000 });
+        return next();
+    }
+    if (record.count >= 120) {
+        return res.status(429).json({ error: 'Çok fazla istek yapıldı. Lütfen bir dakika bekleyin.' });
+    }
+    record.count++;
+    next();
+});
+
+// Periyodik olarak süresi geçmiş HTTP limit kayıtlarını temizleme
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, rec] of httpRateLimits.entries()) {
+        if (now > rec.resetAt) httpRateLimits.delete(ip);
+    }
+}, 60000);
+
 // PaaS / Uptime Monitörleri için Healthcheck Endpoint'i
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -57,6 +88,17 @@ app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: 0, etag: 
 app.get('/', (req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
+
+// [GÜVENLİK FIX - SEC-25 / Prompt 10.1] Bilgi İfşasını Engelleyen 404 & Global Hata Yakalayıcı
+app.use((req, res, next) => {
+    if (req.url.startsWith('/socket.io/')) return next();
+    res.status(404).json({ error: 'Endpoint bulunamadı.' });
+});
+
+app.use((err, req, res, next) => {
+    console.error(`[!] [${new Date().toISOString()}] Unhandled HTTP Error:`, err?.message || err);
+    res.status(err?.status || 500).json({ error: 'Sunucu hatası oluştu.' });
 });
 
 // [GÜVENLİK FIX - SEC-08] Sıkılaştırılmış CORS ve CSWSH Koruması

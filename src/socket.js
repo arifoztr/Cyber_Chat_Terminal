@@ -22,6 +22,18 @@ if (process.env.JWT_SECRET && process.env.JWT_SECRET.trim().length >= 32) {
     console.warn('╚══════════════════════════════════════════════════════════════════════╝');
 }
 
+// [GÜVENLİK FIX - SEC-29 / Prompt 2.2] API Yanıtlarında Veri Sızıntısını Önleyen Sanitize Fonksiyonu
+// Parola hash'i veya dahili veritabanı alanları asla istemciye iletilmez.
+function sanitizeUser(u) {
+    if (!u) return null;
+    return {
+        email: u.email,
+        username: u.username,
+        userId: u.userId,
+        avatar: u.avatar || null
+    };
+}
+
 // [GÜVENLİK] Çıkış yapılan (revoke edilmiş) token'ların kara listesi
 const revokedTokens = new Map(); // token -> expireTimestampMs
 
@@ -148,11 +160,35 @@ module.exports = function setupSockets(io) {
         return true;
     }
 
+    // [GÜVENLİK FIX - SEC-28 / Prompt 2.3] Hatalı Kimlik Doğrulamada Sıkı Hız Sınırı (1 dakikada max 5 başarısız deneme)
+    const failedLoginAttempts = new Map();
+    function checkFailedLoginLimit(ip) {
+        const now = Date.now();
+        const record = failedLoginAttempts.get(ip);
+        if (!record || now > record.resetAt) return true;
+        return record.count < 5;
+    }
+    function recordFailedLogin(ip) {
+        const now = Date.now();
+        const record = failedLoginAttempts.get(ip);
+        if (!record || now > record.resetAt) {
+            failedLoginAttempts.set(ip, { count: 1, resetAt: now + 60000 });
+        } else {
+            record.count++;
+        }
+    }
+    function resetFailedLogin(ip) {
+        failedLoginAttempts.delete(ip);
+    }
+
     // Rate Limiter Çöp Toplayıcısı
     setInterval(() => {
         const now = Date.now();
         for (const [key, record] of rateLimits.entries()) {
             if (now > record.resetAt) rateLimits.delete(key);
+        }
+        for (const [key, record] of failedLoginAttempts.entries()) {
+            if (now > record.resetAt) failedLoginAttempts.delete(key);
         }
     }, 60000);
 
@@ -242,7 +278,7 @@ module.exports = function setupSockets(io) {
                     success: true,
                     message: "Kayıt başarılı.",
                     token,
-                    user: { email: newUser.email, username: newUser.username, userId: newUser.userId, avatar: newUser.avatar }
+                    user: sanitizeUser(newUser)
                 });
             } catch (error) {
                 console.error('[!] register hatası:', error);
@@ -252,8 +288,8 @@ module.exports = function setupSockets(io) {
 
         socket.on('login', async (data, callback) => {
             console.log(`[>> LOGİN İSTEĞİ ALINDI] email: ${data?.email ? String(data.email).replace(/(.{2})(.*)(@.*)/, '$1***$3') : 'yok'}, ip: ${ip}`);
-            if (!checkRateLimit(ip, 'login', 30, 60000)) {
-                console.warn(`[!] LOGİN RATE LIMIT AŞILDI: ${ip}`);
+            if (!checkRateLimit(ip, 'login', 30, 60000) || !checkFailedLoginLimit(ip)) {
+                console.warn(`[!] [${new Date().toISOString()}] LOGİN RATE LIMIT AŞILDI: ${ip}`);
                 return callback({ success: false, message: "SİBER SAVUNMA: Çok fazla giriş denemesi. Lütfen bir dakika bekleyin." });
             }
 
@@ -266,21 +302,28 @@ module.exports = function setupSockets(io) {
                 const user = db.users[email];
                 
                 if (!user) {
-                    console.log(`[!] LOGİN: Başarısız kimlik doğrulama (${email})`);
+                    recordFailedLogin(ip);
+                    console.warn(`[!] [${new Date().toISOString()}] BAŞARISIZ GİRİŞ: Bilinmeyen e-posta (IP: ${ip}, E-posta: ${email.replace(/(.{2})(.*)(@.*)/, '$1***$3')})`);
                     // Zamanlama farkını önlemek için sahte hash karşılaştırması yap
                     await bcrypt.compare(password, DUMMY_HASH);
                     return callback({ success: false, message: "E-posta veya şifre hatalı." });
                 }
                 if (!user.password) {
+                    recordFailedLogin(ip);
+                    console.warn(`[!] [${new Date().toISOString()}] BAŞARISIZ GİRİŞ: Şifresiz hesap (IP: ${ip}, E-posta: ${email.replace(/(.{2})(.*)(@.*)/, '$1***$3')})`);
                     await bcrypt.compare(password, DUMMY_HASH);
                     return callback({ success: false, message: "E-posta veya şifre hatalı." });
                 }
                 
                 const isMatch = await bcrypt.compare(password, user.password);
                 if (!isMatch) {
-                    console.log(`[!] LOGİN: Başarısız kimlik doğrulama (${email})`);
+                    recordFailedLogin(ip);
+                    console.warn(`[!] [${new Date().toISOString()}] BAŞARISIZ GİRİŞ: Hatalı şifre (IP: ${ip}, E-posta: ${email.replace(/(.{2})(.*)(@.*)/, '$1***$3')})`);
                     return callback({ success: false, message: "E-posta veya şifre hatalı." });
                 }
+
+                // Başarılı girişte hatalı deneme sayacı sıfırlanır
+                resetFailedLogin(ip);
 
                 if (!user.userId) {
                     user.userId = 'AGN-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000);
@@ -296,7 +339,7 @@ module.exports = function setupSockets(io) {
                 console.log(`[+] KULLANICI GİRİŞ YAPTI: ${user.username} (${user.userId})`);
                 const token = signJWT({ email: user.email, userId: user.userId });
                 
-                if (callback) callback({ success: true, token, user: { email: user.email, username: user.username, userId: user.userId, avatar: user.avatar } });
+                if (callback) callback({ success: true, token, user: sanitizeUser(user) });
             } catch (error) {
                 console.error('[!] login hatası:', error);
                 if (callback) callback({ success: false, message: "Sunucu hatası oluştu. Lütfen tekrar deneyin." });
@@ -316,7 +359,7 @@ module.exports = function setupSockets(io) {
                 if (!onlineNodes.has(user.userId)) onlineNodes.set(user.userId, new Set());
                 onlineNodes.get(user.userId).add(socket.id);
                 io.emit('node_status_change', { userId: user.userId, status: 'online' });
-                if (callback) callback({ success: true, user: { email: user.email, username: user.username, userId: user.userId, avatar: user.avatar } });
+                if (callback) callback({ success: true, user: sanitizeUser(user) });
             } else {
                 if (callback) callback({ success: false });
             }
@@ -392,9 +435,23 @@ module.exports = function setupSockets(io) {
                 const user = db.users[socket.user.email];
                 
                 const isMatch = await bcrypt.compare(oldPassword, user.password);
-                if (!isMatch) return callback({ success: false, message: "Mevcut şifre hatalı." });
+                if (!isMatch) {
+                    console.warn(`[!] [${new Date().toISOString()}] BAŞARISIZ ŞİFRE DEĞİŞTİRME: Eski şifre hatalı (IP: ${ip}, User: ${user.email})`);
+                    return callback({ success: false, message: "Mevcut şifre hatalı." });
+                }
                 
                 user.password = await bcrypt.hash(newPassword, 10);
+                
+                // [GÜVENLİK FIX - SEC-26 / Prompt 8.1] Şifre değiştiğinde kullanıcının diğer bağlı soketlerini uyar/kapat
+                const userSockets = onlineNodes.get(user.userId);
+                if (userSockets) {
+                    userSockets.forEach(sid => {
+                        if (sid !== socket.id) {
+                            io.to(sid).emit('session_invalidated', { message: 'Şifreniz değiştirildiği için oturumunuz sonlandırıldı.' });
+                        }
+                    });
+                }
+
                 await dbManager.saveDatabase();
                 if (callback) callback({ success: true });
             } catch(e) { callback({ success: false, message: "Sunucu hatası." }); }
@@ -409,7 +466,10 @@ module.exports = function setupSockets(io) {
                 const user = db.users[socket.user.email];
                 
                 const isMatch = await bcrypt.compare(password, user.password);
-                if (!isMatch) return callback({ success: false, message: "Güvenlik şifresi hatalı." });
+                if (!isMatch) {
+                    console.warn(`[!] [${new Date().toISOString()}] BAŞARISIZ HESAP SİLME: Yanlış şifre (IP: ${ip}, User: ${user.email})`);
+                    return callback({ success: false, message: "Güvenlik şifresi hatalı." });
+                }
                 
                 const userId = user.userId;
                 delete db.users[socket.user.email];
