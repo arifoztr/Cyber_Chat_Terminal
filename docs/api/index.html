@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Home</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Home</h1>
+
+    
+
+
+
+    
+
+
+    <h3> </h3>
+
+
+
+
+
+
+
+
+
+
+    
+
+
+
+
+    <section>
+        <article><h1>🔐 Siber E2EE Sohbet Terminali (v10 Cyber-HUD Edition)</h1>
+<blockquote>
+<p><strong>Uçtan Uca Şifreli (E2EE) P2P Sohbet Terminali</strong> — Sunucu sadece signaling ve relay görevi görür; şifreli içerikleri asla çözemez, inceleyemez veya loglayamaz.</p>
+</blockquote>
+<p><img src="https://img.shields.io/badge/version-v10_Cyber--HUD-blueviolet" alt="Version">
+<img src="https://img.shields.io/badge/license-ISC-green" alt="License">
+<img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="Node">
+<img src="https://img.shields.io/badge/tests-145%20passed-brightgreen" alt="Tests">
+<img src="https://img.shields.io/badge/coverage-95%25-brightgreen" alt="Coverage">
+<img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey" alt="Platforms">
+<img src="https://img.shields.io/badge/sqlite-WAL_Mode-blue" alt="SQLite">
+<img src="https://img.shields.io/badge/docker-ready-2496ED" alt="Docker"></p>
+<hr>
+<h2>📌 Proje Özeti</h2>
+<p>Bu proje, modern web tarayıcıları ve yerel masaüstü uygulamaları arasında <strong>ECDH (Elliptic-curve Diffie–Hellman)</strong> ile asenkron anahtar takası yapılan, tüm metin ve dosya içeriklerinin <strong>AES-GCM-256</strong> ile istemci tarafında şifrelendiği uçtan uca korumalı bir P2P sohbet platformudur.</p>
+<p>Sunucu mimarisi <strong>Zero-Knowledge (Sıfır Bilgi)</strong> prensibiyle tasarlanmıştır. Sunucu yalnızca relay vazifesi görür; iletilen mesaj paketlerinin veya dosyaların şifresini çözebilecek anahtarlara hiçbir zaman sahip olamaz.</p>
+<h3>🌟 Öne Çıkan Özellikler</h3>
+<ul>
+<li>🔐 <strong>Askeri Düzey E2EE Şifreleme:</strong> İstemciler arası ECDH (P-256) anahtar anlaşması ve her paket için rastgele 12-byte IV (Initialization Vector) ile AES-GCM-256 şifreleme (Tamamen yerel Web Crypto API).</li>
+<li>🛡️ <strong>Sıfır Dış CDN &amp; Sıkı CSP:</strong> Tüm istemci kütüphaneleri (Tailwind CSS, Socket.IO, QR Code) yerel (<code>public/vendor/</code>) olarak barındırılır. Katı Content-Security-Policy kuralları ile üçüncü taraf kaynak ve script enjeksiyonları tamamen engellenmiştir.</li>
+<li>💻 <strong>Çapraz Platform Masaüstü:</strong> Electron tabanlı güvenli masaüstü istemcisi; <strong>Windows</strong> (<code>.exe</code>), <strong>Linux</strong> (<code>.deb</code>, <code>.AppImage</code>) ve <strong>macOS</strong> (<code>.dmg</code>, <code>.zip</code>) için optimize derlemeler.</li>
+<li>👤 <strong>Profil &amp; Hesap Yönetimi:</strong> Kullanıcı avatarı belirleme/güncelleme (200 KB boyut kısıtı), eski şifre doğrulamalı şifre güncelleme ve tüm verileri, kuyrukları anında temizleyen güvenli hesap silme.</li>
+<li>🔍 <strong>Ajan Arama &amp; Bağlantı Talepleri:</strong> Benzersiz Ajan ID (<code>AGN-XXXX-XXXX</code>) veya kullanıcı adı ile arama, onaylı bağlantı isteği (Accept/Reject) akışı.</li>
+<li>🔗 <strong>Akıllı &amp; Güvenli Bağlantı Tıklama (Smart URL Detection):</strong> Mesajlardaki <code>http://</code>, <code>https://</code> ve <code>www.</code> bağlantıları otomatik algılanır; XSS korumalı güvenli etiketlere (<code>target=&quot;_blank&quot;</code>, <code>rel=&quot;noopener noreferrer&quot;</code>) dönüştürülerek açılır.</li>
+<li>📄 <strong>Uçtan Uca Şifreli Dosya &amp; PDF Aktarımı:</strong> Görseller ve PDF belgeleri (maks. 5 MB) istemcide şifrelenerek güvenle gönderilir; siber kart yapısı üzerinden dahili PDF önizleme ve indirme desteği.</li>
+<li>⏱️ <strong>TTL (Zaman Ayarlı İmha):</strong> Belirlenen süre (5s, 10s, 30s, 60s) sonunda mesajlar hem arayüzden hem de yerel IndexedDB kasasından otomatik ve kalıcı olarak imha edilir.</li>
+<li>🗑️ <strong>Revoke Protokolü (Herkesten Sil):</strong> Gönderici dilediği an iletisini iki taraftan birden silebilir (Sunucu tarafı BOLA yetkilendirme doğrulamalı).</li>
+<li>📴 <strong>Kalıcı Çevrimdışı Kuyruk (Offline Queue):</strong> Karşı taraf çevrimdışı olsa bile paketler SQLite üzerinde güvenle kuyruklanır ve kullanıcı bağlandığında otomatik teslim edilir (7 günlük otomatik çöp toplayıcı GC).</li>
+<li>🪪 <strong>Parmak İzi (Fingerprint) Doğrulama:</strong> Ortadaki Adam (MITM) saldırılarını engellemek amacıyla ECDH açık anahtarları üzerinden SHA-256 parmak izi ve QR kod doğrulama.</li>
+<li>⚡ <strong>Yazıyor... &amp; Durum Takibi:</strong> Gerçek zamanlı yazıyor göstergesi, çevrimiçi/çevrimdışı durum takibi ve bağlantı koptuğunda cyberpunk tarzı otomatik yeniden bağlanma (Auto-reconnect) katmanı.</li>
+<li>🧪 <strong>Kapsamlı Test Altyapısı:</strong> Vitest ve v8 coverage motoru ile koşan 145 birim, entegrasyon ve kripto testi (%95+ kod kapsama oranı).</li>
+</ul>
+<hr>
+<h2>🧰 Teknoloji Yığını</h2>
+<table>
+<thead>
+<tr>
+<th>Alan</th>
+<th>Teknoloji / Standart</th>
+<th>Açıklama</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Frontend</strong></td>
+<td>Vanilla JavaScript (ES6+), Tailwind CSS (Yerel)</td>
+<td>Framework bağımsız, harici CDN gerektirmeyen, hafif ve ultra hızlı arayüz</td>
+</tr>
+<tr>
+<td><strong>Backend</strong></td>
+<td>Node.js, Express, Socket.IO</td>
+<td>Asenkron, modüler, olay tabanlı sinyal ve relay sunucusu</td>
+</tr>
+<tr>
+<td><strong>Kriptografi</strong></td>
+<td>Web Crypto API (<code>window.crypto.subtle</code>)</td>
+<td>Tarayıcı yerel ECDH (P-256), AES-GCM-256, SHA-256</td>
+</tr>
+<tr>
+<td><strong>Masaüstü</strong></td>
+<td>Electron 44, electron-builder</td>
+<td>Sandbox, Context Isolation ve tekil oturum kilidi (Single Instance Lock)</td>
+</tr>
+<tr>
+<td><strong>Kimlik &amp; Oturum</strong></td>
+<td>JWT (HMAC-SHA256) + bcrypt</td>
+<td>Bağımlılıksız token imzalama, güvenli şifre hashleme</td>
+</tr>
+<tr>
+<td><strong>Veritabanı</strong></td>
+<td>SQLite (WAL Modu) + Turso Bulut SQLite (@libsql/client)</td>
+<td>Ortam değişkeniyle yerel SQLite veya bulut veritabanı seçimi; bellek-içi önbellek ve debounced flush</td>
+</tr>
+<tr>
+<td><strong>İstemci Depolama</strong></td>
+<td>IndexedDB (Vault)</td>
+<td>Mesaj geçmişi ve kriptografik anahtarlar sadece istemcide</td>
+</tr>
+<tr>
+<td><strong>Test &amp; Kalite</strong></td>
+<td>Vitest, @vitest/coverage-v8</td>
+<td>145 test senaryosu, %95+ test kapsamı</td>
+</tr>
+<tr>
+<td><strong>Tipografi &amp; Stil</strong></td>
+<td>Inter, JetBrains Mono</td>
+<td>Okunabilir modern siber terminal estetiği</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>📁 Proje Dizin Yapısı</h2>
+<pre class="prettyprint source"><code>/
+├── .github/                               # GitHub Actions CI/CD iş akışları
+│   └── workflows/
+│       ├── build-linux.yml                # Linux (.deb, .AppImage) otomatik derleme
+│       └── build-mac.yml                  # macOS (.dmg, .zip) otomatik derleme
+├── public/                                # İstemci tarafı statik dosyaları
+│   ├── index.html                         # Ana web & Electron arayüzü
+│   ├── config.js                          # İstemci yapılandırması (Backend URL vb.)
+│   ├── style.css                          # Modern siber tema, animasyonlar ve bileşenler
+│   ├── crypto.js                          # Web Crypto API tabanlı E2EE kripto motoru
+│   ├── db.js                              # IndexedDB yerel kasa (Vault) yönetimi
+│   ├── ui.js                              # UI etkileşimi, state yönetimi, render işlemleri
+│   ├── socket-handlers.js                 # Socket.IO istemci olay dinleyicileri
+│   ├── icon.png                           # Uygulama simgesi
+│   └── vendor/                            # Sıfır CDN: Yerel saklanan üçüncü taraf scriptler
+│       ├── tailwindcss.js                 # Yerel Tailwind CSS motoru
+│       ├── socket.io.min.js               # Yerel Socket.IO istemcisi
+│       └── qrcode.min.js                  # Yerel QR kod üretici
+├── src/                                   # Backend kaynak kodları
+│   ├── server.js                          # Express HTTP sunucusu & güvenlik katmanı (CSP, HSTS)
+│   ├── socket.js                          # Socket.IO sunucu olay işleyicileri & relay mantığı
+│   ├── database.js                        # SQLite/Turso veritabanı sürücüsü, önbellek ve GC
+│   └── database.sqlite                    # Çalışma zamanı SQLite veritabanı (WAL modu)
+├── electron/                              # Masaüstü (Electron) kabuğu
+│   ├── main.js                            # Electron ana süreç (pencere, IPC, güvenlik sandbox)
+│   ├── preload.js                         # Güvenli IPC köprüsü (Context Isolation)
+│   └── assets/                            # Uygulama simgeleri (icon.png, icon.jpg)
+├── tests/                                 # Kapsamlı otomatik test paketi (Vitest)
+│   ├── auth.test.js                       # Kimlik doğrulama, token ve şifreleme testleri
+│   ├── crypto.test.js                     # ECDH, AES-GCM ve parmak izi testleri
+│   ├── database.test.js                   # SQLite / Turso sürücü ve GC testleri
+│   ├── e2ee-message.test.js               # Uçtan uca mesaj yaşam döngüsü testleri
+│   ├── server.test.js                     # Express middleware, CSP ve endpoint testleri
+│   └── socket.test.js                     # Socket.IO olayları, kuyruk ve hız limiti testleri
+├── docs/                                  # Proje teknik belgeleri
+│   ├── DEPLOYMENT.md                      # Hibrit bulut dağıtım kılavuzu (Cloudflare + Bulut)
+│   ├── OPTIMIZATIONS.md                   # Güvenlik ve performans optimizasyon detayları
+│   ├── PROGRESS.md                        # Faz durumu ve sürüm yol haritası
+│   └── AGENTS.md                          # AI asistanı ve geliştirici standartları kılavuzu
+├── dist/                                  # Masaüstü derleme çıktıları (Setup, Portable, deb, AppImage, dmg)
+├── Dockerfile                             # Konteynerize dağıtım dosyası
+├── electron-builder.json                  # Çoklu platform masaüstü paketleme yapılandırması
+├── vitest.config.mjs                      # Test ortamı ve v8 coverage yapılandırması
+├── run_tests.bat                          # Windows için tek tıkla test ve rapor çalıştırma betiği
+├── wrangler.toml                          # Cloudflare Pages yapılandırması
+├── .env.example                           # Ortam değişkenleri şablonu
+├── package.json                           # Proje bağımlılıkları ve npm betikleri
+└── README.md                              # Proje dokümantasyonu (Bu dosya)
+</code></pre>
+<hr>
+<h2>🚀 Kurulum ve Başlatma</h2>
+<h3>Gereksinimler</h3>
+<ul>
+<li><strong>Node.js:</strong> v18.0.0 veya üzeri (v20+ önerilir)</li>
+<li><strong>npm:</strong> v9.0.0 veya üzeri (ya da Docker)</li>
+</ul>
+<hr>
+<h3>💻 Yöntem 1: Windows Masaüstü Uygulaması (.exe) Olarak Kurulum</h3>
+<p>Cyber Chat Terminal, uzaktaki veya yereldeki sunucuya güvenli şekilde bağlanan tam teşekküllü bir Windows uygulaması olarak kullanılabilir.</p>
+<h4>1. Hazır Kurulum Dosyaları ile Kullanım</h4>
+<p>GitHub Releases bölümünden veya <code>dist/</code> dizininden derlenen dosyalarla:</p>
+<ul>
+<li><strong>Kurulum Sihirbazı (Setup):</strong> <code>Cyber Chat Terminal Setup 1.0.0.exe</code><br>
+Çift tıklayıp kurulum sihirbazını tamamlayın. Masaüstünüze ve Başlat Menünüze otomatik kısayol eklenir, Denetim Masası'ndan kaldırılabilir.</li>
+<li><strong>Taşınabilir Sürüm (Portable):</strong> <code>Cyber Chat Terminal 1.0.0.exe</code><br>
+Kurulum gerektirmez. Çift tıkladığınız anda doğrudan açılır, USB belleğe atıp her bilgisayarda çalıştırılabilir.</li>
+</ul>
+<h4>2. Kendi Masaüstü Paketlerinizi (.exe) Derlemek</h4>
+<p>Projeyi klonladıktan sonra kendi Windows uygulamanızı oluşturmak için:</p>
+<pre class="prettyprint source lang-bash"><code># 1. Bağımlılıkları yükleyin
+npm install
+
+# 2. Geliştirici modunda test etmek için:
+npm run desktop:start
+
+# 3. Windows Installer ve Portable .exe paketlerini üretmek için:
+npm run desktop:build
+</code></pre>
+<blockquote>
+<p>Derleme tamamlandığında dosyalarınız otomatik olarak <strong><code>dist/</code></strong> klasöründe oluşturulacaktır.</p>
+</blockquote>
+<hr>
+<h3>🐧 Yöntem 2: Linux Masaüstü Uygulaması (<code>.deb</code> / <code>.AppImage</code>) Olarak Kurulum</h3>
+<p>Cyber Chat Terminal, GitHub Actions tarafından otomatik derlenen <strong><code>.deb</code></strong> (Debian/Ubuntu) ve <strong><code>.AppImage</code></strong> paketleriyle Linux'ta yerel masaüstü uygulaması olarak çalıştırılabilir.</p>
+<h4>Paketi İndirme</h4>
+<p>GitHub reposundaki <strong><a href="https://github.com/Arif8054/Cyber_Chat_Terminal/releases">Releases</a></strong> sayfasından en güncel <code>cyber_x.x.x_amd64.deb</code> veya <code>Cyber Chat Terminal-x.x.x.AppImage</code> dosyasını indirin.</p>
+<h4><code>.deb</code> Paketi ile Kurulum (Debian / Ubuntu / Mint)</h4>
+<pre class="prettyprint source lang-bash"><code>sudo dpkg -i cyber_1.0.0_amd64.deb
+
+# Eksik sistem kütüphanesi olursa:
+sudo apt-get install -f -y
+
+# Uygulamayı başlat:
+cyber
+</code></pre>
+<h4><code>.AppImage</code> ile Kurulum (Tüm Linux Dağıtımları)</h4>
+<pre class="prettyprint source lang-bash"><code>chmod +x &quot;Cyber Chat Terminal-1.0.0.AppImage&quot;
+./&quot;Cyber Chat Terminal-1.0.0.AppImage&quot;
+</code></pre>
+<blockquote>
+<p>[!TIP]
+AppImage çalıştırılırken <code>FUSE</code> hatası alırsanız: <code>sudo apt-get install -y libfuse2</code> komutunu çalıştırın.</p>
+</blockquote>
+<h4>Kaynak Koddan Linux Paketi Derleme</h4>
+<pre class="prettyprint source lang-bash"><code>sudo apt-get install -y libfuse2
+npm install
+npm run desktop:build:linux
+</code></pre>
+<hr>
+<h3>🍏 Yöntem 3: macOS Masaüstü Uygulaması (<code>.dmg</code> / <code>.zip</code>) Olarak Kurulum</h3>
+<p>Cyber Chat Terminal, Apple macOS sistemleri için hem <strong>Apple Silicon (M1/M2/M3/M4)</strong> hem de <strong>Intel (x64)</strong> mimarilerine optimize edilmiştir.</p>
+<h4>Paketi İndirme</h4>
+<p>GitHub Releases sayfasından <code>Cyber Chat Terminal-1.0.0.dmg</code> veya <code>Cyber Chat Terminal-1.0.0-mac.zip</code> dosyasını indirin.</p>
+<h4>Kurulum:</h4>
+<ol>
+<li><code>.dmg</code> dosyasını açın.</li>
+<li><code>Cyber Chat Terminal</code> simgesini sürükleyerek <strong>Applications (Uygulamalar)</strong> klasörüne bırakın.</li>
+<li>Uygulamayı Spotlight veya Launchpad üzerinden başlatın.</li>
+</ol>
+<h4>Kaynak Koddan macOS Paketi Derleme:</h4>
+<pre class="prettyprint source lang-bash"><code>npm install
+npm run desktop:build:mac
+</code></pre>
+<blockquote>
+<p>Çıktılar otomatik olarak <code>dist/</code> klasöründe <code>.dmg</code> ve <code>.zip</code> formatında hazırlanır.</p>
+</blockquote>
+<hr>
+<h3>🌐 Yöntem 4: Web / Yerel Node.js Sunucusu Olarak Çalıştırma</h3>
+<h4>1. Depoyu Klonlayın</h4>
+<pre class="prettyprint source lang-bash"><code>git clone https://github.com/Arif8054/Cyber_Chat_Terminal.git
+cd Cyber_Chat_Terminal
+</code></pre>
+<h4>2. Bağımlılıkları Yükleyin</h4>
+<pre class="prettyprint source lang-bash"><code>npm install
+</code></pre>
+<h4>3. Ortam Değişkenlerini Tanımlayın (<code>.env</code>)</h4>
+<p>Kök dizinde bir <code>.env</code> dosyası oluşturun (şablon için <a href=".env.example">.env.example</a> dosyasını referans alabilirsiniz):</p>
+<pre class="prettyprint source lang-env"><code>PORT=3000
+NODE_ENV=development
+JWT_SECRET=super_secret_jwt_passphrase_min_32_chars_long
+CORS_ORIGIN=*
+DB_PATH=./src/database.sqlite
+# İsteğe bağlı — Turso Bulut SQLite:
+# TURSO_DATABASE_URL=libsql://your-db.turso.io
+# TURSO_AUTH_TOKEN=your_turso_auth_token
+</code></pre>
+<blockquote>
+<p>⚠️ <strong>Güvenlik Notu:</strong> Üretim ortamında <code>JWT_SECRET</code> değerini en az 32 karakterlik güçlü bir rastgele anahtarla belirleyin.</p>
+</blockquote>
+<h4>4. Sunucuyu Başlatın</h4>
+<pre class="prettyprint source lang-bash"><code>npm start        # Üretim modu
+# veya
+npm run dev      # Geliştirme modu
+</code></pre>
+<blockquote>
+<p>[!NOTE]
+Windows PowerShell'de <code>npm.ps1 cannot be loaded because running scripts is disabled</code> hatası alırsanız komutları <code>npm.cmd start</code> veya <code>npm.cmd run dev</code> olarak çalıştırabilirsiniz.</p>
+</blockquote>
+<p>Terminalde bağlantı adresleri listelenecektir:</p>
+<ul>
+<li><strong>Yerel Erişim:</strong> <code>http://localhost:3000</code></li>
+<li><strong>Sağlık Kontrolü:</strong> <code>http://localhost:3000/health</code></li>
+</ul>
+<hr>
+<h3>🐳 Yöntem 5: Docker ile Çalıştırma</h3>
+<p>Projeyi tek bir komutla Docker üzerinden izole bir şekilde ayağa kaldırabilirsiniz:</p>
+<pre class="prettyprint source lang-bash"><code># İmajı derleyin
+docker build -t cyber-chat-terminal .
+
+# Konteyneri kalıcı veri diziniyle başlatın
+docker run -d -p 3000:3000 -v $(pwd)/data:/app/data -e DB_PATH=/app/data/database.sqlite --name cyber-chat cyber-chat-terminal
+</code></pre>
+<hr>
+<h2>🧪 Testler ve Kod Doğrulama (Vitest)</h2>
+<p>Proje, E2EE el sıkışması, simetrik şifreleme/çözme, veritabanı sürücüsü, rate limiting ve sunucu güvenlik başlıklarını test eden kapsamlı bir test süitine sahiptir:</p>
+<ul>
+<li><strong>145 Test Senaryosu:</strong> Tamamı bağımsız ve deterministik çalışan birim &amp; entegrasyon testleri.</li>
+<li><strong>%95+ Kod Kapsamı:</strong> Kritik çekirdek katmanlar (<code>crypto.js</code>, <code>database.js</code>, <code>server.js</code>, <code>socket.js</code>) v8 motoruyla izlenir.</li>
+</ul>
+<pre class="prettyprint source lang-bash"><code># Tüm testleri çalıştır ve kapsam (coverage) raporu üret
+npm test
+# (Windows PowerShell için: npm.cmd test)
+
+# Testleri izleme (watch) modunda interaktif çalıştır
+npm run test:watch
+
+# Yalnızca kapsam raporunu terminalde ve HTML olarak derle
+npm run test:coverage
+</code></pre>
+<h3>Windows İçin Tek Tıkla Test:</h3>
+<p>Windows ortamında doğrudan <code>run_tests.bat</code> dosyasını çalıştırabilirsiniz. Testler bittiğinde <code>coverage/index.html</code> raporunu otomatik olarak varsayılan tarayıcınızda açar.</p>
+<hr>
+<h2>🔐 Güvenlik Mimarisi</h2>
+<table>
+<thead>
+<tr>
+<th>Güvenlik Katmanı</th>
+<th>Uygulanan Mekanizma</th>
+<th>Korunan Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Zero-Knowledge Relay</strong></td>
+<td>Sunucu yalnızca şifreli zarfı (ciphertext + IV) iletir. Anahtarlar hiçbir zaman sunucuya gönderilmez.</td>
+<td>Sunucu ihlali veya dinleme durumunda veri sızıntısı</td>
+</tr>
+<tr>
+<td><strong>Native Web Crypto</strong></td>
+<td>Harici JS kripto kütüphaneleri kullanılmaz; tarayıcının yerleşik <code>window.crypto.subtle</code> API'si kullanılır.</td>
+<td>Üçüncü taraf kütüphane arka kapıları (Supply Chain Attacks)</td>
+</tr>
+<tr>
+<td><strong>Sıkı CSP &amp; Sıfır Dış CDN</strong></td>
+<td><code>script-src 'self'</code> direktifi; tüm scriptler <code>public/vendor/</code> dizininden sunulur. Harici script yüklenemez.</td>
+<td>İstemci tarafı XSS ve CDN zehirlenmesi (CDN Compromise)</td>
+</tr>
+<tr>
+<td><strong>CSWSH Savunması</strong></td>
+<td>Socket.IO bağlantılarında origin whitelist ve sandboxed <code>null</code> origin engelleme uygulanır.</td>
+<td>Siteler Arası WebSocket Ele Geçirme (Cross-Site WebSocket Hijacking)</td>
+</tr>
+<tr>
+<td><strong>BOLA Koruması</strong></td>
+<td>Mesaj iptal (<code>revoke_packet</code>) isteklerinde paket sahibinin kimliği sunucu tarafında doğrulanır.</td>
+<td>Başka kullanıcıların mesajlarını yetkisizce silme (Broken Object Level Authorization)</td>
+</tr>
+<tr>
+<td><strong>XSS Korumalı Linkleme</strong></td>
+<td>URL'ler ayrıştırılırken DOM String interpolation yerine <code>document.createTextNode</code> ve protokol doğrulaması (<code>http:</code>, <code>https:</code>) kullanılır.</td>
+<td>XSS (Cross-Site Scripting) ve sahte protokol enjeksiyonu (<code>javascript:</code>)</td>
+</tr>
+<tr>
+<td><strong>JWT Doğrulamalı Socket</strong></td>
+<td>Her Socket bağlantısı HMAC-SHA256 JWT oturumu ile ilişkilendirilir. <code>packet.senderId</code> sunucu tarafında doğrulanır.</td>
+<td>Kimlik sahteciliği (Sender Spoofing)</td>
+</tr>
+<tr>
+<td><strong>Gelişmiş Rate Limiting</strong></td>
+<td>IP bazlı giriş, kayıt, mesaj gönderimi, profil güncelleme ve arama isteklerine sınır uygulanır.</td>
+<td>Brute-force ve Hizmet Dışı Bırakma (DoS)</td>
+</tr>
+<tr>
+<td><strong>HTTP Güvenlik Başlıkları</strong></td>
+<td>HSTS (1 yıl), <code>X-Content-Type-Options: nosniff</code>, <code>X-Frame-Options: DENY</code>, <code>X-XSS-Protection: 0</code>.</td>
+<td>Clickjacking, MIME-sniffing, eski tarayıcı XSS filtre zaafiyetleri</td>
+</tr>
+<tr>
+<td><strong>MITM Doğrulaması</strong></td>
+<td>Karşılıklı açık anahtarların SHA-256 hash'i (Parmak İzi) QR kod ve metin olarak karşılaştırılabilir.</td>
+<td>Araya giren adam (Man-in-the-Middle) saldırıları</td>
+</tr>
+<tr>
+<td><strong>Electron Sandbox &amp; İzolasyon</strong></td>
+<td><code>nodeIntegration: false</code>, <code>contextIsolation: true</code>, <code>sandbox: true</code>, <code>webSecurity: true</code>.</td>
+<td>Masaüstü kabuğunda yerel dosya ve işletim sistemi komut enjeksiyonu</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>🎮 Kullanım Rehberi</h2>
+<ol>
+<li><strong>Giriş / Kayıt:</strong>
+<ul>
+<li>Tarayıcınızda veya masaüstü uygulamasında terminali açın.</li>
+<li>Kullanıcı adı, e-posta ve şifrenizi girerek kaydolun. Sistem otomatik olarak size özel bir Ajan ID (<code>AGN-XXXX-XXXX</code>) üretir.</li>
+</ul>
+</li>
+<li><strong>Profil ve Avatar Özelleştirme:</strong>
+<ul>
+<li>Sol üstteki profil fotoğrafı alanına veya <strong>Ayarlar (⚙️) -&gt; Profil</strong> sekmesine tıklayarak avatar yükleyin (200 KB güvenlik sınırı).</li>
+</ul>
+</li>
+<li><strong>Bağlantı Kurma &amp; Ajan Arama:</strong>
+<ul>
+<li><strong>Doğrudan ID ile:</strong> &quot;➕&quot; butonuna tıklayıp hedef kullanıcının Ajan ID'sini girin.</li>
+<li><strong>Arama ile:</strong> &quot;🔍&quot; butonuna basarak kullanıcı adına göre arama yapın ve bağlantı isteği gönderin. Karşı taraf onayladığında E2EE anahtar takası anında tamamlanır.</li>
+</ul>
+</li>
+<li><strong>Güvenli Mesajlaşma &amp; Akıllı Linkler:</strong>
+<ul>
+<li>Mesaj kutusuna metninizi yazın. Gönderilen mesajlar istemcide AES-GCM ile şifrelenir.</li>
+<li>Mesaj içinde paylaşılan tüm web adresleri otomatik olarak tıklanabilir güvenli bağlantıya dönüşür.</li>
+</ul>
+</li>
+<li><strong>Şifreli PDF ve Görsel Paylaşımı:</strong>
+<ul>
+<li>Ataş (📎) ikonuna tıklayarak görsel veya PDF belgesi (maks. 5 MB) seçin.</li>
+<li>Alınan PDF belgeleri siber kart şeklinde listelenir; <strong>İndir</strong> veya doğrudan <strong>Görüntüle</strong> butonlarıyla incelenebilir.</li>
+</ul>
+</li>
+<li><strong>Zaman Ayarlı İmha (TTL):</strong>
+<ul>
+<li>Gönderim öncesinde TTL menüsünden (5s, 10s, 30s, 60s) seçim yapın. Süre dolduğunda mesaj her iki taraftan ve yerel IndexedDB kasasından kalıcı olarak silinir.</li>
+</ul>
+</li>
+<li><strong>Herkesten Sil (Revoke):</strong>
+<ul>
+<li>Gönderdiğiniz iletinin yanındaki <strong>Sil</strong> butonuna basarak mesajı iki taraftan birden silebilirsiniz.</li>
+</ul>
+</li>
+<li><strong>Güvenlik Ayarları (Şifre Değiştirme &amp; Hesap Silme):</strong>
+<ul>
+<li><strong>Ayarlar -&gt; Güvenlik</strong> sekmesinden mevcut şifrenizi doğrulayarak şifrenizi değiştirebilir veya hesabınızı, tüm mesaj kuyruklarını ve ilişkili verileri kalıcı olarak silebilirsiniz.</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h2>🗺️ Geliştirme Durumu ve Yol Haritası</h2>
+<p>Mevcut sürüm: <strong>v10 (Cyber-HUD Edition)</strong></p>
+<ul>
+<li>[x] <strong>FAZ 1 — Güvenlik Temelleri:</strong> Bağımsız HMAC-SHA256 JWT, IP tabanlı Rate Limiting, Express Güvenlik Başlıkları, Katı CSP (<code>script-src 'self'</code>), Parmak İzi (SHA-256 Fingerprint) Doğrulama.</li>
+<li>[x] <strong>FAZ 2 — Backend &amp; Mimari:</strong> SQLite WAL mimarisi, Asenkron kuyruklama, 7 günlük GC, Hibrit Dağıtım (Cloudflare Pages + Docker), Turso Cloud SQLite desteği.</li>
+<li>[x] <strong>FAZ 3 — Masaüstü ve Platformlar:</strong> Electron entegrasyonu, Windows (Setup + Portable), Linux (.deb + .AppImage), macOS (.dmg + .zip) derleme iş akışları.</li>
+<li>[x] <strong>FAZ 4 — Kullanıcı Deneyimi ve Yönetim:</strong> Profil avatarı, şifre değiştirme, güvenli hesap silme, kullanıcı arama, bağlantı onaylama (Request/Accept/Reject) akışı, sıfır dış CDN mimarisi.</li>
+<li>[x] <strong>FAZ 5 — Test &amp; Güvenilirlik:</strong> Vitest test altyapısı, 145 birim/entegrasyon testi, %95+ kod kapsama oranı.</li>
+<li>[ ] <strong>Gelecek Planlar (FAZ 6):</strong>
+<ul>
+<li>Double Ratchet protokolü ile her mesaj başına İleriye Dönük Gizlilik (Forward Secrecy).</li>
+<li>Ed25519 dijital imzaları ile paket bütünlüğü ve kaynak inkar edilemezliği (Non-repudiation).</li>
+<li>Çoklu katılımcılı şifreli grup sohbetleri.</li>
+</ul>
+</li>
+</ul>
+<p>Ayrıntılı yol haritası için <a href="docs/PROGRESS.md">docs/PROGRESS.md</a> ve <a href="docs/OPTIMIZATIONS.md">docs/OPTIMIZATIONS.md</a> belgelerine göz atabilirsiniz.</p>
+<hr>
+<h2>🤝 Katkıda Bulunma</h2>
+<p>Projeye katkıda bulunurken lütfen aşağıdaki temel ilkelere sadık kalın:</p>
+<ul>
+<li><strong>Dil:</strong> Kod ve API değişkenleri İngilizce; kullanıcı arayüzü metinleri ve toast mesajları Türkçe.</li>
+<li><strong>Mimari:</strong> Frontend saf Vanilla JS (Framework/Bundler kullanılmaz).</li>
+<li><strong>Kriptografi:</strong> Yalnızca tarayıcı yerel <code>window.crypto.subtle</code> API'si (Harici JS kripto paketleri eklenemez).</li>
+<li><strong>Güvenlik Politikası:</strong> Dış CDN bağımlılığı eklenmemeli, tüm üçüncü taraf kütüphaneler <code>public/vendor/</code> altında yerel barındırılmalıdır.</li>
+<li><strong>Test Bütünlüğü:</strong> Yapılan her değişiklik sonrası <code>npm test</code> ile 145 testin hatasız geçtiği doğrulanmalıdır.</li>
+</ul>
+<hr>
+<h2>📄 Lisans</h2>
+<p>Bu proje <a href="LICENSE">ISC</a> lisansı altında sunulmaktadır.</p>
+<hr>
+<div align="center">
+<p><strong>Siber Güvenlik E2EE İletişim Terminali</strong> 🔒<br>
+<em>&quot;Sunucu göremez. Sunucu çözemez. Sunucu loglayamaz.&quot;</em></p>
+</div></article>
+    </section>
+
+
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-AppConfig.html">AppConfig</a></li><li><a href="module-ClientSocketHandlers.html">ClientSocketHandlers</a></li><li><a href="module-CryptoModule.html">CryptoModule</a></li><li><a href="module-DatabaseManager.html">DatabaseManager</a></li><li><a href="module-ElectronMain.html">ElectronMain</a></li><li><a href="module-ElectronPreload.html">ElectronPreload</a></li><li><a href="module-Server.html">Server</a></li><li><a href="module-SocketServer.html">SocketServer</a></li><li><a href="module-UIManager.html">UIManager</a></li><li><a href="module-VaultDB.html">VaultDB</a></li></ul><h3>Namespaces</h3><ul><li><a href="module-AppConfig-APP_CONFIG.html">APP_CONFIG</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 21:35:39 GMT+0300 (Türkiye Standart Saati)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

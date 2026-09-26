@@ -1,4 +1,32 @@
-/**
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: public/socket-handlers.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: public/socket-handlers.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
  * @file socket-handlers.js
  * @module ClientSocketHandlers
  * @description İstemci tarafı Socket.IO olay dinleyicileri modülü.
@@ -22,8 +50,8 @@ function bindSocketEvents() {
         const exists = myContacts.find(c => c.id === data.userId);
         if (exists) {
             updateContactStatusUI(data.userId, data.status === 'online');
-            if (data.status === 'online' && !derivedSecrets[data.userId]) {
-                ensureSharedSecret(data.userId).then(success => { if(success && activeTarget && activeTarget.id === data.userId) enableChatUI(); });
+            if (data.status === 'online' &amp;&amp; !derivedSecrets[data.userId]) {
+                ensureSharedSecret(data.userId).then(success => { if(success &amp;&amp; activeTarget &amp;&amp; activeTarget.id === data.userId) enableChatUI(); });
             }
         }
     });
@@ -37,7 +65,7 @@ function bindSocketEvents() {
      * @param {Object} data - Yazma bildirimi ({ senderId: string }).
      */
     socket.on('user_typing', (data) => {
-        if (typingDiv && activeTarget && activeTarget.id === data.senderId) {
+        if (typingDiv &amp;&amp; activeTarget &amp;&amp; activeTarget.id === data.senderId) {
             const senderName = activeTarget.username ? `${activeTarget.username}` : data.senderId;
             // [GÜVENLİK FIX] innerHTML yerine güvenli DOM API — XSS engellenir
             typingDiv.textContent = '';
@@ -45,7 +73,7 @@ function bindSocketEvents() {
             typingDiv.appendChild(textNode);
             const dotsSpan = document.createElement('span');
             dotsSpan.className = 'typing-dots';
-            for (let i = 0; i < 3; i++) {
+            for (let i = 0; i &lt; 3; i++) {
                 const dot = document.createElement('span');
                 dot.className = 'typing-dot';
                 dotsSpan.appendChild(dot);
@@ -60,7 +88,7 @@ function bindSocketEvents() {
      * @param {Object} data - Durdurma bildirimi ({ senderId: string }).
      */
     socket.on('user_typing_stop', (data) => {
-        if (typingDiv && activeTarget && activeTarget.id === data.senderId) {
+        if (typingDiv &amp;&amp; activeTarget &amp;&amp; activeTarget.id === data.senderId) {
             typingDiv.textContent = '';
         }
     });
@@ -81,12 +109,12 @@ function bindSocketEvents() {
             triggerDesktopNotification("Yeni kişi", `${data.senderId} bağlandı.`);
             safeEmit('check_node_status', data.senderId, (res) => { updateContactStatusUI(res.userId, res.isOnline); });
             safeEmit('get_profiles', [data.senderId], (res) => {
-                if(res && res.profiles && res.profiles[data.senderId]) { 
+                if(res &amp;&amp; res.profiles &amp;&amp; res.profiles[data.senderId]) { 
                     if (res.profiles[data.senderId].avatar) contact.avatar = res.profiles[data.senderId].avatar;
                     if (res.profiles[data.senderId].username) contact.username = res.profiles[data.senderId].username;
                     saveContactsToVault(); 
                     renderContactsSidebarDebounced(); 
-                    if (activeTarget && activeTarget.id === data.senderId) updateChatHeaderUI();
+                    if (activeTarget &amp;&amp; activeTarget.id === data.senderId) updateChatHeaderUI();
                 }
             });
         }
@@ -121,7 +149,7 @@ function bindSocketEvents() {
                 renderContactsSidebarDebounced();
             }
             
-            if (activeTarget && activeTarget.id === data.senderId) { 
+            if (activeTarget &amp;&amp; activeTarget.id === data.senderId) { 
                 enableChatUI(); showToast(`${data.senderId} ile şifreli bağlantı kuruldu!`, 'success'); 
             }
         } catch(e) {}
@@ -143,12 +171,12 @@ function bindSocketEvents() {
             triggerDesktopNotification("YENİ VERİ", `${packet.senderId}`);
             safeEmit('check_node_status', packet.senderId, (res) => { updateContactStatusUI(res.userId, res.isOnline); });
             safeEmit('get_profiles', [packet.senderId], (res) => {
-                if (res && res.profiles && res.profiles[packet.senderId]) {
+                if (res &amp;&amp; res.profiles &amp;&amp; res.profiles[packet.senderId]) {
                     if (res.profiles[packet.senderId].avatar) senderContact.avatar = res.profiles[packet.senderId].avatar;
                     if (res.profiles[packet.senderId].username) senderContact.username = res.profiles[packet.senderId].username;
                     saveContactsToVault();
                     renderContactsSidebarDebounced();
-                    if (activeTarget && activeTarget.id === packet.senderId) updateChatHeaderUI();
+                    if (activeTarget &amp;&amp; activeTarget.id === packet.senderId) updateChatHeaderUI();
                 }
             });
         }
@@ -156,11 +184,11 @@ function bindSocketEvents() {
         senderContact = myContacts.find(c => c.id === packet.senderId);
         await savePacketToVault(packet.senderId, packet);
         
-        if (activeTarget && activeTarget.id === packet.senderId) {
+        if (activeTarget &amp;&amp; activeTarget.id === packet.senderId) {
             playSound('transit'); await processIncomingPacket(packet, senderContact);
         } else {
             playSound('success'); unreadCounts[packet.senderId] = (unreadCounts[packet.senderId] || 0) + 1;
-            const notifSender = senderContact && senderContact.username ? `${senderContact.username} (${packet.senderId})` : packet.senderId;
+            const notifSender = senderContact &amp;&amp; senderContact.username ? `${senderContact.username} (${packet.senderId})` : packet.senderId;
             renderContactsSidebar(); showToast(`${notifSender} yeni mesaj gönderdi.`, 'info');
         }
     });
@@ -199,3 +227,26 @@ function bindSocketEvents() {
         showContactRequestResponse(data);
     });
 }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-AppConfig.html">AppConfig</a></li><li><a href="module-ClientSocketHandlers.html">ClientSocketHandlers</a></li><li><a href="module-CryptoModule.html">CryptoModule</a></li><li><a href="module-DatabaseManager.html">DatabaseManager</a></li><li><a href="module-ElectronMain.html">ElectronMain</a></li><li><a href="module-ElectronPreload.html">ElectronPreload</a></li><li><a href="module-Server.html">Server</a></li><li><a href="module-SocketServer.html">SocketServer</a></li><li><a href="module-UIManager.html">UIManager</a></li><li><a href="module-VaultDB.html">VaultDB</a></li></ul><h3>Namespaces</h3><ul><li><a href="module-AppConfig-APP_CONFIG.html">APP_CONFIG</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 21:35:39 GMT+0300 (Türkiye Standart Saati)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

@@ -1,4 +1,32 @@
-/**
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: src/database.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: src/database.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
  * @file database.js
  * @module DatabaseManager
  * @description Veritabanı ve kalıcılık katmanı.
@@ -14,7 +42,7 @@ const path = require('path');
 // TURSO_DATABASE_URL ve TURSO_AUTH_TOKEN tanımlıysa Turso kullanılır
 const TURSO_URL = process.env.TURSO_DATABASE_URL;
 const TURSO_TOKEN = process.env.TURSO_AUTH_TOKEN;
-const USE_TURSO = !!(TURSO_URL && TURSO_TOKEN);
+const USE_TURSO = !!(TURSO_URL &amp;&amp; TURSO_TOKEN);
 
 // Yerel SQLite yapılandırması (sadece Turso yokken yüklenir)
 let sqlite3 = null;
@@ -64,8 +92,8 @@ const MAX_PACKET_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 Gün
 
 /**
  * @typedef {Object} DatabaseState
- * @property {Object.<string, UserRecord>} users - E-posta adresine göre indekslenmiş kullanıcı kayıtları.
- * @property {Object.<string, QueuedPacket[]>} queue - Hedef userId'ye göre indekslenmiş bekleyen paket dizileri.
+ * @property {Object.&lt;string, UserRecord>} users - E-posta adresine göre indekslenmiş kullanıcı kayıtları.
+ * @property {Object.&lt;string, QueuedPacket[]>} queue - Hedef userId'ye göre indekslenmiş bekleyen paket dizileri.
  */
 
 /**
@@ -76,7 +104,7 @@ const db = { users: {}, queue: {} };
 
 /**
  * userId -> email eşleme indeksi. O(1) hızında kullanıcı tespiti sağlar.
- * @type {Object.<string, string>}
+ * @type {Object.&lt;string, string>}
  */
 const userIdIndex = {};
 
@@ -95,7 +123,7 @@ function getDB() { return db; }
 /**
  * userId -> email eşleme indeksini döner.
  * @function getUserIdIndex
- * @returns {Object.<string, string>} userId'leri email'e eşleyen sözlük nesnesi.
+ * @returns {Object.&lt;string, string>} userId'leri email'e eşleyen sözlük nesnesi.
  */
 function getUserIdIndex() { return userIdIndex; }
 
@@ -106,8 +134,8 @@ function getUserIdIndex() { return userIdIndex; }
  * @async
  * @function tursoRun
  * @param {string} sql - Çalıştırılacak SQL ifadesi.
- * @param {Array<*>} [params=[]] - SQL parametreleri.
- * @returns {Promise<Object>} Turso execution result nesnesi.
+ * @param {Array&lt;*>} [params=[]] - SQL parametreleri.
+ * @returns {Promise&lt;Object>} Turso execution result nesnesi.
  */
 async function tursoRun(sql, params = []) {
     return await tursoClient.execute({ sql, args: params });
@@ -118,8 +146,8 @@ async function tursoRun(sql, params = []) {
  * @async
  * @function tursoGet
  * @param {string} sql - Çalıştırılacak SELECT sorgusu.
- * @param {Array<*>} [params=[]] - SQL parametreleri.
- * @returns {Promise<Object|undefined>} İlk eşleşen satır nesnesi veya sonuç yoksa undefined.
+ * @param {Array&lt;*>} [params=[]] - SQL parametreleri.
+ * @returns {Promise&lt;Object|undefined>} İlk eşleşen satır nesnesi veya sonuç yoksa undefined.
  */
 async function tursoGet(sql, params = []) {
     const result = await tursoClient.execute({ sql, args: params });
@@ -134,8 +162,8 @@ async function tursoGet(sql, params = []) {
  * @async
  * @function tursoAll
  * @param {string} sql - Çalıştırılacak SELECT sorgusu.
- * @param {Array<*>} [params=[]] - SQL parametreleri.
- * @returns {Promise<Array<Object>>} Eşleşen tüm satırların nesne dizisi.
+ * @param {Array&lt;*>} [params=[]] - SQL parametreleri.
+ * @returns {Promise&lt;Array&lt;Object>>} Eşleşen tüm satırların nesne dizisi.
  */
 async function tursoAll(sql, params = []) {
     const result = await tursoClient.execute({ sql, args: params });
@@ -152,8 +180,8 @@ async function tursoAll(sql, params = []) {
  * Yerel SQLite veritabanında komut çalıştırır (INSERT, UPDATE, DELETE).
  * @function sqliteRun
  * @param {string} sql - Çalıştırılacak SQL ifadesi.
- * @param {Array<*>} [params=[]] - SQL parametreleri.
- * @returns {Promise<Object>} İşlem sonucunu (lastID, changes) içeren nesne.
+ * @param {Array&lt;*>} [params=[]] - SQL parametreleri.
+ * @returns {Promise&lt;Object>} İşlem sonucunu (lastID, changes) içeren nesne.
  */
 function sqliteRun(sql, params = []) {
     return new Promise((resolve, reject) => {
@@ -169,8 +197,8 @@ function sqliteRun(sql, params = []) {
  * Yerel SQLite veritabanından tek bir satır getirir.
  * @function sqliteGet
  * @param {string} sql - Çalıştırılacak SELECT sorgusu.
- * @param {Array<*>} [params=[]] - SQL parametreleri.
- * @returns {Promise<Object|undefined>} Eşleşen satır veya undefined.
+ * @param {Array&lt;*>} [params=[]] - SQL parametreleri.
+ * @returns {Promise&lt;Object|undefined>} Eşleşen satır veya undefined.
  */
 function sqliteGet(sql, params = []) {
     return new Promise((resolve, reject) => {
@@ -186,8 +214,8 @@ function sqliteGet(sql, params = []) {
  * Yerel SQLite veritabanından tüm satırları getirir.
  * @function sqliteAll
  * @param {string} sql - Çalıştırılacak SELECT sorgusu.
- * @param {Array<*>} [params=[]] - SQL parametreleri.
- * @returns {Promise<Array<Object>>} Eşleşen satırlar dizisi.
+ * @param {Array&lt;*>} [params=[]] - SQL parametreleri.
+ * @returns {Promise&lt;Array&lt;Object>>} Eşleşen satırlar dizisi.
  */
 function sqliteAll(sql, params = []) {
     return new Promise((resolve, reject) => {
@@ -206,8 +234,8 @@ function sqliteAll(sql, params = []) {
  * @async
  * @function queryRun
  * @param {string} sql - Çalıştırılacak SQL ifadesi.
- * @param {Array<*>} [params=[]] - Sorgu parametreleri.
- * @returns {Promise<Object>} Sorgu sonucu.
+ * @param {Array&lt;*>} [params=[]] - Sorgu parametreleri.
+ * @returns {Promise&lt;Object>} Sorgu sonucu.
  */
 async function queryRun(sql, params = []) {
     return (USE_TURSO || tursoClient) ? tursoRun(sql, params) : sqliteRun(sql, params);
@@ -218,8 +246,8 @@ async function queryRun(sql, params = []) {
  * @async
  * @function queryGet
  * @param {string} sql - Çalıştırılacak SELECT sorgusu.
- * @param {Array<*>} [params=[]] - Sorgu parametreleri.
- * @returns {Promise<Object|undefined>} Eşleşen kayıt nesnesi.
+ * @param {Array&lt;*>} [params=[]] - Sorgu parametreleri.
+ * @returns {Promise&lt;Object|undefined>} Eşleşen kayıt nesnesi.
  */
 async function queryGet(sql, params = []) {
     return (USE_TURSO || tursoClient) ? tursoGet(sql, params) : sqliteGet(sql, params);
@@ -230,8 +258,8 @@ async function queryGet(sql, params = []) {
  * @async
  * @function queryAll
  * @param {string} sql - Çalıştırılacak SELECT sorgusu.
- * @param {Array<*>} [params=[]] - Sorgu parametreleri.
- * @returns {Promise<Array<Object>>} Eşleşen kayıtlar listesi.
+ * @param {Array&lt;*>} [params=[]] - Sorgu parametreleri.
+ * @returns {Promise&lt;Array&lt;Object>>} Eşleşen kayıtlar listesi.
  */
 async function queryAll(sql, params = []) {
     return (USE_TURSO || tursoClient) ? tursoAll(sql, params) : sqliteAll(sql, params);
@@ -243,14 +271,14 @@ async function queryAll(sql, params = []) {
  * Veritabanındaki tüm kullanıcıları tarayarak bellekteki userIdIndex haritasını günceller.
  * @async
  * @function rebuildUserIdIndex
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function rebuildUserIdIndex() {
     try {
         const rows = await queryAll(`SELECT userId, email FROM users`);
         Object.keys(userIdIndex).forEach(k => delete userIdIndex[k]);
         for (const row of rows) {
-            if (row.userId && row.email) userIdIndex[row.userId] = row.email;
+            if (row.userId &amp;&amp; row.email) userIdIndex[row.userId] = row.email;
         }
     } catch (e) {
         console.error('[!] rebuildUserIdIndex hatası:', e);
@@ -263,7 +291,7 @@ async function rebuildUserIdIndex() {
  * Bellekteki kullanıcı ve mesaj kuyruğu durumunu toplu (batch) olarak Turso'ya senkronize eder.
  * @async
  * @function syncMemoryToTurso
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function syncMemoryToTurso() {
     const statements = [];
@@ -322,7 +350,7 @@ async function syncMemoryToTurso() {
  * @async
  * @function syncMemoryToSqlite
  * @throws {Error} SQLite yazma işlemi başarısız olduğunda işlem geri alınır (ROLLBACK) ve hata fırlatılır.
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function syncMemoryToSqlite() {
     await sqliteRun('BEGIN TRANSACTION');
@@ -380,7 +408,7 @@ async function syncMemoryToSqlite() {
  * Yapılandırmaya göre belleği Turso veya yerel SQLite ile senkronize eder.
  * @async
  * @function syncMemoryToSql
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function syncMemoryToSql() {
     if (USE_TURSO || tursoClient) {
@@ -396,7 +424,7 @@ async function syncMemoryToSql() {
  * Veritabanını 50ms gecikmeli (debounce) ve sıralı kilit (writeLock) ile diske kaydeder.
  * Birden çok eşzamanlı istek tek bir disk yazma işleminde birleştirilir.
  * @function saveDatabase
- * @returns {Promise<null|Error>} Yazma tamamlandığında resolve olur (varsa hatayla birlikte).
+ * @returns {Promise&lt;null|Error>} Yazma tamamlandığında resolve olur (varsa hatayla birlikte).
  */
 function saveDatabase() {
     return new Promise((resolve) => {
@@ -427,7 +455,7 @@ function saveDatabase() {
  * @async
  * @function saveDatabaseImmediate
  * @throws {Error} Yazma sırasında hata oluşursa fırlatır.
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function saveDatabaseImmediate() {
     if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
@@ -453,7 +481,7 @@ async function saveDatabaseImmediate() {
  * Turso bulut istemcisini bağlar, tabloları ve indeksleri hazırlar, verileri belleğe yükler.
  * @async
  * @function initTurso
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function initTurso() {
     console.log('[+] TURSO BULUT VERİTABANI BAĞLANIYOR...');
@@ -521,7 +549,7 @@ async function initTurso() {
  * ve verileri belleğe yükler.
  * @async
  * @function initSqlite
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function initSqlite() {
     await new Promise((resolve, reject) => {
@@ -549,10 +577,10 @@ async function initSqlite() {
     // Eski JSON'dan Migration (tek seferlik)
     const row = await sqliteGet(`SELECT COUNT(*) AS count FROM users`);
     const userCount = row ? row.count : 0;
-    if (userCount === 0 && fs.existsSync(legacyJsonPath)) {
+    if (userCount === 0 &amp;&amp; fs.existsSync(legacyJsonPath)) {
         try {
             const fileContent = fs.readFileSync(legacyJsonPath, 'utf8');
-            if (fileContent && fileContent.trim() !== '') {
+            if (fileContent &amp;&amp; fileContent.trim() !== '') {
                 const parsed = JSON.parse(fileContent);
                 await sqliteRun('BEGIN TRANSACTION');
                 for (const email in (parsed.users || {})) {
@@ -601,7 +629,7 @@ async function initSqlite() {
  * Ortam değişkenlerine göre Turso veya yerel SQLite veritabanını başlatır.
  * @async
  * @function initDB
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function initDB() {
     if (USE_TURSO || tursoClient) {
@@ -623,7 +651,7 @@ function startGarbageCollector() {
     setInterval(async () => {
         try {
             const expireTime = Date.now() - MAX_PACKET_AGE_MS;
-            await queryRun(`DELETE FROM queue WHERE timestamp < ?`, [expireTime]);
+            await queryRun(`DELETE FROM queue WHERE timestamp &lt; ?`, [expireTime]);
             console.log(`[PERİYODİK TEMİZLİK] Eski paketler temizlendi.`);
             const queueRows = await queryAll(`SELECT * FROM queue`);
             for (const key in db.queue) delete db.queue[key];
@@ -668,4 +696,26 @@ module.exports = {
         legacyJsonPath,
         backupJsonPath
     }
-};
+};</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-AppConfig.html">AppConfig</a></li><li><a href="module-ClientSocketHandlers.html">ClientSocketHandlers</a></li><li><a href="module-CryptoModule.html">CryptoModule</a></li><li><a href="module-DatabaseManager.html">DatabaseManager</a></li><li><a href="module-ElectronMain.html">ElectronMain</a></li><li><a href="module-ElectronPreload.html">ElectronPreload</a></li><li><a href="module-Server.html">Server</a></li><li><a href="module-SocketServer.html">SocketServer</a></li><li><a href="module-UIManager.html">UIManager</a></li><li><a href="module-VaultDB.html">VaultDB</a></li></ul><h3>Namespaces</h3><ul><li><a href="module-AppConfig-APP_CONFIG.html">APP_CONFIG</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 21:35:39 GMT+0300 (Türkiye Standart Saati)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

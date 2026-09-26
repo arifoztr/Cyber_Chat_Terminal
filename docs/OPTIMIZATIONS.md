@@ -1,117 +1,91 @@
 # OPTİMİZASYON VE GÜVENLİK KILAVUZU (OPTIMIZATIONS)
 
-**Sürüm:** v10 (Cyber-HUD Edition)
-**Son Güncelleme:** 2026-06-28
+**Sürüm:** v10 (Cyber-HUD Edition — Production Ready)  
+**Son Güncelleme:** 2026-09-26  
 
 ---
 
-## 📌 Uyulması Zorunlu Kısıtlamalar
+## 📌 Temel Güvenlik İlkeleri (Sıfır-Güven / Zero-Knowledge)
 
-### 1. Sıfır-Bilgi Backend (Zero-Knowledge)
-Node.js sunucusu (`server.js`, `socket.js`) yalnızca signaling ve relay görevi görür.
-Backend mantığında `textPayload` veya `filePayload` içeriğini **asla** çözmeyin, parse etmeyin, inceleyin veya loglayın.
+### 1. Sıfır-Bilgi Backend (Zero-Knowledge Signaling)
+Backend sunucusu (`src/server.js`, `src/socket.js`) yalnızca signaling ve relay görevi görür.
+- Sunucu mantığında `textPayload` veya `filePayload` içerikleri **asla** çözülmez, parse edilmez, incelenmez veya loglanmaz.
+- Şifreli paketler sunucu belleğinde veya veritabanında yalnızca alıcı çevrimiçi olana kadar tutulur ve teslim edildikten/süresi dolduktan sonra silinir.
 
-### 2. İstemci Tarafı Depolama Katılığı
-Sohbet geçmişi (`cyber_history_`), kişi listesi (`cyber_contacts_`) ve türetilmiş ECDH sırları **yalnızca** tarayıcının IndexedDB / localStorage'ında saklanır. Bu verileri **asla** sunucuya iletmeyin.
+### 2. İstemci Tarafı Depolama İzolasyonu
+- Sohbet geçmişi, kişi listesi ve türetilmiş simetrik oturum anahtarları (ECDH shared secrets) **yalnızca** tarayıcının IndexedDB kasasında (`cyber_vault_db`) saklanır.
+- Kriptografik anahtarlar veya şifresi çözülmüş metinler **asla** sunucuya iletilmez.
 
-### 3. Yerel Web Crypto Kullanımı
-Tüm istemci tarafı şifreleme/şifre çözme işlemleri `window.crypto.subtle` API'si ile yapılmalıdır. Harici kriptografi paketleri (crypto-js vb.) **yasaktır**.
-
-### 4. Vanilla Frontend Ekosistemi
-İstemci (`siber_e2ee_sohbet_terminali.html`) Vanilla JavaScript ve Tailwind CSS (CDN) kullanır. React, Vue, Svelte veya herhangi bir framework/bundler **yasaktır**.
-
----
-
-## 🔒 Güvenlik Yapılandırması (FAZ 1 — Tamamlandı)
-
-### JWT Güvenliği
-- JWT, bağımlılıksız HMAC-SHA256 ile imzalanır.
-- `JWT_SECRET` ortam değişkeni `.env` dosyasından okunur.
-- **Üretim ortamında** `.env` yoksa rastgele 32-byte geçici anahtar üretilir (sunucu restart oturumları geçersiz kılar).
-- **Geliştirme ortamında** sabit geliştirme anahtarı kullanılır.
-- JWT süresi: 24 saat.
-
-### Rate Limiting (Hız Sınırlandırma)
-| İşlem | Limit | Pencere |
-|-------|-------|---------|
-| Kayıt (`register`) | 3 | 60 saniye |
-| Giriş (`login`) | 5 | 60 saniye |
-| Mesaj gönderimi (`send_packet`) | 60 | 60 saniye |
-| ECDH teklifi/yanıtı | 10 | 60 saniye |
-| Anahtar istekleri (`get_pubkey`) | 60 | 60 saniye |
-| Kullanıcı arama (`search`) | 30 | 60 saniye |
-| Profil güncelleme (`update_avatar`) | 10 | 60 saniye |
-| Hesap silme (`delete_account`) | 3 | 60 saniye |
-
-### Express Güvenlik Başlıkları
-- `Strict-Transport-Security`: HSTS aktif (1 yıl, alt domainler dahil)
-- `X-Content-Type-Options`: nosniff
-- `X-Frame-Options`: DENY
-- `X-XSS-Protection`: 1; mode=block
-
-### CORS ve Proxy Yapılandırması
-- CORS origin `CORS_ORIGIN` ortam değişkeniyle ayarlanabilir (varsayılan: `*`).
-- `trust proxy` aktif — `x-forwarded-for` header'ı üzerinden gerçek istemci IP'si alınır.
-- `allowEIO3` (eski Socket.IO protokolü) kaldırıldı.
-
-### Statik Dosya Güvenliği
-- Yalnızca `./public/` dizini HTTP üzerinden sunulur.
-- `database.json`, `database.sqlite`, `server.js`, `socket.js`, `package.json` gibi hassas dosyalara HTTP erişimi engellenmiştir.
+### 3. Standart Web Crypto API
+- Tüm şifreleme ve anahtar türetme işlemleri W3C standartlarında `window.crypto.subtle` API'si üzerinden AES-256-GCM, ECDH (P-256) ve PBKDF2 ile gerçekleştirilir.
 
 ---
 
-## 🗄️ Veritabanı Mimarisi (FAZ 2 — Tamamlandı)
+## 🔒 Güvenlik Sertleştirmeleri (Security Hardening)
 
-### SQLite Geçişi
-- `database.json` → SQLite (WAL modu) geçişi tamamlandı.
-- Otomatik migration: İlk çalıştırmada `database.json` verilerini SQLite'a aktarır ve eski dosyayı `.backup` olarak yedekler.
-- Bellek-içi cache (`db.users`, `db.queue`) ile hızlı okuma, transaction bazlı yazma ile veri bütünlüğü.
+### 1. CSWSH (Cross-Site WebSocket Hijacking) Savunması
+- `src/server.js` içerisindeki `isOriginAllowed` fonksiyonu, Socket.IO el sıkışması sırasında gelen `Origin` başlığını doğrular.
+- Tarayıcı harici yetkisiz kaynaklardan veya sahte sitelerden gelen WebSocket bağlantı istekleri sunucu düzeyinde anında reddedilir.
 
-### Debounced Yazma Mekanizması
-- `saveDatabase()`: 50ms debounce ile birleştirilmiş yazma (normal işlemler).
-- `saveDatabaseImmediate()`: Anında diske yazma (hesap silme, sunucu kapanışı).
-- Write lock ile eşzamanlı yazma çakışması önlenir.
+### 2. Sıkı HTTP Güvenlik Başlıkları & CSP
+- `Content-Security-Policy`: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ...`
+- `Strict-Transport-Security` (HSTS): 1 yıl zorunlu HTTPS (alt alan adları dahil).
+- `X-Content-Type-Options`: `nosniff`.
+- `X-Frame-Options`: `DENY` (Clickjacking saldırılarına karşı tam koruma).
+- `X-XSS-Protection`: `1; mode=block`.
 
-### Çöp Toplayıcı (Garbage Collector)
-- Her saat başı çalışır.
-- `MAX_PACKET_AGE_MS = 7 gün` süresi dolan çevrimdışı paketleri siler.
-- Hem SQLite hem bellek-içi durumu senkronize eder.
+### 3. Inline Olay Dinleyicilerinin Temizlenmesi (`SEC-13`)
+- CSP kurallarına tam uyum sağlamak için HTML içerisindeki tüm `onclick`, `onsubmit` gibi inline nitelikler kaldırılmış; [public/ui.js](file:///c:/Users/Arifo/OneDrive/Masa%C3%BCst%C3%BC/cyber/public/ui.js) içerisinde `initAppEvents()` ve `initAuthEvents()` fonksiyonları aracılığıyla güvenli `addEventListener` yapısına geçirilmiştir.
+
+### 4. Güvenli DOM API'si ve Dosya XSS Koruması
+- Mesaj akışında gelen dosya adları ve bağlantılar asla `innerHTML` ile yazdırılmaz.
+- `renderMessageTextWithLinks` fonksiyonu ve PDF/resim kartları `document.createElement` ve `textContent` ile oluşturulur; böylece dosya adı enjeksiyonu kaynaklı XSS açıkları engellenmiştir.
+
+### 5. Kesin TTL Zaman Aşımı ve Sekme Dönüş Kontrolü (`SEC-18`)
+- Kendi kendini imha eden (TTL) mesajlar hem `setTimeout` hem de `setInterval` ile garantiye alınmıştır.
+- Tarayıcı sekmesi arka plana atıldığında timer gecikmelerinden dolayı süresi dolan mesajların ekranda kalmaması için `document.addEventListener('visibilitychange')` dinleyicisi eklenmiş; sekme tekrar aktif olduğunda süresi biten tüm mesajlar DOM ve IndexedDB'den anında silinmektedir.
+
+### 6. BOLA / IDOR Savunması (`revoke_packet`)
+- Mesaj iptal etme / geri çekme işleminde istemciden gelen `senderId` parametresi sunucu tarafında dikkate alınmaz. Sunucu, işlemi gerçekleştiren soketin doğrulanmış oturum kimliğini (`socket.user.userId`) zorunlu kılar. Böylece kullanıcıların başkasının mesajını silmesi engellenir.
+
+### 7. Güvenilir IP Tespiti ve Spoofing Savunması
+- `getClientIp` fonksiyonu, ters vekiller (Cloudflare, yerel proxy) haricinde sahte `x-forwarded-for` başlıklarını yok sayar ve doğrudan soket soket adresi (`socket.handshake.address`) üzerinden güvenilir IP doğrulaması yapar.
 
 ---
 
-## 🔗 Bağlantı Yönetimi ve Yeniden Bağlanma
+## ⚡ İstek Sınırlandırma (Rate Limiting)
 
-### İstemci Otomatik Yeniden Bağlanma
-- Bağlantı koptuğunda (sunucu restart, ağ hatası) istemci otomatik olarak yeniden bağlanmayı dener.
-- Maksimum 20 deneme, 2 saniye aralıklarla.
-- Yeniden bağlanma sırasında modern siber temalı overlay gösterilir, kullanıcı oturumu korunur.
-- Başarılı yeniden bağlanmada JWT ile oturum doğrulanır, ECDH anahtarları tekrar yayınlanır.
+DDoS ve brute-force saldırılarına karşı IP bazlı dinamik hız sınırları:
 
-### Çevrimiçi Durum Takibi
-- `onlineNodes` Map'i bellekte tutulur. Sunucu restart durumunda kullanıcılar tekrar giriş yapana kadar çevrimdışı görünür.
-- Her kullanıcının birden fazla socket bağlantısı desteklenir (çoklu sekme/cihaz).
+| İşlem (Action) | İzin Verilen Limit | Zaman Penceresi |
+|----------------|-------------------|-----------------|
+| `register` | 3 istek | 60 saniye |
+| `login` | 5 istek | 60 saniye |
+| `send_secure_packet` | 60 paket | 60 saniye |
+| `ecdh_offer` / `ecdh_answer` | 10 istek | 60 saniye |
+| `get_public_key` | 60 istek | 60 saniye |
+| `search_users` | 30 istek | 60 saniye |
+| `update_avatar` | 10 istek | 60 saniye |
+| `change_password` | 5 istek | 60 saniye |
+| `delete_account` | 3 istek | 60 saniye |
+| `revoke_packet` | 30 istek | 60 saniye |
 
 ---
 
-## 📐 Repo Kuralları ve Bilinen Kırılganlıklar
+## 🗄️ Veritabanı ve Çevrimdışı Kuyruk Mimarisi
 
-### Agent ID Formatı
-Sistem tarafından üretilen kullanıcı ID'leri `AGN-XXXX-XXXX` formatını takip eder.
+- **Hibrit Motor:** SQLite3 (WAL modu) veya Cloud Turso (`@libsql/client`).
+- **Debounced / Eşzamanlı Kilit:** Veritabanı yazma operasyonları bellek içi önbellek (`cache`) ve `withLock` asenkron eşzamanlama kilidiyle koordine edilir.
+- **Otomatik Çöp Toplayıcı (Garbage Collector):** Her saat başı çalışarak süresi dolmuş veya 7 günden eski teslim edilmemiş çevrimdışı paketleri temizler.
 
-### Çift Dil Kuralı
-- Kod mimarisi (değişkenler, fonksiyonlar, API olayları): **İngilizce**
-- Kullanıcı arayüzü metinleri: **Türkçe**
-- UI eklemeleri mevcut modern cyber-dark estetiğine uymalıdır (temiz koyu yüzeyler, CSS değişkenleri, duyarlı kart yapısı, net tipografi).
-- Ses efektleri ve ağ izleyici (sniffer) arayüzden çıkarılmıştır; yeni UI bileşenlerinde gereksiz ses tetiklemeleri ve sniffer bağımlılıkları eklenmemelidir.
+---
 
-### Revoke Protokolü Kırılganlığı
-- `revoke_packet` olayı `packetId`, `senderId` ve `targetId` alanlarının tam eşleşmesine bağlıdır.
-- Paket şeması değiştirilirse bu üç alan korunmalıdır.
-- DOM'da `msg-{packetId}` ID'siyle element aranır.
+## 🖥️ Masaüstü Güvenliği (Electron Isolation)
 
-### Global State vs. UI Senkronizasyonu
-- Frontend global state değişkenleri (`myContacts`, `activeTarget`, `derivedSecrets`, `unreadCounts`) DOM'a otomatik yansımaz.
-- State değişikliği sonrası ilgili render fonksiyonları (`renderContactsSidebar()`, `enableChatUI()` vb.) manuel çağrılmalıdır.
+- `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true`.
+- Renderer süreci Node.js API'lerine doğrudan erişemez; yalnızca `preload.js` üzerinden sınırlandırılmış güvenli kanallara erişebilir.
+- Dış bağlantılar `shell.openExternal` ile sistem varsayılan tarayıcısında açılır; pencere içi yetkisiz yönlendirmeler engellenir.
 
-### Çevrimdışı Kuyruk Overwrite Riski
-- `db.queue[targetId]` dizisine ekleme yapmadan önce her zaman `if (!db.queue[targetId]) db.queue[targetId] = [];` kontrolü yapın.
+---
+
+**Son Güncelleme:** 2026-09-26

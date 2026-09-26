@@ -1,4 +1,32 @@
-/**
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: public/ui.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: public/ui.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
  * @file ui.js
  * @module UIManager
  * @description Kullanıcı Arayüzü, State Yönetimi ve DOM İşlemleri Modülü.
@@ -61,13 +89,13 @@ let activeTarget = null;
 
 /**
  * Kullanıcının kişi listesi.
- * @type {Array<Object>}
+ * @type {Array&lt;Object>}
  */
 let myContacts = []; 
 
 /**
  * Kişilere göre okunmamış mesaj sayaçları (userId -> count).
- * @type {Object.<string, number>}
+ * @type {Object.&lt;string, number>}
  */
 let unreadCounts = {}; 
 
@@ -119,7 +147,7 @@ function safeEmit(event, data, callback) {
  * @returns {void}
  */
 function triggerDesktopNotification(title, body) {
-    if (window.siberBridge && typeof window.siberBridge.showNotification === 'function') {
+    if (window.siberBridge &amp;&amp; typeof window.siberBridge.showNotification === 'function') {
         window.siberBridge.showNotification(title, body);
     }
 }
@@ -195,10 +223,10 @@ function fadeOutAndRemoveElement(element, onComplete) {
  * @returns {void}
  */
 function renderLogPlaceholder(logBox, icon, message, spinner = true) {
-    logBox.innerHTML = `<div class="chat-placeholder flex flex-col items-center justify-center h-full opacity-50 mt-4 sm:mt-10">
-        ${spinner ? '<div class="w-10 h-10 sm:w-16 sm:h-16 border-2 sm:border-4 border-dashed border-green-500/50 animate-[spin_4s_linear_infinite] rounded-full mb-2 sm:mb-4"></div>' : `<span class="text-2xl sm:text-4xl mb-1 sm:mb-2">${icon}</span>`}
-        <div class="text-green-500 text-[9px] sm:text-xs font-mono tracking-normal uppercase text-center">${message}</div>
-    </div>`;
+    logBox.innerHTML = `&lt;div class="chat-placeholder flex flex-col items-center justify-center h-full opacity-50 mt-4 sm:mt-10">
+        ${spinner ? '&lt;div class="w-10 h-10 sm:w-16 sm:h-16 border-2 sm:border-4 border-dashed border-green-500/50 animate-[spin_4s_linear_infinite] rounded-full mb-2 sm:mb-4">&lt;/div>' : `&lt;span class="text-2xl sm:text-4xl mb-1 sm:mb-2">${icon}&lt;/span>`}
+        &lt;div class="text-green-500 text-[9px] sm:text-xs font-mono tracking-normal uppercase text-center">${message}&lt;/div>
+    &lt;/div>`;
 }
 
 // === SES SİSTEMİ (DEVRE DIŞI) ===
@@ -355,7 +383,7 @@ function switchAuthTab(tab) {
         if (authSwitchLink) authSwitchLink.innerText = "Kayıt Olun";
 
         const emailInput = document.getElementById('authEmail');
-        if (emailInput && document.activeElement !== emailInput) emailInput.focus();
+        if (emailInput &amp;&amp; document.activeElement !== emailInput) emailInput.focus();
     } else {
         if (regContainer) regContainer.classList.remove('hidden');
         if (regConfirmContainer) regConfirmContainer.classList.remove('hidden');
@@ -419,7 +447,7 @@ function handleAuthSubmit() {
             return;
         }
 
-        if (passwordConfirm && password !== passwordConfirm) {
+        if (passwordConfirm &amp;&amp; password !== passwordConfirm) {
             playSound('error');
             if (passwordConfirmInput) passwordConfirmInput.classList.add('input-error');
             setAuthAlert("Girdiğiniz şifreler birbiriyle eşleşmiyor.", 'error');
@@ -427,7 +455,7 @@ function handleAuthSubmit() {
             return;
         }
 
-        if (password.length < 4) {
+        if (password.length &lt; 4) {
             playSound('error');
             if (passwordInput) passwordInput.classList.add('input-error');
             setAuthAlert("Şifre en az 4 karakter uzunluğunda olmalıdır.", 'error');
@@ -469,7 +497,7 @@ function handleAuthSubmit() {
             setAuthAlert("Hesap oluşturuluyor...", 'info');
             socket.emit('register', { email, password, username }, (res) => {
                 restoreBtn();
-                if (res && res.success) {
+                if (res &amp;&amp; res.success) {
                     playSound('success');
                     if (res.token) {
                         localStorage.setItem('cyber_jwt', res.token);
@@ -496,7 +524,7 @@ function handleAuthSubmit() {
             setAuthAlert("Kimlik doğrulanıyor...", 'info');
             socket.emit('login', { email, password }, (res) => {
                 restoreBtn();
-                if (res && res.success) {
+                if (res &amp;&amp; res.success) {
                     if (res.token) {
                         localStorage.setItem('cyber_jwt', res.token);
                         socket.auth = { token: res.token };
@@ -514,11 +542,11 @@ function handleAuthSubmit() {
     };
 
     // Socket bağlantı kontrolü ve başlatma
-    const configuredBackend = (window.APP_CONFIG && window.APP_CONFIG.BACKEND_URL) ? window.APP_CONFIG.BACKEND_URL.trim() : '';
+    const configuredBackend = (window.APP_CONFIG &amp;&amp; window.APP_CONFIG.BACKEND_URL) ? window.APP_CONFIG.BACKEND_URL.trim() : '';
     let targetUrl = serverUrl;
-    if (configuredBackend && (!serverUrl || serverUrl === 'http://localhost:3000')) {
+    if (configuredBackend &amp;&amp; (!serverUrl || serverUrl === 'http://localhost:3000')) {
         targetUrl = configuredBackend;
-    } else if (window.location.origin && window.location.origin !== 'null' && !window.location.origin.startsWith('file://')) {
+    } else if (window.location.origin &amp;&amp; window.location.origin !== 'null' &amp;&amp; !window.location.origin.startsWith('file://')) {
         if (!serverUrl || serverUrl === 'http://localhost:3000') {
             targetUrl = window.location.origin;
         }
@@ -566,9 +594,9 @@ function autoLoginAttempt() {
     const token = localStorage.getItem('cyber_jwt');
     if (!token) return;
     
-    const configuredBackend = (window.APP_CONFIG && window.APP_CONFIG.BACKEND_URL) ? window.APP_CONFIG.BACKEND_URL.trim() : '';
+    const configuredBackend = (window.APP_CONFIG &amp;&amp; window.APP_CONFIG.BACKEND_URL) ? window.APP_CONFIG.BACKEND_URL.trim() : '';
     const input = document.getElementById('serverIp');
-    const serverUrl = (input && input.value.trim()) || configuredBackend || (window.location.origin && !window.location.origin.startsWith('file://') ? window.location.origin : 'http://localhost:3000');
+    const serverUrl = (input &amp;&amp; input.value.trim()) || configuredBackend || (window.location.origin &amp;&amp; !window.location.origin.startsWith('file://') ? window.location.origin : 'http://localhost:3000');
     
     showToast("Oturum doğrulanıyor...", 'info');
     
@@ -577,7 +605,7 @@ function autoLoginAttempt() {
 
     socket.once('connect', () => {
         socket.emit('verify_session', token, (res) => {
-            if (res && res.success) {
+            if (res &amp;&amp; res.success) {
                 currentUser = res.user;
                 finishLoginSetup();
             } else {
@@ -669,9 +697,9 @@ function setupSocketEvents(sock) {
     sock.on('connect', () => {
         // Yeniden bağlanma — oturum açıksa JWT ile oturumu doğrula
         const token = localStorage.getItem('cyber_jwt');
-        if (currentUser && token) {
+        if (currentUser &amp;&amp; token) {
             sock.emit('verify_session', token, (res) => {
-                if (res && res.success) {
+                if (res &amp;&amp; res.success) {
                     currentUser = res.user;
                     hideReconnectOverlay();
                     showToast("Bağlantı yeniden kuruldu!", 'success');
@@ -721,10 +749,10 @@ function forceReconnect() {
  */
 function updateMyAvatarUI() {
     const container = document.getElementById('myProfileAvatarContainer');
-    if (currentUser && currentUser.avatar) {
-        container.innerHTML = `<img src="${currentUser.avatar}" class="w-full h-full object-cover">`;
+    if (currentUser &amp;&amp; currentUser.avatar) {
+        container.innerHTML = `&lt;img src="${currentUser.avatar}" class="w-full h-full object-cover">`;
     } else {
-        container.innerHTML = `<span class="text-blue-300 font-black  text-[10px] sm:text-xs">OP</span>`;
+        container.innerHTML = `&lt;span class="text-blue-300 font-black  text-[10px] sm:text-xs">OP&lt;/span>`;
     }
 }
 
@@ -744,7 +772,7 @@ function finishLoginSetup() {
     if (myContacts.length > 0) {
         safeEmit('join_status_rooms', myContacts.map(c => c.id));
         safeEmit('get_profiles', myContacts.map(c => c.id), (res) => {
-            if (res && res.profiles) {
+            if (res &amp;&amp; res.profiles) {
                 myContacts.forEach(c => { 
                     if (res.profiles[c.id]) {
                         if (res.profiles[c.id].avatar) c.avatar = res.profiles[c.id].avatar;
@@ -752,7 +780,7 @@ function finishLoginSetup() {
                     }
                 });
                 saveContactsToVault(); renderContactsSidebarDebounced();
-                if (activeTarget && res.profiles[activeTarget.id]) {
+                if (activeTarget &amp;&amp; res.profiles[activeTarget.id]) {
                     if (res.profiles[activeTarget.id].username) activeTarget.username = res.profiles[activeTarget.id].username;
                     if (res.profiles[activeTarget.id].avatar) activeTarget.avatar = res.profiles[activeTarget.id].avatar;
                     updateChatHeaderUI();
@@ -855,7 +883,7 @@ function updateContactStatusUI(userId, isOnline) {
         dot.title = isOnline ? 'Çevrimiçi' : 'Çevrimdışı';
     }
     
-    if (activeTarget && activeTarget.id === userId) {
+    if (activeTarget &amp;&amp; activeTarget.id === userId) {
         const headerDot = document.getElementById('chatStatusDot');
         if (headerDot) headerDot.className = `status-dot ${isOnline ? 'status-online' : 'status-offline'} shrink-0`;
     }
@@ -914,7 +942,7 @@ function renderContactsSidebar() {
     if (_contactSearchTerm) {
         filtered = myContacts.filter(c => 
             c.id.toLowerCase().includes(_contactSearchTerm) || 
-            (c.username && c.username.toLowerCase().includes(_contactSearchTerm))
+            (c.username &amp;&amp; c.username.toLowerCase().includes(_contactSearchTerm))
         );
     }
 
@@ -923,15 +951,15 @@ function renderContactsSidebar() {
         const emptyDiv = document.createElement('div');
         emptyDiv.className = 'flex flex-col items-center justify-center py-8 px-4 text-center';
         emptyDiv.innerHTML = _contactSearchTerm
-            ? '<span class="text-2xl mb-2 opacity-50">🔍</span><div class="text-xs text-[--text-muted]">Sonuç bulunamadı.</div>'
-            : '<span class="text-3xl mb-2 opacity-50">💬</span><div class="text-xs text-[--text-secondary] font-medium">Henüz bir sohbet yok</div><div class="text-[11px] text-[--text-muted] mt-1">Yeni kişi ekleyerek güvenli sohbete başlayın.</div>';
+            ? '&lt;span class="text-2xl mb-2 opacity-50">🔍&lt;/span>&lt;div class="text-xs text-[--text-muted]">Sonuç bulunamadı.&lt;/div>'
+            : '&lt;span class="text-3xl mb-2 opacity-50">💬&lt;/span>&lt;div class="text-xs text-[--text-secondary] font-medium">Henüz bir sohbet yok&lt;/div>&lt;div class="text-[11px] text-[--text-muted] mt-1">Yeni kişi ekleyerek güvenli sohbete başlayın.&lt;/div>';
         listContainer.appendChild(emptyDiv);
         return;
     }
 
     const fragment = document.createDocumentFragment();
     filtered.forEach(contact => {
-        const isActive = activeTarget && activeTarget.id === contact.id;
+        const isActive = activeTarget &amp;&amp; activeTarget.id === contact.id;
         const unreadCount = unreadCounts[contact.id] || 0;
         const hasSecret = !!derivedSecrets[contact.id];
 
@@ -1047,7 +1075,7 @@ function removeContact(targetId, event) {
         event.preventDefault();
     }
     const contact = myContacts.find(c => c.id === targetId);
-    const displayName = contact && contact.username ? `${contact.username} (${targetId})` : targetId;
+    const displayName = contact &amp;&amp; contact.username ? `${contact.username} (${targetId})` : targetId;
     
     showCustomConfirm(`${displayName} kişisine ait tüm sohbet geçmişi ve şifreleme anahtarları silinecektir. Bu işlem geri alınamaz.`, async () => {
         // 1. myContacts listesinden kaldır ve kasaya kaydet
@@ -1074,7 +1102,7 @@ function removeContact(targetId, event) {
         }
 
         // 6. Eğer aktif sohbet buysa ekranı sıfırla
-        if (activeTarget && activeTarget.id === targetId) {
+        if (activeTarget &amp;&amp; activeTarget.id === targetId) {
             activeTarget = null;
             updateChatHeaderUI();
             const clearChatBtn = document.getElementById('clearChatBtn');
@@ -1153,12 +1181,12 @@ function disableChatUI() {
  * @async
  * @function selectTarget
  * @param {string} targetId - Hedef kişinin kullanıcı ID'si.
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function selectTarget(targetId) {
     const selected = myContacts.find(c => c.id === targetId); if (!selected) return;
     
-    if (activeTarget && isCurrentlyTyping) {
+    if (activeTarget &amp;&amp; isCurrentlyTyping) {
         clearTimeout(localTypingTimeout);
         socket.emit('stop_typing', { targetId: activeTarget.id });
         isCurrentlyTyping = false;
@@ -1172,14 +1200,14 @@ async function selectTarget(targetId) {
     // Profil eksikse veya güncel değilse arka planda sorgula
     if (!activeTarget.username || !activeTarget.avatar) {
         safeEmit('get_profiles', [activeTarget.id], (res) => {
-            if (res && res.profiles && res.profiles[activeTarget.id]) {
+            if (res &amp;&amp; res.profiles &amp;&amp; res.profiles[activeTarget.id]) {
                 const prof = res.profiles[activeTarget.id];
                 let changed = false;
-                if (prof.username && activeTarget.username !== prof.username) {
+                if (prof.username &amp;&amp; activeTarget.username !== prof.username) {
                     activeTarget.username = prof.username;
                     changed = true;
                 }
-                if (prof.avatar && activeTarget.avatar !== prof.avatar) {
+                if (prof.avatar &amp;&amp; activeTarget.avatar !== prof.avatar) {
                     activeTarget.avatar = prof.avatar;
                     changed = true;
                 }
@@ -1196,7 +1224,7 @@ async function selectTarget(targetId) {
     if (hasSecret) enableChatUI(); 
     else {
         disableChatUI(); const success = await ensureSharedSecret(selected.id);
-        if (success) { if (activeTarget && activeTarget.id === selected.id) { enableChatUI(); showToast(`Şifreli kanal kuruldu!`); } renderContactsSidebar(); } 
+        if (success) { if (activeTarget &amp;&amp; activeTarget.id === selected.id) { enableChatUI(); showToast(`Şifreli kanal kuruldu!`); } renderContactsSidebar(); } 
         else setTimeout(() => initiateEcdhHandshake(selected.id), 300);
     }
     safeEmit('check_node_status', activeTarget.id, (res) => { updateContactStatusUI(res.userId, res.isOnline); });
@@ -1300,14 +1328,14 @@ function addContact(targetId, username = null) {
         safeEmit('join_status_rooms', [targetId]); 
         safeEmit('check_node_status', targetId, (res) => { if (res) updateContactStatusUI(res.userId, res.isOnline); });
         safeEmit('get_profiles', [targetId], (res) => {
-            if (res && res.profiles && res.profiles[targetId]) {
+            if (res &amp;&amp; res.profiles &amp;&amp; res.profiles[targetId]) {
                 const c = myContacts.find(x => x.id === targetId);
                 if (c) {
                     if (res.profiles[targetId].avatar) c.avatar = res.profiles[targetId].avatar;
                     if (res.profiles[targetId].username) c.username = res.profiles[targetId].username;
                     saveContactsToVault();
                     renderContactsSidebarDebounced();
-                    if (activeTarget && activeTarget.id === targetId) updateChatHeaderUI();
+                    if (activeTarget &amp;&amp; activeTarget.id === targetId) updateChatHeaderUI();
                 }
             }
         });
@@ -1320,11 +1348,11 @@ function addContact(targetId, username = null) {
         
         return true;
     } else {
-        if (username && !existing.username) {
+        if (username &amp;&amp; !existing.username) {
             existing.username = username;
             saveContactsToVault();
             renderContactsSidebarDebounced();
-            if (activeTarget && activeTarget.id === targetId) updateChatHeaderUI();
+            if (activeTarget &amp;&amp; activeTarget.id === targetId) updateChatHeaderUI();
         }
     }
     return false;
@@ -1363,17 +1391,17 @@ function hideSearchModal() {
 function performSearch() {
     const query = document.getElementById('searchQuery').value.trim();
     const resultsList = document.getElementById('searchResultsList');
-    if (!query || query.length < 2) {
+    if (!query || query.length &lt; 2) {
         resultsList.innerHTML = 'Arama yapmak için en az 2 karakter girin...';
         return;
     }
     safeEmit('search_users', query, (res) => {
         if (!res || !res.results) {
-            resultsList.innerHTML = '<span class="text-red-500">// ARAMA BAŞARISIZ //</span>';
+            resultsList.innerHTML = '&lt;span class="text-red-500">// ARAMA BAŞARISIZ //&lt;/span>';
             return;
         }
         if (res.results.length === 0) {
-            resultsList.innerHTML = '<span class="text-gray-400">// SONUÇ BULUNAMADI //</span>';
+            resultsList.innerHTML = '&lt;span class="text-gray-400">// SONUÇ BULUNAMADI //&lt;/span>';
             return;
         }
         resultsList.replaceChildren();
@@ -1524,12 +1552,12 @@ function handleContactRequestResponse(accepted) {
 function showContactRequestResponse(data) {
     if (data.accepted) {
         const c = myContacts.find(x => x.id === data.senderId);
-        if (c && data.username) {
+        if (c &amp;&amp; data.username) {
             c.username = data.username;
             if (data.avatar) c.avatar = data.avatar;
             saveContactsToVault();
             renderContactsSidebarDebounced();
-            if (activeTarget && activeTarget.id === data.senderId) updateChatHeaderUI();
+            if (activeTarget &amp;&amp; activeTarget.id === data.senderId) updateChatHeaderUI();
         }
         const name = data.username ? `${data.username} (${data.senderId})` : data.senderId;
         showToast(`${name} bağlantı isteğinizi kabul etti!`, 'success');
@@ -1570,7 +1598,7 @@ function handleContactSubmit() {
  * Ortak gizli anahtarı doğrular, TTL (kendi kendini imha) süresini ekler ve Socket.IO üzerinden iletir.
  * @async
  * @function sendSecurePacket
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function sendSecurePacket() {
     if (!activeTarget) return;
@@ -1583,7 +1611,7 @@ async function sendSecurePacket() {
     const msgInput = document.getElementById('messageInput');
     const rawText = msgInput.value.trim(); const hasFile = activeFileBase64 !== null;
     const ttl = parseInt(document.getElementById('messageTtl').value); 
-    if (!rawText && !hasFile) return;
+    if (!rawText &amp;&amp; !hasFile) return;
     msgInput.value = '';
 
     let encryptedText = null; let encryptedFile = null;
@@ -1616,8 +1644,8 @@ async function sendSecurePacket() {
     safeEmit('stop_typing', { targetId: activeTarget.id });
     
     safeEmit('send_secure_packet', packet, (res) => { 
-        if (res && res.queued) showToast("Kişi çevrimdışı, mesaj kuyruğa eklendi.", 'warning');
-        else if (res && res.error === "RATE_LIMIT") { playSound('error'); showToast("Çok hızlı mesaj gönderiyorsunuz, lütfen bekleyin.", 'error'); }
+        if (res &amp;&amp; res.queued) showToast("Kişi çevrimdışı, mesaj kuyruğa eklendi.", 'warning');
+        else if (res &amp;&amp; res.error === "RATE_LIMIT") { playSound('error'); showToast("Çok hızlı mesaj gönderiyorsunuz, lütfen bekleyin.", 'error'); }
     });
     
     const pSize = new Blob([JSON.stringify(packet)]).size;
@@ -1632,7 +1660,7 @@ async function sendSecurePacket() {
  * @function decryptPacketForDisplay
  * @param {Object} packet - Şifrelenmiş paket verisi ({ id, senderId, targetId, textPayload, filePayload, fileName, ttl, timestamp }).
  * @param {Object} [contactInfo] - Kişi nesnesi bilgisi.
- * @returns {Promise<Object|null>} Çözülmüş mesaj veri nesnesi veya geçersizse/süresi dolmuşsa null.
+ * @returns {Promise&lt;Object|null>} Çözülmüş mesaj veri nesnesi veya geçersizse/süresi dolmuşsa null.
  */
 async function decryptPacketForDisplay(packet, contactInfo) {
     let decryptedText = null; let decryptedFile = null; let hasError = false;
@@ -1646,7 +1674,7 @@ async function decryptPacketForDisplay(packet, contactInfo) {
             if (packet.textPayload) { decryptedText = await decryptGCM(packet.textPayload, cryptoKey); if (!decryptedText) hasError = true; }
             if (packet.filePayload) { 
                 decryptedFile = await decryptGCM(packet.filePayload, cryptoKey); 
-                if (!decryptedFile.startsWith("data:image") && !decryptedFile.startsWith("data:application/pdf")) hasError = true; 
+                if (!decryptedFile.startsWith("data:image") &amp;&amp; !decryptedFile.startsWith("data:application/pdf")) hasError = true; 
             }
         } catch(e) { hasError = true; }
     }
@@ -1656,7 +1684,7 @@ async function decryptPacketForDisplay(packet, contactInfo) {
     if (packet.ttl) {
         const elapsedSeconds = Math.round((Date.now() - packet.timestamp) / 1000);
         remainingTtl = packet.ttl - elapsedSeconds;
-        if (remainingTtl <= 0) {
+        if (remainingTtl &lt;= 0) {
             await removePacketFromVault(isMine ? packet.targetId : packet.senderId, packet.id);
             return null; 
         }
@@ -1670,7 +1698,7 @@ async function decryptPacketForDisplay(packet, contactInfo) {
  * @function processIncomingPacket
  * @param {Object} packet - Gelen şifreli paket nesnesi.
  * @param {Object} [contactInfo] - İlgili kişi bilgileri.
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function processIncomingPacket(packet, contactInfo) {
     const data = await decryptPacketForDisplay(packet, contactInfo);
@@ -1708,7 +1736,7 @@ function initScrollToBottomFab() {
     if (!chatLog || !fab) return;
     chatLog.addEventListener('scroll', () => {
         const threshold = 120;
-        const isNearBottom = chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight < threshold;
+        const isNearBottom = chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight &lt; threshold;
         if (isNearBottom) {
             fab.classList.remove('visible');
             if (dot) dot.classList.remove('has-new');
@@ -1734,7 +1762,7 @@ function scrollChatToBottom() {
 // === MESAJ UI RENDERLAMA ===
 
 /**
- * Mesaj metnindeki URL bağlantılarını tespit eder ve güvenli target="_blank" rel="noopener noreferrer" <a> etiketleri olarak DOM'a ekler.
+ * Mesaj metnindeki URL bağlantılarını tespit eder ve güvenli target="_blank" rel="noopener noreferrer" &lt;a> etiketleri olarak DOM'a ekler.
  * @function renderMessageTextWithLinks
  * @param {HTMLElement} container - Bağlantı ve metinlerin ekleneceği taşıyıcı DOM öğesi.
  * @param {string} text - İşlenecek ham mesaj metni.
@@ -1761,7 +1789,7 @@ function renderMessageTextWithLinks(container, text, isMine) {
         }
 
         let href = rawUrl;
-        if (!href.startsWith('http://') && !href.startsWith('https://')) {
+        if (!href.startsWith('http://') &amp;&amp; !href.startsWith('https://')) {
             href = 'https://' + href;
         }
 
@@ -1775,7 +1803,7 @@ function renderMessageTextWithLinks(container, text, isMine) {
             isValid = false;
         }
 
-        if (isValid && rawUrl.length > 0) {
+        if (isValid &amp;&amp; rawUrl.length > 0) {
             const link = document.createElement('a');
             link.href = href;
             link.target = '_blank';
@@ -1797,7 +1825,7 @@ function renderMessageTextWithLinks(container, text, isMine) {
         lastIndex = match.index + match[0].length;
     }
 
-    if (lastIndex < text.length) {
+    if (lastIndex &lt; text.length) {
         container.appendChild(document.createTextNode(text.substring(lastIndex)));
     }
 }
@@ -1837,7 +1865,7 @@ function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl
         _lastDateLabel = dateLabel;
         const divider = document.createElement('div');
         divider.className = 'date-divider';
-        divider.innerHTML = `<span>── ${dateLabel} ──</span>`;
+        divider.innerHTML = `&lt;span>── ${dateLabel} ──&lt;/span>`;
         logBox.appendChild(divider);
     }
 
@@ -1859,12 +1887,12 @@ function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl
         headerSpan.appendChild(revokeBtn);
     } else {
         const contact = myContacts.find(c => c.id === sender);
-        const displayName = (contact && contact.username) ? `${contact.username} (${sender})` : sender;
+        const displayName = (contact &amp;&amp; contact.username) ? `${contact.username} (${sender})` : sender;
         const senderSpan = document.createElement('span'); senderSpan.className = `font-black ${senderColor} truncate`; senderSpan.textContent = displayName; headerSpan.appendChild(senderSpan);
         const timeSpan = document.createElement('span'); timeSpan.className = 'text-gray-500 ml-1.5 sm:ml-2 flex-shrink-0'; timeSpan.textContent = `[${timeStr}]`; headerSpan.appendChild(timeSpan);
     }
 
-    if (ttl && ttl > 0) {
+    if (ttl &amp;&amp; ttl > 0) {
         const ttlBadge = document.createElement('span'); ttlBadge.id = `ttl-badge-${packetId}`;
         ttlBadge.className = 'mx-1.5 sm:mx-2 px-1 sm:px-1.5 py-0.5 bg-red-950/80 border border-red-500 text-red-400 font-mono text-[7px] sm:text-[9px] animate-pulse font-black   flex-shrink-0';
         ttlBadge.textContent = `TTL:${ttl}s`;
@@ -1945,7 +1973,7 @@ function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl
 
     // Scroll konumuna göre FAB göster
     const threshold = 120;
-    const isNearBottom = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < threshold;
+    const isNearBottom = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight &lt; threshold;
     logBox.appendChild(msgDiv);
     if (isNearBottom) {
         logBox.scrollTop = logBox.scrollHeight;
@@ -1957,12 +1985,12 @@ function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl
         if (dot) dot.classList.add('has-new');
     }
 
-    if (ttl && ttl > 0) startSelfDestructTimer(packetId, ttl, isMine ? activeTarget.id : sender);
+    if (ttl &amp;&amp; ttl > 0) startSelfDestructTimer(packetId, ttl, isMine ? activeTarget.id : sender);
 }
 
 /**
  * Aktif TTL kendi kendini imha sayaçlarının ve aralıklarının referans tablosu.
- * @type {Object.<string, {interval: number, timeout: number, expiresAt: number, targetUser: string}>}
+ * @type {Object.&lt;string, {interval: number, timeout: number, expiresAt: number, targetUser: string}>}
  */
 const _activeTimers = {};
 
@@ -2005,7 +2033,7 @@ function startSelfDestructTimer(packetId, duration, targetUser) {
         const remainingMs = expiresAt - Date.now();
         const secondsLeft = Math.max(0, Math.ceil(remainingMs / 1000));
         if (badge) badge.innerText = `TTL:${secondsLeft}s`;
-        if (remainingMs <= 0) {
+        if (remainingMs &lt;= 0) {
             destroyMessage();
         }
     }, 1000);
@@ -2019,7 +2047,7 @@ document.addEventListener('visibilitychange', () => {
         const now = Date.now();
         for (const packetId of Object.keys(_activeTimers)) {
             const timerObj = _activeTimers[packetId];
-            if (timerObj && timerObj.expiresAt <= now) {
+            if (timerObj &amp;&amp; timerObj.expiresAt &lt;= now) {
                 if (timerObj.interval) clearInterval(timerObj.interval);
                 if (timerObj.timeout) clearTimeout(timerObj.timeout);
                 delete _activeTimers[packetId];
@@ -2078,7 +2106,7 @@ function toggleKeyReveal() {
     }
 }
 
-// === DOSYA VE BELGE İŞLEMLERİ (RESİM & PDF) ===
+// === DOSYA VE BELGE İŞLEMLERİ (RESİM &amp; PDF) ===
 
 /**
  * Base64 kodlu veri URI dizesini ikili Blob nesnesine dönüştürür.
@@ -2093,7 +2121,7 @@ function base64ToBlob(base64Data, contentType = 'application/pdf') {
     const binaryStr = window.atob(b64);
     const len = binaryStr.length;
     const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
+    for (let i = 0; i &lt; len; i++) {
         bytes[i] = binaryStr.charCodeAt(i);
     }
     return new Blob([bytes], { type: contentType });
@@ -2266,8 +2294,8 @@ function showSettingsModal() {
     playSound('type'); 
     document.getElementById('settingsModal').classList.remove('hidden'); 
     switchSettingsTab('profile');
-    if (currentUser && currentUser.avatar) {
-        document.getElementById('settingsAvatarPreview').innerHTML = `<img src="${currentUser.avatar}" class="w-full h-full object-cover">`;
+    if (currentUser &amp;&amp; currentUser.avatar) {
+        document.getElementById('settingsAvatarPreview').innerHTML = `&lt;img src="${currentUser.avatar}" class="w-full h-full object-cover">`;
     }
 }
 
@@ -2325,7 +2353,7 @@ function handleSettingsAvatarSelect(input) {
             const sx = (img.width - size) / 2; const sy = (img.height - size) / 2;
             ctx.drawImage(img, sx, sy, size, size, 0, 0, MAX_DIM, MAX_DIM);
             pendingAvatarBase64 = canvas.toDataURL('image/jpeg', 0.8); 
-            document.getElementById('settingsAvatarPreview').innerHTML = `<img src="${pendingAvatarBase64}" class="w-full h-full object-cover">`;
+            document.getElementById('settingsAvatarPreview').innerHTML = `&lt;img src="${pendingAvatarBase64}" class="w-full h-full object-cover">`;
             playSound('success');
         }; img.src = e.target.result;
     }; reader.readAsDataURL(file);
@@ -2339,7 +2367,7 @@ function handleSettingsAvatarSelect(input) {
 function saveProfileSettings() {
     if (!pendingAvatarBase64) return;
     safeEmit('update_avatar', pendingAvatarBase64, (res) => {
-        if (res && res.success) {
+        if (res &amp;&amp; res.success) {
             playSound('success'); currentUser.avatar = pendingAvatarBase64; pendingAvatarBase64 = null;
             updateMyAvatarUI(); showToast("Profil fotoğrafı güncellendi.", 'success'); hideSettingsModal();
         } else { playSound('error'); showToast(`HATA: ${res ? res.message : 'Güncellenemedi'}`, 'error'); }
@@ -2355,7 +2383,7 @@ function changeUserPassword() {
     const oldP = document.getElementById('setOldPwd').value; const newP = document.getElementById('setNewPwd').value;
     if(!oldP || !newP) { playSound('error'); showToast("Lütfen şifre alanlarını doldurun.", 'error'); return; }
     safeEmit('change_password', { oldPassword: oldP, newPassword: newP }, (res) => {
-        if (res && res.success) {
+        if (res &amp;&amp; res.success) {
             playSound('success'); showToast("Şifre değiştirildi.", 'success');
             document.getElementById('setOldPwd').value = ''; document.getElementById('setNewPwd').value = ''; hideSettingsModal();
         } else { playSound('error'); showToast(`HATA: ${res ? res.message : 'Başarısız'}`, 'error'); }
@@ -2372,7 +2400,7 @@ function deleteUserAccount() {
     if(!pwd) { playSound('error'); showToast("Lütfen onay şifrenizi girin."); return; }
     showCustomConfirm("Hesabınız ve tüm verileriniz kalıcı olarak silinecektir. Bu işlem geri alınamaz.", () => {
         safeEmit('delete_account', { password: pwd }, (res) => {
-            if (res && res.success) {
+            if (res &amp;&amp; res.success) {
                 playSound('destroy'); localStorage.clear(); sessionStorage.clear(); indexedDB.deleteDatabase(DB_NAME);
                 showToast("Hesap silindi.", 'system');
                 setTimeout(() => window.location.reload(), 2000);
@@ -2394,7 +2422,7 @@ function updateMobileLayout() {
     
     if (!sidebar || !chatArea) return;
     
-    if (window.innerWidth < 1024) {
+    if (window.innerWidth &lt; 1024) {
         if (activeTarget) {
             sidebar.classList.add('hidden');
             chatArea.classList.remove('hidden');
@@ -2422,7 +2450,7 @@ function mobileGoBack() {
     updateMobileLayout();
     renderContactsSidebar();
     
-    // reset chat ui header & content
+    // reset chat ui header &amp; content
     updateChatHeaderUI();
     document.getElementById('clearChatBtn').classList.add('hidden');
     disableChatUI();
@@ -2481,7 +2509,7 @@ function initAuthEvents() {
             input.addEventListener('input', () => {
                 input.classList.remove('input-error');
                 const alertEl = document.getElementById('authAlert');
-                if (alertEl && alertEl.classList.contains('auth-alert-error')) {
+                if (alertEl &amp;&amp; alertEl.classList.contains('auth-alert-error')) {
                     alertEl.classList.add('hidden');
                 }
             });
@@ -2589,7 +2617,7 @@ function initAppEvents() {
 function autoFillServerUrl() {
     const input = document.getElementById('serverIp');
     const toggleBtn = document.getElementById('serverIpToggleBtn');
-    const configuredBackend = (window.APP_CONFIG && window.APP_CONFIG.BACKEND_URL) 
+    const configuredBackend = (window.APP_CONFIG &amp;&amp; window.APP_CONFIG.BACKEND_URL) 
         ? window.APP_CONFIG.BACKEND_URL.trim() 
         : '';
 
@@ -2601,7 +2629,7 @@ function autoFillServerUrl() {
             if (toggleBtn) toggleBtn.classList.remove('hidden');
         } else {
             const origin = window.location.origin;
-            if (origin && origin !== 'null' && !origin.startsWith('file://')) {
+            if (origin &amp;&amp; origin !== 'null' &amp;&amp; !origin.startsWith('file://')) {
                 input.value = origin;
             } else if (!input.value) {
                 input.value = 'http://localhost:3000';
@@ -2619,3 +2647,26 @@ if (document.readyState === 'loading') {
     autoFillServerUrl();
 }
 
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-AppConfig.html">AppConfig</a></li><li><a href="module-ClientSocketHandlers.html">ClientSocketHandlers</a></li><li><a href="module-CryptoModule.html">CryptoModule</a></li><li><a href="module-DatabaseManager.html">DatabaseManager</a></li><li><a href="module-ElectronMain.html">ElectronMain</a></li><li><a href="module-ElectronPreload.html">ElectronPreload</a></li><li><a href="module-Server.html">Server</a></li><li><a href="module-SocketServer.html">SocketServer</a></li><li><a href="module-UIManager.html">UIManager</a></li><li><a href="module-VaultDB.html">VaultDB</a></li></ul><h3>Namespaces</h3><ul><li><a href="module-AppConfig-APP_CONFIG.html">APP_CONFIG</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 21:35:39 GMT+0300 (Türkiye Standart Saati)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

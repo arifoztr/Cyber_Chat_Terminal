@@ -1,109 +1,136 @@
-﻿# Siber E2EE Sohbet Terminali — Dağıtım Kılavuzu (Hibrit Mimari)
+# Siber E2EE Sohbet Terminali — Dağıtım Kılavuzu (Hibrit & Bulut Mimari)
 
-Bu kılavuz, projenizi **Frontend: Cloudflare Pages** ve **Backend: Bulut (Render / Railway / VPS)** üzerinde 7/24 canlıya almak için gereken adımları içerir.
+Bu kılavuz, projenizi **Frontend: Cloudflare Pages / Vercel** ve **Backend: Bulut (Render / Railway / Turso / VPS)** üzerinde 7/24 kesintisiz ve güvenli şekilde canlıya almak için gereken adımları içerir.
 
 ---
 
 ## 🏗️ Mimari Şema
 
-```
-[Kullanıcı Tarayıcısı]
+```text
+[Kullanıcı Tarayıcısı / Electron Masaüstü]
         │
-        ├── (HTTPS) ────────► [Cloudflare Pages] (public/ statik dosyaları)
+        ├── (HTTPS) ────────► [Cloudflare Pages] (public/ statik web arayüzü)
         │
-        └── (WSS/WebSockets) ► [Backend: Render/Railway/VPS] (Node.js + Socket.IO + SQLite)
+        └── (WSS/WebSockets) ► [Backend: Render / Railway / VPS] (Node.js + Socket.IO)
+                                       │
+                                       └── (HTTPS / IPC) ──► [Turso Cloud DB veya Yerel SQLite]
 ```
 
 ---
 
-## 🚀 ADIM 1: Backend Dağıtımı
+## 🚀 ADIM 1: Veritabanı Seçimi (Önerilen: Turso Cloud)
 
-Backend'inizi barındırmak için aşağıdaki seçeneklerden birini seçin:
+Proje hem yerel dosya tabanlı SQLite hem de bulut tabanlı **Turso (LibSQL)** destekler. Kalıcı disk maliyeti olmadan sunucusuz (serverless) çalışmak için Turso en ideal çözümdür:
 
-### Seçenek A: Render.com (Önerilen / Kolay)
-1. [render.com](https://render.com) üzerinde ücretsiz hesap açın.
-2. **New +** butonuna basıp **Web Service** seçin.
-3. GitHub deponuzu (`Arif8054/Cyber_Chat_Terminal`) bağlayın.
-4. Ayarları şu şekilde yapın:
-   - **Name:** `cyber-backend` (veya istediğiniz bir isim)
-   - **Environment:** `Node` veya `Docker`
-   - **Build Command:** `npm install` (Node seçtiyseniz)
-   - **Start Command:** `node server.js` (Node seçtiyseniz)
+1. [turso.tech](https://turso.tech) üzerinde ücretsiz bir hesap oluşturun.
+2. CLI veya web paneli üzerinden yeni bir veritabanı açın:
+   ```bash
+   turso db create cyber-db
+   turso db show cyber-db --url
+   turso db tokens create cyber-db
+   ```
+3. Elde ettiğiniz bağlantı URL'sini (`TURSO_DATABASE_URL`) ve yetki belirtecini (`TURSO_AUTH_TOKEN`) bir kenara not edin.
+
+---
+
+## 🚀 ADIM 2: Backend Dağıtımı
+
+### Seçenek A: Render.com (Önerilen)
+1. [render.com](https://render.com) üzerinde oturum açın.
+2. **New +** -> **Web Service** seçeneğine tıklayın.
+3. GitHub deponuzu bağlayın.
+4. Temel ayarları yapın:
+   - **Name:** `cyber-backend`
+   - **Environment:** `Node`
+   - **Build Command:** `npm install`
+   - **Start Command:** `npm start` (veya `node src/server.js`)
    - **Plan:** Free
 5. **Environment Variables** (Ortam Değişkenleri) sekmesinde ekleyin:
    - `NODE_ENV`: `production`
-   - `JWT_SECRET`: En az 32 karakterlik rastgele bir metin
-   - `CORS_ORIGIN`: Cloudflare Pages adresiniz (Deploy sonrası güncelleyebilirsiniz, şimdilik boş bırakabilirsiniz)
-6. **Create Web Service** butonuna tıklayın.
-7. Dağıtım tamamlandığında size bir adres verilecektir:  
-   👉 `https://cyber-backend.onrender.com`
+   - `JWT_SECRET`: En az 32 karakterlik güçlü rastgele metin
+   - `TURSO_DATABASE_URL`: *(Turso kullanıyorsanız libSQL URL'si)*
+   - `TURSO_AUTH_TOKEN`: *(Turso auth token)*
+   - `CORS_ORIGIN`: Cloudflare Pages alan adınız (ör. `https://cyber-chat.pages.dev`)
+6. **Create Web Service** butonuna basarak dağıtımı tamamlayın.
+   👉 Backend URL: `https://cyber-backend.onrender.com`
 
 ---
 
-### Seçenek B: Railway.app (SQLite Kalıcı Disk İçin İdeal)
+### Seçenek B: Railway.app (Yerel SQLite Diski İle)
 1. [railway.app](https://railway.app) üzerinde GitHub ile giriş yapın.
-2. **New Project** -> **Deploy from GitHub repo** seçin ve bu depoyu seçin.
-3. Servis ayarlarına gidip **Variables** bölümünden `JWT_SECRET` ekleyin.
-4. SQLite verilerinin sıfırlanmaması için:
-   - **Add Volume** seçeneğiyle bir kalıcı disk ekleyin (Bağlama noktası: `/data`).
-   - Ortam değişkenlerine `DB_PATH=/data/database.sqlite` ekleyin.
-5. **Generate Domain** butonuna basarak backend adresinizi alın:  
+2. **New Project** -> **Deploy from GitHub repo** adımlarını izleyin.
+3. Turso kullanmıyorsanız ve verileri sunucu içi SQLite'ta tutmak istiyorsanız:
+   - Servis paneline gidin, **Add Volume** ile `/data` dizinine kalıcı bir disk bağlayın.
+   - Değişkenlere `DB_PATH=/data/database.sqlite` ekleyin.
+4. `JWT_SECRET` ve `NODE_ENV=production` değişkenlerini tanımlayın.
+5. **Generate Domain** ile genel URL'nizi alın:  
    👉 `https://cyber-production.up.railway.app`
 
 ---
 
-### Seçenek C: VPS / Kendi Linux Sunucunuz (Docker ile)
+### Seçenek C: VPS / Kendi Linux Sunucunuz (Docker İle)
 ```bash
-# Depoyu sunucuya çekin
+# Depoyu sunucuya klonlayın
 git clone https://github.com/Arif8054/Cyber_Chat_Terminal.git
 cd Cyber_Chat_Terminal
 
-# Docker imajını oluşturun ve başlatın
+# Docker imajını derleyin ve arka planda çalıştırın
 docker build -t cyber-backend .
-docker run -d -p 3000:3000 -v $(pwd)/data:/app/data -e DB_PATH=/app/data/database.sqlite --name cyber-chat cyber-backend
+docker run -d \
+  -p 3000:3000 \
+  -v $(pwd)/data:/app/data \
+  -e DB_PATH=/app/data/database.sqlite \
+  -e JWT_SECRET="guclu-rastgele-gizli-anahtar-32-karakter" \
+  -e NODE_ENV="production" \
+  --name cyber-chat \
+  cyber-backend
 ```
 
 ---
 
-## 🌐 ADIM 2: Frontend Dağıtımı (Cloudflare Pages)
+## 🌐 ADIM 3: Frontend Dağıtımı (Cloudflare Pages)
 
 1. [dash.cloudflare.com](https://dash.cloudflare.com) adresine giriş yapın.
-2. Sol menüden **Workers & Pages** -> **Create application** -> **Pages** sekmesini seçin.
-3. **Connect to Git** (Git'e Bağlan) butonuna tıklayın ve GitHub hesabınızı yetkilendirin.
-4. `Arif8054/Cyber_Chat_Terminal` deposunu seçin ve **Begin setup** deyin.
-5. Dağıtım ayarlarını şu şekilde doldurun:
-   - **Project name:** `cyber-chat` (isteğe bağlı)
-   - **Production branch:** `main`
+2. **Workers & Pages** -> **Create application** -> **Pages** -> **Connect to Git** seçin.
+3. `Cyber_Chat_Terminal` deponuzu seçin.
+4. Dağıtım ayarlarını şu şekilde yapılandırın:
    - **Framework preset:** `None`
    - **Build command:** *(BOŞ BIRAKIN)*
    - **Build output directory:** `public`
-6. **Save and Deploy** butonuna tıklayın.
-7. Yaklaşık 15-30 saniye içinde siteniz yayında olacaktır!  
-   👉 Örnek adres: `https://cyber-chat.pages.dev`
+5. **Save and Deploy** butonuna tıklayın. Siteniz yaklaşık 20 saniye içinde yayına girecektir.  
+   👉 Örnek URL: `https://cyber-chat.pages.dev`
 
 ---
 
-## 🔗 ADIM 3: Frontend ve Backend'i Birbirine Bağlama
+## 🔗 ADIM 4: Frontend ve Backend'i Bağlama
 
-1. Bilgisayarınızdaki `public/config.js` dosyasını açın:
+İstemcinin canlıdaki sunucuya otomatik olarak bağlanması için:
+
+1. `public/config.js` dosyasını açın:
    ```javascript
    window.APP_CONFIG = {
-       // ADIM 1'de aldığınız backend adresini buraya yapıştırın:
-       BACKEND_URL: "https://cyber-backend.onrender.com"
+       BACKEND_URL: "https://cyber-backend.onrender.com" // Kendi backend adresiniz
    };
    ```
-2. Değişikliği kaydedip GitHub'a gönderin:
+2. Değişikliği commit edip GitHub'a gönderin:
    ```bash
    git add public/config.js
-   git commit -m "Configure backend URL for Cloudflare Pages"
+   git commit -m "Configure production backend URL"
    git push origin main
    ```
-3. Cloudflare Pages otomatik olarak yeni commit'i algılar ve saniyeler içinde güncellemeyi canlıya alır.
+3. Cloudflare Pages otomatik olarak yeni commit'i algılar ve saniyeler içinde günceller.
 
 ---
 
-## 🔒 Güvenlik & CORS Sıkılaştırma (Opsiyonel)
+## 🔒 Güvenlik Sertleştirmesi (CORS & CSWSH)
 
-Sistem canlıya alındıktan sonra, backend sunucunuzun ortam değişkenlerine şunu ekleyerek yalnızca kendi Cloudflare sitenizden gelen isteklere izin verebilirsiniz:
+Backend sunucunuzun ortam değişkenlerine `CORS_ORIGIN` tanımlayarak yetkisiz kaynaklardan gelen WebSocket bağlantılarını (CSWSH) tamamen engelleyin:
 
-- `CORS_ORIGIN`: `https://cyber-chat.pages.dev`
+```env
+CORS_ORIGIN=https://cyber-chat.pages.dev
+```
+
+---
+
+**Son Güncelleme:** 2026-09-26  
+**Doküman Sürümü:** v2.0

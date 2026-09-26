@@ -1,4 +1,32 @@
-/**
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: src/socket.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: src/socket.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
  * @file socket.js
  * @module SocketServer
  * @description Socket.IO tabanlı gerçek zamanlı iletişim ve güvenlik sunucusu.
@@ -18,8 +46,8 @@ const dbManager = require('./database');
 const MAX_QUEUE_SIZE = 50;
 
 /**
- * Çevrimiçi kullanıcıların bağlı soket kimliklerini tutan harita (userId -> Set<socketId>).
- * @type {Map<string, Set<string>>}
+ * Çevrimiçi kullanıcıların bağlı soket kimliklerini tutan harita (userId -> Set&lt;socketId>).
+ * @type {Map&lt;string, Set&lt;string>>}
  */
 const onlineNodes = new Map();
 
@@ -35,7 +63,7 @@ const DUMMY_HASH = '$2b$10$7EqJtq98hPqEX7fNZaFWoO0VpIxFk3E9V2bJgN1Jt3kR0n3X2m2Xe
  * @type {string}
  */
 let JWT_SECRET;
-if (process.env.JWT_SECRET && process.env.JWT_SECRET.trim().length >= 32) {
+if (process.env.JWT_SECRET &amp;&amp; process.env.JWT_SECRET.trim().length >= 32) {
     JWT_SECRET = process.env.JWT_SECRET.trim();
 } else {
     JWT_SECRET = crypto.randomBytes(32).toString('hex');
@@ -73,7 +101,7 @@ function sanitizeUser(u) {
 
 /**
  * Çıkış yapılmış (iptal edilmiş) token'ların kara listesi (token -> expTimestampMs).
- * @type {Map<string, number>}
+ * @type {Map&lt;string, number>}
  */
 const revokedTokens = new Map();
 
@@ -154,7 +182,7 @@ function verifyJWT(token) {
         const nowSec = Math.floor(Date.now() / 1000);
         // Hem standart saniye hem geriye dönük milisaniye kontrolü
         const expSec = payload.exp > 1e11 ? Math.floor(payload.exp / 1000) : payload.exp;
-        if (expSec < nowSec) return null;
+        if (expSec &lt; nowSec) return null;
 
         return payload;
     } catch (e) { return null; }
@@ -187,14 +215,14 @@ function getClientIp(socket) {
     if (trustProxy) {
         // Cloudflare önceliği
         const cfIp = socket.handshake.headers['cf-connecting-ip'];
-        if (cfIp && typeof cfIp === 'string') {
+        if (cfIp &amp;&amp; typeof cfIp === 'string') {
             const trimmed = cfIp.trim();
-            if (trimmed.length <= 45) return trimmed;
+            if (trimmed.length &lt;= 45) return trimmed;
         }
         const forwarded = socket.handshake.headers['x-forwarded-for'];
-        if (forwarded && typeof forwarded === 'string') {
+        if (forwarded &amp;&amp; typeof forwarded === 'string') {
             const ip = forwarded.split(',')[0].trim();
-            if (ip && ip.length <= 45) return ip;
+            if (ip &amp;&amp; ip.length &lt;= 45) return ip;
         }
     }
     
@@ -252,7 +280,7 @@ module.exports = function setupSockets(io) {
         const now = Date.now();
         const record = failedLoginAttempts.get(ip);
         if (!record || now > record.resetAt) return true;
-        return record.count < 5;
+        return record.count &lt; 5;
     }
 
     /**
@@ -298,7 +326,7 @@ module.exports = function setupSockets(io) {
     function isPacketExpired(p) {
         if (!p || !p.timestamp) return false;
         const age = Date.now() - p.timestamp;
-        if (p.ttl && typeof p.ttl === 'number' && p.ttl > 0) {
+        if (p.ttl &amp;&amp; typeof p.ttl === 'number' &amp;&amp; p.ttl > 0) {
             return age >= (p.ttl * 1000);
         }
         return age >= dbManager.MAX_PACKET_AGE_MS;
@@ -309,7 +337,7 @@ module.exports = function setupSockets(io) {
         const token = socket.handshake.auth?.token;
         if (token) {
             const payload = verifyJWT(token);
-            if (payload && db.users[payload.email]) {
+            if (payload &amp;&amp; db.users[payload.email]) {
                 socket.user = db.users[payload.email];
             }
         }
@@ -342,19 +370,19 @@ module.exports = function setupSockets(io) {
                 email = String(email).trim().toLowerCase();
                 username = String(username).trim();
 
-                // [GÜVENLİK FIX - SEC-14] Prototype Pollution Koruması & E-posta Doğrulaması
+                // [GÜVENLİK FIX - SEC-14] Prototype Pollution Koruması &amp; E-posta Doğrulaması
                 const forbiddenKeys = ['__proto__', 'constructor', 'prototype'];
                 if (forbiddenKeys.includes(email) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                     return callback({ success: false, message: "Geçersiz e-posta adresi formatı." });
                 }
 
                 // [GÜVENLİK FIX - SEC-15] Parola Güvenlik Politikası
-                if (typeof password !== 'string' || password.length < 8 || password.length > 72) {
+                if (typeof password !== 'string' || password.length &lt; 8 || password.length > 72) {
                     return callback({ success: false, message: "Şifre en az 8, en fazla 72 karakter uzunluğunda olmalıdır." });
                 }
 
                 // Kullanıcı adı uzunluk ve güvenlik sınırı
-                if (username.length < 2 || username.length > 32) {
+                if (username.length &lt; 2 || username.length > 32) {
                     return callback({ success: false, message: "Kullanıcı adı 2-32 karakter uzunluğunda olmalıdır." });
                 }
 
@@ -475,7 +503,7 @@ module.exports = function setupSockets(io) {
             }
             const payload = verifyJWT(token);
             const email = payload?.email ? payload.email.trim().toLowerCase() : null;
-            if (email && db.users[email]) {
+            if (email &amp;&amp; db.users[email]) {
                 const user = db.users[email];
                 socket.user = user;
                 if (!onlineNodes.has(user.userId)) onlineNodes.set(user.userId, new Set());
@@ -497,7 +525,7 @@ module.exports = function setupSockets(io) {
             const token = data?.token || socket.handshake.auth?.token;
             if (token) {
                 revokeToken(token);
-                console.log(`[-] OTURUM KAPATILDI & TOKEN İPTAL EDİLDİ: ${socket.user?.username || socket.id}`);
+                console.log(`[-] OTURUM KAPATILDI &amp; TOKEN İPTAL EDİLDİ: ${socket.user?.username || socket.id}`);
             }
             if (socket.user) {
                 const userId = socket.user.userId;
@@ -534,7 +562,7 @@ module.exports = function setupSockets(io) {
                 safeUserIds.forEach(uid => {
                     if (typeof uid !== 'string' || uid.length > 50) return;
                     const email = userIdIndex[uid];
-                    if (email && db.users[email]) {
+                    if (email &amp;&amp; db.users[email]) {
                         profiles[uid] = { 
                             username: db.users[email].username || null,
                             avatar: db.users[email].avatar || null 
@@ -556,7 +584,7 @@ module.exports = function setupSockets(io) {
             if (!socket.user || !db.users[socket.user.email]) return callback({ success: false });
             
             // 200KB limit (Güvenlik için payload boyutu kısıtlaması)
-            if (avatarBase64 && avatarBase64.length > 200000) return callback({ success: false, message: "Görsel çok büyük." });
+            if (avatarBase64 &amp;&amp; avatarBase64.length > 200000) return callback({ success: false, message: "Görsel çok büyük." });
             
             db.users[socket.user.email].avatar = avatarBase64;
             await dbManager.saveDatabase();
@@ -575,7 +603,7 @@ module.exports = function setupSockets(io) {
             
             try {
                 const { oldPassword, newPassword } = data;
-                if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 72) {
+                if (!newPassword || typeof newPassword !== 'string' || newPassword.length &lt; 8 || newPassword.length > 72) {
                     return callback({ success: false, message: "Yeni şifre en az 8, en fazla 72 karakter olmalıdır." });
                 }
                 const user = db.users[socket.user.email];
@@ -652,7 +680,7 @@ module.exports = function setupSockets(io) {
          * @param {Object} publicKeyJwk - JWK formatında açık anahtar nesnesi.
          */
         socket.on('publish_public_key', async (publicKeyJwk) => {
-            if (socket.user && db.users[socket.user.email]) {
+            if (socket.user &amp;&amp; db.users[socket.user.email]) {
                 db.users[socket.user.email].publicKey = publicKeyJwk;
                 await dbManager.saveDatabase();
             }
@@ -674,7 +702,7 @@ module.exports = function setupSockets(io) {
             }
             const email = userIdIndex[targetId];
             const targetUser = email ? db.users[email] : null;
-            if (targetUser && targetUser.publicKey) {
+            if (targetUser &amp;&amp; targetUser.publicKey) {
                 // ECDH sırasında avatarı da ilet
                 if (callback) callback({ success: true, publicKey: targetUser.publicKey, avatar: targetUser.avatar });
             } else {
@@ -691,7 +719,7 @@ module.exports = function setupSockets(io) {
             if (!socket.user) return;
             const userId = socket.user.userId;
 
-            if (db.queue[userId] && db.queue[userId].length > 0) {
+            if (db.queue[userId] &amp;&amp; db.queue[userId].length > 0) {
                 // [GÜVENLİK FIX - SEC-18] Sunucu tarafı katı TTL denetimi:
                 // Süresi dolmuş TTL ve bayat paketler elenir, yalnızca geçerli paketler iletilir.
                 const validPackets = db.queue[userId].filter(p => !isPacketExpired(p));
@@ -714,7 +742,7 @@ module.exports = function setupSockets(io) {
         socket.on('check_node_status', (userId, callback) => {
             if (!socket.user) return callback ? callback({ userId, isOnline: false }) : undefined;
             if (!checkRateLimit(ip, 'node_status', 60, 60000)) return;
-            const isOnline = onlineNodes.has(userId) && onlineNodes.get(userId).size > 0;
+            const isOnline = onlineNodes.has(userId) &amp;&amp; onlineNodes.get(userId).size > 0;
             if (callback) callback({ userId, isOnline });
         });
 
@@ -731,7 +759,7 @@ module.exports = function setupSockets(io) {
             const statuses = {};
             if (Array.isArray(userIds)) {
                 userIds.forEach(userId => {
-                    statuses[userId] = onlineNodes.has(userId) && onlineNodes.get(userId).size > 0;
+                    statuses[userId] = onlineNodes.has(userId) &amp;&amp; onlineNodes.get(userId).size > 0;
                 });
             }
             callback({ statuses });
@@ -797,7 +825,7 @@ module.exports = function setupSockets(io) {
             }
 
             const targetSockets = onlineNodes.get(packet.targetId);
-            if (targetSockets && targetSockets.size > 0) {
+            if (targetSockets &amp;&amp; targetSockets.size > 0) {
                 targetSockets.forEach(sid => io.to(sid).emit('receive_secure_packet', packet));
                 if (callback) callback({ queued: false });
             } else {
@@ -829,7 +857,7 @@ module.exports = function setupSockets(io) {
             const results = [];
             const searchTerm = query.toLowerCase().trim();
             // [GÜVENLİK FIX - SEC-22] Tek karakterli / jokerli brute-force ve toplu numara taramasını engelleme
-            if (!searchTerm || searchTerm.length < 2) return callback({ results: [] });
+            if (!searchTerm || searchTerm.length &lt; 2) return callback({ results: [] });
             for (const email in db.users) {
                 const user = db.users[email];
                 if (user.userId === socket.user.userId) continue;
@@ -838,7 +866,7 @@ module.exports = function setupSockets(io) {
                         userId: user.userId,
                         username: user.username,
                         avatar: user.avatar || null,
-                        isOnline: onlineNodes.has(user.userId) && onlineNodes.get(user.userId).size > 0
+                        isOnline: onlineNodes.has(user.userId) &amp;&amp; onlineNodes.get(user.userId).size > 0
                     });
                 }
                 if (results.length >= 20) break;
@@ -857,7 +885,7 @@ module.exports = function setupSockets(io) {
             if (!checkRateLimit(ip, 'notify', 30, 60000)) return;
             const targetId = data.targetId;
             const targetSockets = onlineNodes.get(targetId);
-            if (targetSockets && targetSockets.size > 0) {
+            if (targetSockets &amp;&amp; targetSockets.size > 0) {
                 targetSockets.forEach(sid => {
                     io.to(sid).emit('contact_request', {
                         senderId: socket.user.userId,
@@ -880,7 +908,7 @@ module.exports = function setupSockets(io) {
             if (!checkRateLimit(ip, 'respond', 30, 60000)) return;
             const { targetId, accepted } = data;
             const targetSockets = onlineNodes.get(targetId);
-            if (targetSockets && targetSockets.size > 0) {
+            if (targetSockets &amp;&amp; targetSockets.size > 0) {
                 targetSockets.forEach(sid => {
                     io.to(sid).emit('contact_request_response', {
                         senderId: socket.user.userId,
@@ -910,14 +938,14 @@ module.exports = function setupSockets(io) {
             };
             const targetSockets = onlineNodes.get(safeData.targetId);
             
-            if (targetSockets && targetSockets.size > 0) {
+            if (targetSockets &amp;&amp; targetSockets.size > 0) {
                 targetSockets.forEach(sid => io.to(sid).emit('packet_revoked', safeData));
             } else {
                 if (db.queue[safeData.targetId]) {
                     const initialLength = db.queue[safeData.targetId].length;
                     // BOLA / IDOR Koruması: Sadece oturum açmış kullanıcının kendi gönderdiği paketi sil
                     db.queue[safeData.targetId] = db.queue[safeData.targetId].filter(
-                        p => !((p.id === safeData.packetId || p.packetId === safeData.packetId) && p.senderId === socket.user.userId)
+                        p => !((p.id === safeData.packetId || p.packetId === safeData.packetId) &amp;&amp; p.senderId === socket.user.userId)
                     );
                     if (initialLength > db.queue[safeData.targetId].length) await dbManager.saveDatabase();
                 }
@@ -933,7 +961,7 @@ module.exports = function setupSockets(io) {
             if (!socket.user) return;
             if (!Array.isArray(userIds)) return;
             userIds.forEach(uid => {
-                if (typeof uid === 'string' && uid.length < 20) {
+                if (typeof uid === 'string' &amp;&amp; uid.length &lt; 20) {
                     socket.join(`status_${uid}`);
                 }
             });
@@ -966,7 +994,7 @@ module.exports = function setupSockets(io) {
         socket.on('typing', (data) => {
             if (!socket.user || !data || !data.targetId) return;
             const targetSockets = onlineNodes.get(data.targetId);
-            if (targetSockets && targetSockets.size > 0) {
+            if (targetSockets &amp;&amp; targetSockets.size > 0) {
                 targetSockets.forEach(sid => io.to(sid).emit('user_typing', { senderId: socket.user.userId }));
             }
         });
@@ -979,7 +1007,7 @@ module.exports = function setupSockets(io) {
         socket.on('stop_typing', (data) => {
             if (!socket.user || !data || !data.targetId) return;
             const targetSockets = onlineNodes.get(data.targetId);
-            if (targetSockets && targetSockets.size > 0) {
+            if (targetSockets &amp;&amp; targetSockets.size > 0) {
                 targetSockets.forEach(sid => io.to(sid).emit('user_typing_stop', { senderId: socket.user.userId }));
             }
         });
@@ -1002,4 +1030,26 @@ module.exports._internals = {
     onlineNodes,
     DUMMY_HASH,
     MAX_QUEUE_SIZE
-};
+};</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-AppConfig.html">AppConfig</a></li><li><a href="module-ClientSocketHandlers.html">ClientSocketHandlers</a></li><li><a href="module-CryptoModule.html">CryptoModule</a></li><li><a href="module-DatabaseManager.html">DatabaseManager</a></li><li><a href="module-ElectronMain.html">ElectronMain</a></li><li><a href="module-ElectronPreload.html">ElectronPreload</a></li><li><a href="module-Server.html">Server</a></li><li><a href="module-SocketServer.html">SocketServer</a></li><li><a href="module-UIManager.html">UIManager</a></li><li><a href="module-VaultDB.html">VaultDB</a></li></ul><h3>Namespaces</h3><ul><li><a href="module-AppConfig-APP_CONFIG.html">APP_CONFIG</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 21:35:39 GMT+0300 (Türkiye Standart Saati)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

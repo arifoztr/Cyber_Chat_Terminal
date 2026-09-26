@@ -1,4 +1,32 @@
-/**
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: public/db.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: public/db.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
  * @file db.js
  * @module VaultDB
  * @description İstemci tarafı kalıcı veri saklama ve kasa (vault) katmanı.
@@ -30,7 +58,7 @@ let _idbInstance = null;
  * CyberVaultDB IndexedDB veritabanı bağlantısını açar veya mevcut bağlantıyı döner.
  * 'packets' (id, peerId, timestamp indeksli) ve 'cryptoKeys' (userId indeksli) nesne depolarını hazırlar.
  * @function openVaultDB
- * @returns {Promise<IDBDatabase>} Açık IndexedDB veritabanı örneği.
+ * @returns {Promise&lt;IDBDatabase>} Açık IndexedDB veritabanı örneği.
  */
 function openVaultDB() {
     return new Promise((resolve, reject) => {
@@ -57,15 +85,15 @@ function openVaultDB() {
  * ve localStorage'daki eski kayıtları temizler.
  * @async
  * @function migrateLocalStorageToIndexedDB
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function migrateLocalStorageToIndexedDB() {
     if (!currentUser) return;
     const prefix = `cyber_history_idx_${currentUser.userId}_`;
     let migratedCount = 0;
-    for (let i = 0; i < localStorage.length; i++) {
+    for (let i = 0; i &lt; localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith(prefix)) {
+        if (key &amp;&amp; key.startsWith(prefix)) {
             const targetId = key.substring(prefix.length);
             const index = JSON.parse(localStorage.getItem(key) || '[]');
             for (const pktId of index) {
@@ -93,12 +121,12 @@ async function migrateLocalStorageToIndexedDB() {
  * @function savePacketToVault
  * @param {string} peerId - Sohbet edilen kişinin userId'si.
  * @param {Object} packet - Kaydedilecek paket nesnesi ({ id, senderId, targetId, payload, timestamp, ttl, ... }).
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function savePacketToVault(peerId, packet) {
     if (!currentUser) return;
     // [GÜVENLİK FIX - SEC-18] Süresi dolmuş TTL paketlerini kasaya kaydetme
-    if (packet.ttl && typeof packet.ttl === 'number') {
+    if (packet.ttl &amp;&amp; typeof packet.ttl === 'number') {
         const elapsed = Date.now() - (packet.timestamp || Date.now());
         if (elapsed >= (packet.ttl * 1000)) return;
     }
@@ -119,7 +147,7 @@ async function savePacketToVault(peerId, packet) {
  * @async
  * @function loadHistoryFromVault
  * @param {string} peerId - Mesaj geçmişi istenen kişinin userId'si.
- * @returns {Promise<Array<Object>>} Geçerli mesaj paketleri listesi.
+ * @returns {Promise&lt;Array&lt;Object>>} Geçerli mesaj paketleri listesi.
  */
 async function loadHistoryFromVault(peerId) {
     if (!currentUser) return [];
@@ -137,7 +165,7 @@ async function loadHistoryFromVault(peerId) {
                 for (const p of packets) {
                     if (p.ownerId !== currentUser.userId) continue;
                     // [GÜVENLİK FIX - SEC-18] Kasa yüklemesinde süresi dolmuş TTL mesajlarını temizle
-                    if (p.ttl && typeof p.ttl === 'number' && (now - (p.timestamp || 0)) >= (p.ttl * 1000)) {
+                    if (p.ttl &amp;&amp; typeof p.ttl === 'number' &amp;&amp; (now - (p.timestamp || 0)) >= (p.ttl * 1000)) {
                         store.delete(p.id);
                         continue;
                     }
@@ -156,7 +184,7 @@ async function loadHistoryFromVault(peerId) {
  * Süresi dolmuş mesaj paketlerini IndexedDB kasasından kalıcı olarak siler.
  * @async
  * @function purgeExpiredVaultPackets
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function purgeExpiredVaultPackets() {
     if (!currentUser) return;
@@ -170,7 +198,7 @@ async function purgeExpiredVaultPackets() {
             const cursor = e.target.result;
             if (cursor) {
                 const pkt = cursor.value;
-                if (pkt && pkt.ttl && typeof pkt.ttl === 'number') {
+                if (pkt &amp;&amp; pkt.ttl &amp;&amp; typeof pkt.ttl === 'number') {
                     if ((now - (pkt.timestamp || 0)) >= (pkt.ttl * 1000)) {
                         cursor.delete();
                     }
@@ -189,7 +217,7 @@ setInterval(purgeExpiredVaultPackets, 10000);
  * @function removePacketFromVault
  * @param {string} peerId - Mesajın ait olduğu karşı tarafın ID'si.
  * @param {string} packetId - Silinecek paketin kimliği.
- * @returns {Promise<boolean>} Paket başarıyla silindiyse true, yetkisiz veya bulunamadıysa false.
+ * @returns {Promise&lt;boolean>} Paket başarıyla silindiyse true, yetkisiz veya bulunamadıysa false.
  */
 async function removePacketFromVault(peerId, packetId) {
     if (!currentUser || !packetId) return false;
@@ -208,7 +236,7 @@ async function removePacketFromVault(peerId, packetId) {
                 const isAuthorized = (
                     pkt.senderId === peerId || 
                     pkt.peerId === peerId || 
-                    (peerId === currentUser.userId && pkt.ownerId === currentUser.userId)
+                    (peerId === currentUser.userId &amp;&amp; pkt.ownerId === currentUser.userId)
                 );
 
                 if (isAuthorized) {
@@ -231,7 +259,7 @@ async function removePacketFromVault(peerId, packetId) {
  * @async
  * @function clearPeerPacketsFromVault
  * @param {string} peerId - Mesajları temizlenecek kişinin ID'si.
- * @returns {Promise<boolean>} Başarıyla temizlendiyse true, hata oluştuysa false.
+ * @returns {Promise&lt;boolean>} Başarıyla temizlendiyse true, hata oluştuysa false.
  */
 async function clearPeerPacketsFromVault(peerId) {
     if (!peerId) return false;
@@ -300,7 +328,7 @@ function loadContactsFromVault() {
  * @function saveCryptoKeyToVault
  * @param {string} userId - Kullanıcı kimliği.
  * @param {Object} keyData - Anahtar verisi ({ privateKey, publicKey, publicJwk }).
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function saveCryptoKeyToVault(userId, keyData) {
     try {
@@ -319,7 +347,7 @@ async function saveCryptoKeyToVault(userId, keyData) {
  * @async
  * @function loadCryptoKeyFromVault
  * @param {string} userId - Kullanıcı kimliği.
- * @returns {Promise<Object|null>} Saklanan anahtar verisi veya bulunamazsa null.
+ * @returns {Promise&lt;Object|null>} Saklanan anahtar verisi veya bulunamazsa null.
  */
 async function loadCryptoKeyFromVault(userId) {
     try {
@@ -343,7 +371,7 @@ async function loadCryptoKeyFromVault(userId) {
  * @async
  * @function removeCryptoKeyFromVault
  * @param {string} userId - Kullanıcı kimliği.
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function removeCryptoKeyFromVault(userId) {
     try {
@@ -354,3 +382,26 @@ async function removeCryptoKeyFromVault(userId) {
         store.delete(userId);
     } catch (e) {}
 }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-AppConfig.html">AppConfig</a></li><li><a href="module-ClientSocketHandlers.html">ClientSocketHandlers</a></li><li><a href="module-CryptoModule.html">CryptoModule</a></li><li><a href="module-DatabaseManager.html">DatabaseManager</a></li><li><a href="module-ElectronMain.html">ElectronMain</a></li><li><a href="module-ElectronPreload.html">ElectronPreload</a></li><li><a href="module-Server.html">Server</a></li><li><a href="module-SocketServer.html">SocketServer</a></li><li><a href="module-UIManager.html">UIManager</a></li><li><a href="module-VaultDB.html">VaultDB</a></li></ul><h3>Namespaces</h3><ul><li><a href="module-AppConfig-APP_CONFIG.html">APP_CONFIG</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 21:35:39 GMT+0300 (Türkiye Standart Saati)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

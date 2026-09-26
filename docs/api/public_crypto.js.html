@@ -1,4 +1,32 @@
-/**
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: public/crypto.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: public/crypto.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>/**
  * @file crypto.js
  * @module CryptoModule
  * @description Kriptografi ve Anahtar Yönetimi Modülü.
@@ -9,7 +37,7 @@
 
 /**
  * Türetilmiş AES anahtarlarının önbelleği (hexSecret -> CryptoKey).
- * @type {Object.<string, CryptoKey>}
+ * @type {Object.&lt;string, CryptoKey>}
  * @private
  */
 const _aesKeyCache = {};
@@ -28,7 +56,7 @@ let myPublicKeyJwk = null;
 
 /**
  * Hedef kullanıcılara göre türetilmiş paylaşılan sırlar (targetUserId -> hexSecret).
- * @type {Object.<string, string>}
+ * @type {Object.&lt;string, string>}
  */
 let derivedSecrets = {};
 
@@ -40,7 +68,7 @@ let derivedSecrets = {};
  */
 function hexToBytes(hex) {
     const bytes = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < bytes.length; i++) {
+    for (let i = 0; i &lt; bytes.length; i++) {
         bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
     }
     return bytes;
@@ -51,7 +79,7 @@ function hexToBytes(hex) {
  * @async
  * @function getAesGcmKey
  * @param {string} hexSecret - 256-bit onaltılık gizli anahtar.
- * @returns {Promise<CryptoKey>} AES-GCM algoritmasında kullanılacak CryptoKey nesnesi.
+ * @returns {Promise&lt;CryptoKey>} AES-GCM algoritmasında kullanılacak CryptoKey nesnesi.
  */
 async function getAesGcmKey(hexSecret) {
     if (_aesKeyCache[hexSecret]) return _aesKeyCache[hexSecret];
@@ -71,10 +99,10 @@ async function getAesGcmKey(hexSecret) {
 function bufferToBase64(buffer) {
     const bytes = new Uint8Array(buffer);
     const chunks = [];
-    for (let i = 0; i < bytes.length; i += 8192) {
+    for (let i = 0; i &lt; bytes.length; i += 8192) {
         chunks.push(String.fromCharCode(...bytes.subarray(i, i + 8192)));
     }
-    const btoaFn = (typeof window !== 'undefined' && window.btoa) ? window.btoa : (typeof btoa !== 'undefined' ? btoa : (b => Buffer.from(b, 'binary').toString('base64')));
+    const btoaFn = (typeof window !== 'undefined' &amp;&amp; window.btoa) ? window.btoa : (typeof btoa !== 'undefined' ? btoa : (b => Buffer.from(b, 'binary').toString('base64')));
     return btoaFn(chunks.join('')); 
 }
 
@@ -85,7 +113,7 @@ function bufferToBase64(buffer) {
  * @returns {Uint8Array} Çözülen bayt dizisi.
  */
 function base64ToBuffer(base64) {
-    const atobFn = (typeof window !== 'undefined' && window.atob) ? window.atob : (typeof atob !== 'undefined' ? atob : (b => Buffer.from(b, 'base64').toString('binary')));
+    const atobFn = (typeof window !== 'undefined' &amp;&amp; window.atob) ? window.atob : (typeof atob !== 'undefined' ? atob : (b => Buffer.from(b, 'base64').toString('binary')));
     const raw = atobFn(base64);
     return Uint8Array.from(raw, c => c.charCodeAt(0));
 }
@@ -97,7 +125,7 @@ function base64ToBuffer(base64) {
  * @function encryptGCM
  * @param {string} text - Şifrelenecek düz metin.
  * @param {string} hexSecret - 256-bit onaltılık paylaşılan sır.
- * @returns {Promise<string>} Base64 kodlu IV ve şifreli veri paketi.
+ * @returns {Promise&lt;string>} Base64 kodlu IV ve şifreli veri paketi.
  */
 async function encryptGCM(text, hexSecret) {
     const key = await getAesGcmKey(hexSecret);
@@ -120,7 +148,7 @@ async function encryptGCM(text, hexSecret) {
  * @param {string} base64Data - Base64 formatında [IV + Şifreli Metin].
  * @param {string} hexSecret - 256-bit onaltılık paylaşılan sır.
  * @throws {Error} Veri bozulmuşsa veya anahtar yanlışsa deşifreleme hatası fırlatır.
- * @returns {Promise<string>} Orijinal düz metin.
+ * @returns {Promise&lt;string>} Orijinal düz metin.
  */
 async function decryptGCM(base64Data, hexSecret) {
     const key = await getAesGcmKey(hexSecret);
@@ -139,13 +167,13 @@ async function decryptGCM(base64Data, hexSecret) {
  * 3. Hiç anahtar yoksa yeni P-256 ECDH çifti oluşturur ve IndexedDB'ye kaydeder.
  * @async
  * @function initEcdhKeys
- * @returns {Promise<void>}
+ * @returns {Promise&lt;void>}
  */
 async function initEcdhKeys() {
     // 1. Önce IndexedDB'den CryptoKey nesnesi olarak yüklemeyi dene
     try {
         const vaultKey = await loadCryptoKeyFromVault(currentUser.userId);
-        if (vaultKey && vaultKey.privateKey && vaultKey.publicJwk) {
+        if (vaultKey &amp;&amp; vaultKey.privateKey &amp;&amp; vaultKey.publicJwk) {
             let pubKey = vaultKey.publicKey;
             if (!pubKey) {
                 pubKey = await crypto.subtle.importKey('jwk', vaultKey.publicJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
@@ -212,7 +240,7 @@ async function initEcdhKeys() {
  * @async
  * @function deriveSharedSecret
  * @param {JsonWebKey} theirPublicJwk - Karşı tarafın JWK açık anahtarı.
- * @returns {Promise<string>} Hex formatında 256-bit türetilmiş ortak anahtar.
+ * @returns {Promise&lt;string>} Hex formatında 256-bit türetilmiş ortak anahtar.
  */
 async function deriveSharedSecret(theirPublicJwk) {
     const theirKey = await crypto.subtle.importKey('jwk', theirPublicJwk, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
@@ -241,20 +269,20 @@ async function deriveSharedSecret(theirPublicJwk) {
  * @async
  * @function ensureSharedSecret
  * @param {string} targetId - Hedef kullanıcının ID'si.
- * @returns {Promise<boolean>} Anahtar başarıyla türetildiyse true, aksi halde false.
+ * @returns {Promise&lt;boolean>} Anahtar başarıyla türetildiyse true, aksi halde false.
  */
 async function ensureSharedSecret(targetId) {
     if (derivedSecrets[targetId]) return true;
       
     return new Promise((resolve) => {
         safeEmit('get_public_key', targetId, async (res) => {
-            if (res && res.success && res.publicKey) {
+            if (res &amp;&amp; res.success &amp;&amp; res.publicKey) {
                 try {
                     // [GÜVENLİK FIX - SEC-05] Açık anahtar parmak izi kontrolü (MITM tespiti)
                     const fingerprint = await generateKeyFingerprint(res.publicKey);
                     const storedFp = localStorage.getItem('cyber_fp_' + currentUser.userId + '_' + targetId);
                     
-                    if (storedFp && storedFp !== fingerprint) {
+                    if (storedFp &amp;&amp; storedFp !== fingerprint) {
                         // ⚠️ ANAHTAR DEĞİŞMİŞ — Kullanıcıyı uyar
                         console.warn(`[!] GÜVENLİK UYARISI: ${targetId} açık anahtarı değişmiş!`);
                         if (typeof showToast === 'function') {
@@ -322,7 +350,7 @@ function loadSecretsFromVault() { if (currentUser) { const data = sessionStorage
  * @async
  * @function generateKeyFingerprint
  * @param {JsonWebKey} publicKeyJwk - Parmak izi alınacak JWK açık anahtar.
- * @returns {Promise<string|null>} Okunabilir parmak izi dizesi veya anahtar yoksa null.
+ * @returns {Promise&lt;string|null>} Okunabilir parmak izi dizesi veya anahtar yoksa null.
  */
 async function generateKeyFingerprint(publicKeyJwk) {
     if (!publicKeyJwk) return null;
@@ -341,7 +369,7 @@ async function generateKeyFingerprint(publicKeyJwk) {
  * @function generateSafetyNumber
  * @param {JsonWebKey} myPubKeyJwk - Kullanıcının kendi JWK açık anahtarı.
  * @param {JsonWebKey} theirPubKeyJwk - İletişim kurulan karşı tarafın JWK açık anahtarı.
- * @returns {Promise<string|null>} 5'li gruplar halinde formatlanmış güvenlik numarası.
+ * @returns {Promise&lt;string|null>} 5'li gruplar halinde formatlanmış güvenlik numarası.
  */
 async function generateSafetyNumber(myPubKeyJwk, theirPubKeyJwk) {
     if (!myPubKeyJwk || !theirPubKeyJwk) return null;
@@ -362,7 +390,7 @@ async function generateSafetyNumber(myPubKeyJwk, theirPubKeyJwk) {
  * @async
  * @function verifyContactFingerprint
  * @param {string} targetId - Doğrulanacak hedef kişinin ID'si.
- * @returns {Promise<Object>} Doğrulama sonucu ({ verified, fingerprint, firstTime?, previousFingerprint?, reason? }).
+ * @returns {Promise&lt;Object>} Doğrulama sonucu ({ verified, fingerprint, firstTime?, previousFingerprint?, reason? }).
  */
 async function verifyContactFingerprint(targetId) {
     return new Promise((resolve) => {
@@ -402,12 +430,12 @@ async function verifyContactFingerprint(targetId) {
  * @returns {void}
  */
 function acceptNewFingerprint(targetId, fingerprint) {
-    if (currentUser && targetId && fingerprint) {
+    if (currentUser &amp;&amp; targetId &amp;&amp; fingerprint) {
         localStorage.setItem('cyber_fp_' + currentUser.userId + '_' + targetId, fingerprint);
     }
 }
 
-if (typeof module !== 'undefined' && module.exports) {
+if (typeof module !== 'undefined' &amp;&amp; module.exports) {
     module.exports = {
         hexToBytes,
         getAesGcmKey,
@@ -434,3 +462,26 @@ if (typeof module !== 'undefined' && module.exports) {
         getDerivedSecrets: () => derivedSecrets
     };
 }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Modules</h3><ul><li><a href="module-AppConfig.html">AppConfig</a></li><li><a href="module-ClientSocketHandlers.html">ClientSocketHandlers</a></li><li><a href="module-CryptoModule.html">CryptoModule</a></li><li><a href="module-DatabaseManager.html">DatabaseManager</a></li><li><a href="module-ElectronMain.html">ElectronMain</a></li><li><a href="module-ElectronPreload.html">ElectronPreload</a></li><li><a href="module-Server.html">Server</a></li><li><a href="module-SocketServer.html">SocketServer</a></li><li><a href="module-UIManager.html">UIManager</a></li><li><a href="module-VaultDB.html">VaultDB</a></li></ul><h3>Namespaces</h3><ul><li><a href="module-AppConfig-APP_CONFIG.html">APP_CONFIG</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 21:35:39 GMT+0300 (Türkiye Standart Saati)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

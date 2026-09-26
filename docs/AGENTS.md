@@ -1,126 +1,113 @@
-AGENTS.md – Siber E2EE Sohbet Terminali (v10 Cyber-HUD Edition)
-📌 Proje Özeti
-Bu proje, uçtan uca şifreli (E2EE) bir P2P sohbet terminalidir. İstemciler (web tarayıcıları) arasında ECDH ile anahtar takası yapılır, tüm mesajlar ve dosyalar AES-GCM-256 ile şifrelenir. Sunucu yalnızca signaling ve relay görevi görür; şifreli içerikleri asla çözemez.
+# AGENTS.md – Siber E2EE Sohbet Terminali (Developer & AI Agent Kılavuzu)
 
-Arayüz, modern cyber-dark estetiğinde tasarlanmıştır ve TTL ile kendini imha eden mesajlar, görsel dosya paylaşımı, çevrimdışı kuyruklama, parmak izi doğrulama ve tamamen istemci tarafında saklanan kriptografik anahtarlar içerir.
+## 📌 Proje Özeti
+Bu proje, uçtan uca şifreli (E2EE) bir P2P sohbet terminalidir. İstemciler (web tarayıcıları ve Electron masaüstü uygulaması) arasında ECDH (P-256) ile asenkron anahtar takası yapılır; tüm mesajlar ve dosyalar (resim, PDF) AES-GCM-256 ile şifrelenir. Sunucu yalnızca signaling ve relay görevi görür; şifreli içerikleri asla çözemez, inceleyemez veya saklayamaz.
 
-🧰 Teknoloji Yığını
-Alan  ||    Teknoloji
--------------------    
-Frontend  ||    Vanilla JavaScript, Tailwind CSS (CDN), Socket.io (client)
-Backend   ||	Node.js, Express, Socket.io (server)
-Şifreleme   ||	Web Crypto API (crypto.subtle): AES-GCM, ECDH, SHA-256
-Kimlik Doğrulama    ||	JWT (bağımlılıksız, HMAC-SHA256) + bcrypt
-Veritabanı  ||	SQLite (WAL modu) + bellek-içi cache, debounced yazma
-CSS Kütüphanesi ||	Tailwind CSS (CDN) + özel modern cyber stilleri (style.css)
-Fontlar ||	Inter, JetBrains Mono
+Arayüz; modern cyber-dark HUD estetiğinde tasarlanmış olup TTL ile kendini imha eden mesajlar, dosya/belge paylaşımı, çevrimdışı kuyruklama, parmak izi (Safety Number) doğrulaması, ses efektleri ve tamamen istemci tarafında saklanan IndexedDB şifreli kasası içerir.
 
+---
 
+## 🧰 Teknoloji Yığını
 
-📁 Klasör / Dosya Yapısı
-text
+| Alan | Teknoloji |
+|------|-----------|
+| **Frontend** | Vanilla JavaScript (ES6+), Tailwind CSS, Socket.IO Client |
+| **Masaüstü (Desktop)** | Electron, ContextBridge API (İzole Preload, Sandbox) |
+| **Backend** | Node.js, Express, Socket.IO Server |
+| **Şifreleme (E2EE)** | Web Crypto API (`window.crypto.subtle`): AES-256-GCM, ECDH (P-256), SHA-256, PBKDF2 |
+| **Kimlik Doğrulama** | Bağımsız JWT (HMAC-SHA256) + bcrypt şifreleme |
+| **Veritabanı** | Hibrit: Yerel SQLite3 (WAL modu) veya Cloud Turso (`@libsql/client`) |
+| **İstemci Depolama** | IndexedDB (Kasa / Vault) + localStorage yedekleme/taşıma |
+| **Test Altyapısı** | Vitest, V8 Coverage (145+ Test, %94+ kod kapsamı) |
+| **Dökümantasyon** | JSDoc 3, Markdown Eklentisi (`npm run docs`) |
+| **Tipografi** | Inter, JetBrains Mono |
+
+---
+
+## 📁 Klasör ve Dosya Yapısı
+
+```text
 /
+├── electron/
+│   ├── main.js                  # Electron ana süreç yaşam döngüsü ve IPC güvenliği
+│   └── preload.js               # ContextBridge ile izole API köprüsü (electronAPI)
 ├── public/
-│   ├── siber_e2ee_sohbet_terminali.html  # Ana HTML şablonu
-│   ├── ui.js                             # UI, state yönetimi, auth, reconnect
-│   ├── socket-handlers.js                # Socket.IO olay dinleyicileri (istemci)
-│   ├── crypto.js                         # ECDH/AES kripto işlemleri (istemci)
-│   ├── db.js                             # IndexedDB yönetimi (istemci)
-│   └── style.css                         # Tüm özel CSS (cyber tema, animasyonlar)
-├── database.js                           # SQLite veritabanı yönetimi (okuma/yazma, migration, GC)
-├── socket.js                             # Socket.IO olay işleyicileri (sunucu tarafı)
-├── server.js                             # Express + HTTP sunucu başlangıcı
-├── database.sqlite                       # (Çalışma zamanı oluşur) SQLite veritabanı
-├── .env                                  # Ortam değişkenleri (JWT_SECRET, CORS_ORIGIN)
-├── OPTIMIZATIONS.md                      # Güvenlik kılavuzu ve optimizasyon detayları
-├── PROGRESS.md                           # Mevcut durum ve roadmap
-└── AGENTS.md                             # (Bu dosya) – AI asistanı için kılavuz
-🤖 AI Asistanı İçin Özel Talimatlar
-Bu proje "Vibe Coding" yaklaşımıyla geliştirilmektedir. Aşağıdaki kurallara kesinlikle uyun:
+│   ├── config.js                # Dinamik runtime istemci yapılandırması (BACKEND_URL)
+│   ├── crypto.js                # Web Crypto API şifreleme, ECDH, PBKDF2 motoru
+│   ├── db.js                    # IndexedDB Vault ve yerel kasa depolama yönetimi
+│   ├── index.html               # Tek sayfa modern cyber terminal HTML arayüzü
+│   ├── socket-handlers.js       # İstemci Socket.IO olay dinleyicileri
+│   ├── style.css                # Siber karanlık HUD stilleri ve animasyonlar
+│   ├── ui.js                    # UI kontrolcüsü, formlar, mesaj renderlama, sesler
+│   └── vendor/                  # Yerel 3. parti kütüphaneler (tailwindcss, socket.io, qrcode)
+├── src/
+│   ├── database.js              # Turso / SQLite3 hibrit veritabanı, queue ve GC
+│   ├── server.js                # Express HTTP sunucusu, CSP/HSTS güvenlik başlıkları
+│   └── socket.js                # Socket.IO sunucusu, JWT, rate limit ve 24 olay işleyicisi
+├── tests/                       # Vitest birim ve entegrasyon test paketleri
+│   ├── auth.test.js
+│   ├── crypto.test.js
+│   ├── database.test.js
+│   ├── e2ee-message.test.js
+│   ├── server.test.js
+│   └── socket.test.js
+├── docs/                        # Proje teknik ve dağıtım dokümanları
+│   ├── AGENTS.md                # (Bu dosya) AI Ajan ve Geliştirici Kılavuzu
+│   ├── DEPLOYMENT.md            # Cloudflare Pages, Render, Railway, Turso yayına alma
+│   ├── OPTIMIZATIONS.md         # Güvenlik politikaları, hız limitleri ve optimizasyonlar
+│   ├── PROGRESS.md              # Tamamlanan fazlar ve yol haritası
+│   └── api/                     # JSDoc tarafından üretilen HTML API dökümanları
+├── jsdoc.json                   # JSDoc derleyici yapılandırma dosyası
+├── package.json                 # Proje bağımlılıkları ve npm scriptleri
+└── vitest.config.mjs            # Test yapılandırması ve kapsam ayarları
+```
 
-1. Kod Dili ve Yorumlar
--Kod (değişkenler, fonksiyonlar, API olayları) İngilizce olmalıdır.
+---
 
--Kullanıcı arayüzü metinleri (etiketler, butonlar, tost mesajları) Türkçe olmalıdır.
+## 🤖 AI Asistanı ve Geliştiriciler İçin Temel Kurallar
 
--Yorumlar Türkçe olabilir, ancak kodun kendisi İngilizce kalmalıdır.
+1. **Dil Ayrımı ve JSDoc Standartları:**
+   - Kod mimarisi (değişkenler, fonksiyonlar, socket olayları): **İngilizce**.
+   - Kullanıcı arayüzü metinleri (etiketler, butonlar, toast bildirimleri): **Türkçe**.
+   - Kod yorumları: **Türkçe JSDoc** formatında olmalıdır. TypeScript dinamik `import()` tipi yerine standart Closure tipleri (`{Object}`, `{string}`, `{boolean}`) kullanılmalıdır.
 
-2. Frontend Katmanı
--Vanilla JavaScript kullanın. React, Vue, Svelte veya herhangi bir framework/bundler YASAKTIR.
+2. **Frontend Katmanı:**
+   - **Vanilla JavaScript:** React, Vue veya harici UI derleyicileri kesinlikle kullanılmaz.
+   - **Doğal Kriptografi:** Şifreleme işlemleri yalnızca `window.crypto.subtle` API'siyle yapılır. Harici kütüphane eklenmez.
+   - **XSS ve CSP Uyumluluğu:** Inline event handler'lar (`onclick=""`) yerine `addEventListener` kullanılır (`SEC-13`). `innerHTML` ile kullanıcı girdisi basılmaz; güvenli DOM API'leri (`textContent`, `createElement`) tercih edilir.
 
--Tüm şifreleme işlemleri window.crypto.subtle API'si ile yapılmalıdır. Harici kripto kütüphaneleri kullanmayın.
+3. **Sıfır-Bilgi Backend (Zero-Knowledge):**
+   - Sunucu yalnızca sinyalleşme ve paket yönlendirme yapar.
+   - `textPayload` veya `filePayload` içerikleri sunucuda asla deşifre edilmez, parse edilmez, kaydedilmez veya loglanmaz.
 
--CSS eklemeleri Tailwind CDN sınıfları + style.css içindeki özel sınıflarla yapılmalıdır.
+4. **Veritabanı ve Çevrimdışı Kuyruk Güvenliği:**
+   - Veritabanı hem yerel SQLite3 hem de bulut Turso (`@libsql/client`) ile uyumlu çalışır.
+   - Kuyruk yazma işlemlerinde write-lock ve `db.queue[targetId] = db.queue[targetId] || []` yapısı korunmalıdır.
+   - Zaman aşımına uğrayan TTL paketleri hem sunucuda (GC) hem de istemcide anında imha edilir.
 
--Yeni UI öğeleri mevcut modern cyber-dark estetiğine (koyu kartlar, CSS değişkenleri, duyarlı düzen, Inter ve JetBrains Mono tipografisi) uymalıdır. Ses efektleri ve ağ dinleyici (sniffer) arayüzden çıkarılmıştır, yeni bileşenlerde bunlara referans verilmemelidir.
+5. **Test Bütünlüğü:**
+   - Kod tabanında yapılan her değişiklik sonrası `npm.cmd test` çalıştırılarak 145 testin tamamının başarılı geçtiği doğrulanmalıdır.
 
-3. Backend Katmanı
--Sunucu yalnızca signaling ve relay görevi görür. textPayload veya filePayload içeriğini asla çözmeyin, incelemeyin veya loglamayın.
+---
 
--db nesnesinde yapılan her değişiklikten sonra saveDatabase() çağrılmalıdır (debounced ~50ms).
+## 🧪 Test ve Doğrulama Komutları
 
--Kritik işlemlerde (hesap silme, sunucu kapanışı) saveDatabaseImmediate() kullanın.
+```bash
+# Birim ve entegrasyon testlerini çalıştırma (Kapsam raporu ile)
+npm.cmd test
 
--Kuyruğa ekleme yaparken mutlaka if (!db.queue[targetId]) db.queue[targetId] = [] kontrolü yapın.
+# JSDoc HTML dökümantasyonunu yeniden üretme
+npm.cmd run docs
 
-4. State ve UI Senkronizasyonu
--Frontend global state değişkenleriyle çalışır (myContacts, activeTarget, derivedSecrets).
+# Sunucuyu başlatma
+npm start
 
--State değiştiğinde ilgili UI render fonksiyonlarını manuel olarak tetikleyin (renderContactsSidebar(), enableChatUI() vb.).
+# Masaüstü Electron uygulamasını başlatma
+npm run desktop:start
+```
 
--DOM güncellemeleri için document.getElementById() ile doğrudan erişim kullanın.
+---
 
-5. Hata Ayıklama Stili
--Hataları console.error ile loglayın, ancak kullanıcıya showToast() ile Türkçe ve anlaşılır mesajlar gösterin.
-
--Beklenmeyen durumlar için try/catch blokları kullanın ve UI'da geri bildirim sağlayın.
-
-⚠️ Bilinen Sorunlar / Kırılgan Noktalar
-🔴 Revoke Protokolü (Mesaj İmhası)
-Kırılganlık: revoke_packet olayı, packetId, senderId ve targetId alanlarının tam eşleşmesine bağlıdır.
-
-Risk: Paket yapısı değişirse (örneğin alan adı değişikliği) iptal çalışmaz. Ayrıca DOM'da msg-{packetId} ID'siyle aranan öğe bulunamazsa hata oluşur.
-
-Öneri: Packet şemasını değiştirirken bu üç alanı koruyun. socket.js içindeki filtreleme mantığını da güncelleyin.
-
-🟡 Veritabanı (SQLite) Performansı
-Veriler SQLite (WAL modu) ile saklanır, bellek-içi cache (db.users, db.queue) üzerinden okunur.
-
-Debounce (50ms) ile yazma işlemleri birleştirilse de, yüksek trafikte tam senkronizasyon sorunları yaşanabilir.
-
-Transaction bazlı yazma ve write lock mekanizması ile veri bütünlüğü korunur.
-
-🟠 Frontend State Yönetimi
-Global değişkenler üzerinden yapılan tüm mutasyonlar DOM'a otomatik yansımaz.
-
-Örneğin unreadCounts güncellenir, ancak renderContactsSidebar() çağrılmazsa kullanıcı göremez.
-
-Çözüm: State değişikliği yapan her fonksiyonun sonunda ilgili render fonksiyonlarını çağırdığından emin olun.
-
-🔵 Offline Kuyruk (Queue) Overwrite Rsiski
-socket.js içinde db.queue[packet.targetId] = db.queue[packet.targetId] || [] kontrolü yapılmazsa, mevcut kuyruk yanlışlıkla sıfırlanabilir.
-
-Fix: Her ekleme öncesi if (!db.queue[targetId]) db.queue[targetId] = []; kontrolü eklenmiştir, ancak bu kuralı her yeni işlemde hatırlayın.
-
-🟣 JWT ve Oturum Yönetimi
-JWT, bağımlılıksız olarak HMAC-SHA256 ile imzalanmıştır. JWT_SECRET değişkeni .env'den okunmalıdır (prod ortamında).
-
-Şu an process.env.JWT_SECRET yoksa sabit anahtar kullanılır – bu güvenlik zafiyetidir.
-
-Öneri: .env dosyası oluşturup JWT_SECRET tanımlayın ve dotenv ekleyin.
-
-🧪 Test ve Doğrulama İpuçları
-Test Senaryosu	Nasıl Doğrulanır
-ECDH Anahtar Takası	İki taraf da giriş yaptıktan sonra derivedSecrets objesinde karşılıklı anahtar var mı kontrol edin.
-Mesaj Şifreleme	DevTools Network/Konsol akışında textPayload alanının şifreli (base64) göründüğünden emin olun.
-Revoke (İmha)	Mesaj gönderip "İMHA ET" butonuna tıklayın. Karşı tarafta mesaj kaybolmalı.
-TTL (Zamanlı İmha)	TTL süresi dolduğunda mesaj hem DOM'dan hem de IDB'den silinmeli.
-Çevrimdışı Kuyruk	Hedef çevrimdışıyken mesaj gönderin. Hedef giriş yaptığında mesajlar gelmeli.
-📎 Ek Notlar
-OPTIMIZATIONS.md ve PROGRESS.md dosyaları, gelecek planlamaları içerir. FAZ 1–5 arası güvenlik, ölçeklenebilirlik ve deneyim iyileştirmeleri burada detaylandırılmıştır.
-
-database.js içindeki MAX_PACKET_AGE_MS = 7 gün değeri, kuyruktaki mesajların otomatik temizlenme süresidir.
-
-Son Güncelleme: 2026-09-16
-Versiyon: v10 (Cyber-HUD Edition — Modern Dark UI)
-Maintainer: Vibe Coding Collective 🚀
+**Son Güncelleme:** 2026-09-26  
+**Sürüm:** v10 (Cyber-HUD Edition — Production Ready)  
+**Lisans:** ISC

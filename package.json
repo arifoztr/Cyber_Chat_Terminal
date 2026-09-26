@@ -8,6 +8,7 @@
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "docs": "jsdoc -c jsdoc.json",
     "start": "node src/server.js",
     "dev": "node src/server.js",
     "desktop:start": "electron electron/main.js",
@@ -32,6 +33,7 @@
     "@vitest/coverage-v8": "^5.0.2",
     "electron": "^44.4.3",
     "electron-builder": "^26.15.3",
+    "jsdoc": "^4.0.5",
     "vitest": "^5.0.2"
   }
 }
