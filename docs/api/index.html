@@ -52,28 +52,34 @@
 <img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen" alt="Node">
 <img src="https://img.shields.io/badge/tests-145%20passed-brightgreen" alt="Tests">
 <img src="https://img.shields.io/badge/coverage-95%25-brightgreen" alt="Coverage">
+<img src="https://img.shields.io/badge/JSDoc-100%25_Documented-blue" alt="JSDoc">
+<img src="https://img.shields.io/badge/E2EE-AES--256--GCM-orange" alt="E2EE">
 <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey" alt="Platforms">
 <img src="https://img.shields.io/badge/sqlite-WAL_Mode-blue" alt="SQLite">
+<img src="https://img.shields.io/badge/turso-libSQL_ready-00EB8A" alt="Turso">
 <img src="https://img.shields.io/badge/docker-ready-2496ED" alt="Docker"></p>
 <hr>
 <h2>📌 Proje Özeti</h2>
-<p>Bu proje, modern web tarayıcıları ve yerel masaüstü uygulamaları arasında <strong>ECDH (Elliptic-curve Diffie–Hellman)</strong> ile asenkron anahtar takası yapılan, tüm metin ve dosya içeriklerinin <strong>AES-GCM-256</strong> ile istemci tarafında şifrelendiği uçtan uca korumalı bir P2P sohbet platformudur.</p>
+<p>Bu proje, modern web tarayıcıları ve yerel masaüstü uygulamaları arasında <strong>ECDH (Elliptic-curve Diffie–Hellman, P-256)</strong> ile asenkron anahtar takası yapılan, tüm metin ve dosya içeriklerinin <strong>AES-GCM-256</strong> ile istemci tarafında şifrelendiği uçtan uca korumalı bir P2P sohbet platformudur.</p>
 <p>Sunucu mimarisi <strong>Zero-Knowledge (Sıfır Bilgi)</strong> prensibiyle tasarlanmıştır. Sunucu yalnızca relay vazifesi görür; iletilen mesaj paketlerinin veya dosyaların şifresini çözebilecek anahtarlara hiçbir zaman sahip olamaz.</p>
+<hr>
 <h3>🌟 Öne Çıkan Özellikler</h3>
 <ul>
 <li>🔐 <strong>Askeri Düzey E2EE Şifreleme:</strong> İstemciler arası ECDH (P-256) anahtar anlaşması ve her paket için rastgele 12-byte IV (Initialization Vector) ile AES-GCM-256 şifreleme (Tamamen yerel Web Crypto API).</li>
 <li>🛡️ <strong>Sıfır Dış CDN &amp; Sıkı CSP:</strong> Tüm istemci kütüphaneleri (Tailwind CSS, Socket.IO, QR Code) yerel (<code>public/vendor/</code>) olarak barındırılır. Katı Content-Security-Policy kuralları ile üçüncü taraf kaynak ve script enjeksiyonları tamamen engellenmiştir.</li>
 <li>💻 <strong>Çapraz Platform Masaüstü:</strong> Electron tabanlı güvenli masaüstü istemcisi; <strong>Windows</strong> (<code>.exe</code>), <strong>Linux</strong> (<code>.deb</code>, <code>.AppImage</code>) ve <strong>macOS</strong> (<code>.dmg</code>, <code>.zip</code>) için optimize derlemeler.</li>
-<li>👤 <strong>Profil &amp; Hesap Yönetimi:</strong> Kullanıcı avatarı belirleme/güncelleme (200 KB boyut kısıtı), eski şifre doğrulamalı şifre güncelleme ve tüm verileri, kuyrukları anında temizleyen güvenli hesap silme.</li>
+<li>👤 <strong>Profil &amp; Hesap Yönetimi:</strong> Kullanıcı avatarı belirleme/güncelleme (Canvas üzerinde istemci tarafı optimizasyon), eski şifre doğrulamalı şifre güncelleme ve tüm verileri, kuyrukları anında temizleyen güvenli hesap silme.</li>
 <li>🔍 <strong>Ajan Arama &amp; Bağlantı Talepleri:</strong> Benzersiz Ajan ID (<code>AGN-XXXX-XXXX</code>) veya kullanıcı adı ile arama, onaylı bağlantı isteği (Accept/Reject) akışı.</li>
 <li>🔗 <strong>Akıllı &amp; Güvenli Bağlantı Tıklama (Smart URL Detection):</strong> Mesajlardaki <code>http://</code>, <code>https://</code> ve <code>www.</code> bağlantıları otomatik algılanır; XSS korumalı güvenli etiketlere (<code>target=&quot;_blank&quot;</code>, <code>rel=&quot;noopener noreferrer&quot;</code>) dönüştürülerek açılır.</li>
 <li>📄 <strong>Uçtan Uca Şifreli Dosya &amp; PDF Aktarımı:</strong> Görseller ve PDF belgeleri (maks. 5 MB) istemcide şifrelenerek güvenle gönderilir; siber kart yapısı üzerinden dahili PDF önizleme ve indirme desteği.</li>
-<li>⏱️ <strong>TTL (Zaman Ayarlı İmha):</strong> Belirlenen süre (5s, 10s, 30s, 60s) sonunda mesajlar hem arayüzden hem de yerel IndexedDB kasasından otomatik ve kalıcı olarak imha edilir.</li>
+<li>⏱️ <strong>TTL (Zaman Ayarlı İmha):</strong> Belirlenen süre (5s, 10s, 30s, 60s) sonunda mesajlar hem arayüzden hem de yerel IndexedDB kasasından otomatik ve kalıcı olarak imha edilir. Sekme arka plandan döndüğünde süresi dolmuş tüm iletiler anında silinir (<code>SEC-18</code>).</li>
 <li>🗑️ <strong>Revoke Protokolü (Herkesten Sil):</strong> Gönderici dilediği an iletisini iki taraftan birden silebilir (Sunucu tarafı BOLA yetkilendirme doğrulamalı).</li>
 <li>📴 <strong>Kalıcı Çevrimdışı Kuyruk (Offline Queue):</strong> Karşı taraf çevrimdışı olsa bile paketler SQLite üzerinde güvenle kuyruklanır ve kullanıcı bağlandığında otomatik teslim edilir (7 günlük otomatik çöp toplayıcı GC).</li>
-<li>🪪 <strong>Parmak İzi (Fingerprint) Doğrulama:</strong> Ortadaki Adam (MITM) saldırılarını engellemek amacıyla ECDH açık anahtarları üzerinden SHA-256 parmak izi ve QR kod doğrulama.</li>
-<li>⚡ <strong>Yazıyor... &amp; Durum Takibi:</strong> Gerçek zamanlı yazıyor göstergesi, çevrimiçi/çevrimdışı durum takibi ve bağlantı koptuğunda cyberpunk tarzı otomatik yeniden bağlanma (Auto-reconnect) katmanı.</li>
-<li>🧪 <strong>Kapsamlı Test Altyapısı:</strong> Vitest ve v8 coverage motoru ile koşan 145 birim, entegrasyon ve kripto testi (%95+ kod kapsama oranı).</li>
+<li>🪪 <strong>Parmak İzi (Fingerprint) Doğrulama:</strong> Ortadaki Adam (MITM) saldırılarını engellemek amacıyla ECDH açık anahtarları üzerinden SHA-256 parmak izi ve Safety Number doğrulama rehberi.</li>
+<li>🔊 <strong>Siber Ses Geri Bildirimleri:</strong> Web Audio API sentezleyici ile üretilen fütüristik siber ses efektleri (yazma, paket iletimi, hata, başarı sesleri).</li>
+<li>⚡ <strong>Yazıyor... &amp; Durum Takibi:</strong> Gerçek zamanlı yazıyor göstergesi, çevrimiçi/çevrimdışı durum takibi ve bağlantı koptuğunda otomatik yeniden bağlanma (Auto-reconnect) katmanı.</li>
+<li>🧪 <strong>Kapsamlı Test Altyapısı:</strong> Vitest ve v8 coverage motoru ile koşan 145 birim, entegrasyon ve kripto testi (%94+ kod kapsama oranı).</li>
+<li>📚 <strong>Tam JSDoc Dökümantasyonu:</strong> Kod tabanındaki tüm backend, istemci ve Electron modülleri JSDoc standartlarında açıklanmış, <code>npm run docs</code> ile tek tıkla zengin HTML dökümantasyonu üretilebilir.</li>
 </ul>
 <hr>
 <h2>🧰 Teknoloji Yığını</h2>
@@ -99,7 +105,7 @@
 <tr>
 <td><strong>Kriptografi</strong></td>
 <td>Web Crypto API (<code>window.crypto.subtle</code>)</td>
-<td>Tarayıcı yerel ECDH (P-256), AES-GCM-256, SHA-256</td>
+<td>Tarayıcı yerel ECDH (P-256), AES-GCM-256, SHA-256, PBKDF2</td>
 </tr>
 <tr>
 <td><strong>Masaüstü</strong></td>
@@ -113,7 +119,7 @@
 </tr>
 <tr>
 <td><strong>Veritabanı</strong></td>
-<td>SQLite (WAL Modu) + Turso Bulut SQLite (@libsql/client)</td>
+<td>Hibrit: SQLite (WAL Modu) veya Turso Bulut SQLite (@libsql/client)</td>
 <td>Ortam değişkeniyle yerel SQLite veya bulut veritabanı seçimi; bellek-içi önbellek ve debounced flush</td>
 </tr>
 <tr>
@@ -124,7 +130,12 @@
 <tr>
 <td><strong>Test &amp; Kalite</strong></td>
 <td>Vitest, @vitest/coverage-v8</td>
-<td>145 test senaryosu, %95+ test kapsamı</td>
+<td>145 test senaryosu, %94+ test kapsamı</td>
+</tr>
+<tr>
+<td><strong>Dökümantasyon</strong></td>
+<td>JSDoc 3, Markdown Eklentisi</td>
+<td>HTML API dökümantasyon motoru (<code>npm run docs</code>)</td>
 </tr>
 <tr>
 <td><strong>Tipografi &amp; Stil</strong></td>
@@ -135,7 +146,7 @@
 </table>
 <hr>
 <h2>📁 Proje Dizin Yapısı</h2>
-<pre class="prettyprint source"><code>/
+<pre class="prettyprint source lang-text"><code>/
 ├── .github/                               # GitHub Actions CI/CD iş akışları
 │   └── workflows/
 │       ├── build-linux.yml                # Linux (.deb, .AppImage) otomatik derleme
@@ -173,8 +184,9 @@
 │   ├── DEPLOYMENT.md                      # Hibrit bulut dağıtım kılavuzu (Cloudflare + Bulut)
 │   ├── OPTIMIZATIONS.md                   # Güvenlik ve performans optimizasyon detayları
 │   ├── PROGRESS.md                        # Faz durumu ve sürüm yol haritası
-│   └── AGENTS.md                          # AI asistanı ve geliştirici standartları kılavuzu
-├── dist/                                  # Masaüstü derleme çıktıları (Setup, Portable, deb, AppImage, dmg)
+│   ├── AGENTS.md                          # AI asistanı ve geliştirici standartları kılavuzu
+│   └── api/                               # JSDoc tarafından derlenen HTML API dökümantasyonu
+├── jsdoc.json                             # JSDoc yapılandırma dosyası
 ├── Dockerfile                             # Konteynerize dağıtım dosyası
 ├── electron-builder.json                  # Çoklu platform masaüstü paketleme yapılandırması
 ├── vitest.config.mjs                      # Test ortamı ve v8 coverage yapılandırması
@@ -195,7 +207,7 @@
 <h3>💻 Yöntem 1: Windows Masaüstü Uygulaması (.exe) Olarak Kurulum</h3>
 <p>Cyber Chat Terminal, uzaktaki veya yereldeki sunucuya güvenli şekilde bağlanan tam teşekküllü bir Windows uygulaması olarak kullanılabilir.</p>
 <h4>1. Hazır Kurulum Dosyaları ile Kullanım</h4>
-<p>GitHub Releases bölümünden veya <code>dist/</code> dizininden derlenen dosyalarla:</p>
+<p>GitHub Releases bölümünden derlenen dosyalarla:</p>
 <ul>
 <li><strong>Kurulum Sihirbazı (Setup):</strong> <code>Cyber Chat Terminal Setup 1.0.0.exe</code><br>
 Çift tıklayıp kurulum sihirbazını tamamlayın. Masaüstünüze ve Başlat Menünüze otomatik kısayol eklenir, Denetim Masası'ndan kaldırılabilir.</li>
@@ -203,7 +215,6 @@
 Kurulum gerektirmez. Çift tıkladığınız anda doğrudan açılır, USB belleğe atıp her bilgisayarda çalıştırılabilir.</li>
 </ul>
 <h4>2. Kendi Masaüstü Paketlerinizi (.exe) Derlemek</h4>
-<p>Projeyi klonladıktan sonra kendi Windows uygulamanızı oluşturmak için:</p>
 <pre class="prettyprint source lang-bash"><code># 1. Bağımlılıkları yükleyin
 npm install
 
@@ -220,7 +231,7 @@ npm run desktop:build
 <h3>🐧 Yöntem 2: Linux Masaüstü Uygulaması (<code>.deb</code> / <code>.AppImage</code>) Olarak Kurulum</h3>
 <p>Cyber Chat Terminal, GitHub Actions tarafından otomatik derlenen <strong><code>.deb</code></strong> (Debian/Ubuntu) ve <strong><code>.AppImage</code></strong> paketleriyle Linux'ta yerel masaüstü uygulaması olarak çalıştırılabilir.</p>
 <h4>Paketi İndirme</h4>
-<p>GitHub reposundaki <strong><a href="https://github.com/Arif8054/Cyber_Chat_Terminal/releases">Releases</a></strong> sayfasından en güncel <code>cyber_x.x.x_amd64.deb</code> veya <code>Cyber Chat Terminal-x.x.x.AppImage</code> dosyasını indirin.</p>
+<p>GitHub reposundaki <strong><a href="https://github.com/arifoztr/Cyber_Chat_Terminal/releases">Releases</a></strong> sayfasından en güncel <code>cyber_x.x.x_amd64.deb</code> veya <code>Cyber Chat Terminal-x.x.x.AppImage</code> dosyasını indirin.</p>
 <h4><code>.deb</code> Paketi ile Kurulum (Debian / Ubuntu / Mint)</h4>
 <pre class="prettyprint source lang-bash"><code>sudo dpkg -i cyber_1.0.0_amd64.deb
 
@@ -264,7 +275,7 @@ npm run desktop:build:mac
 <hr>
 <h3>🌐 Yöntem 4: Web / Yerel Node.js Sunucusu Olarak Çalıştırma</h3>
 <h4>1. Depoyu Klonlayın</h4>
-<pre class="prettyprint source lang-bash"><code>git clone https://github.com/Arif8054/Cyber_Chat_Terminal.git
+<pre class="prettyprint source lang-bash"><code>git clone https://github.com/arifoztr/Cyber_Chat_Terminal.git
 cd Cyber_Chat_Terminal
 </code></pre>
 <h4>2. Bağımlılıkları Yükleyin</h4>
@@ -277,7 +288,7 @@ NODE_ENV=development
 JWT_SECRET=super_secret_jwt_passphrase_min_32_chars_long
 CORS_ORIGIN=*
 DB_PATH=./src/database.sqlite
-# İsteğe bağlı — Turso Bulut SQLite:
+# İsteğe bağlı — Turso Bulut SQLite (libSQL):
 # TURSO_DATABASE_URL=libsql://your-db.turso.io
 # TURSO_AUTH_TOKEN=your_turso_auth_token
 </code></pre>
@@ -285,7 +296,7 @@ DB_PATH=./src/database.sqlite
 <p>⚠️ <strong>Güvenlik Notu:</strong> Üretim ortamında <code>JWT_SECRET</code> değerini en az 32 karakterlik güçlü bir rastgele anahtarla belirleyin.</p>
 </blockquote>
 <h4>4. Sunucuyu Başlatın</h4>
-<pre class="prettyprint source lang-bash"><code>npm start        # Üretim modu
+<pre class="prettyprint source lang-bash"><code>npm start        # Üretim modu (node src/server.js)
 # veya
 npm run dev      # Geliştirme modu
 </code></pre>
@@ -308,11 +319,12 @@ docker build -t cyber-chat-terminal .
 docker run -d -p 3000:3000 -v $(pwd)/data:/app/data -e DB_PATH=/app/data/database.sqlite --name cyber-chat cyber-chat-terminal
 </code></pre>
 <hr>
-<h2>🧪 Testler ve Kod Doğrulama (Vitest)</h2>
+<h2>🧪 Testler, Dökümantasyon ve Kalite</h2>
+<h3>1. Otomatik Test Paketi (Vitest)</h3>
 <p>Proje, E2EE el sıkışması, simetrik şifreleme/çözme, veritabanı sürücüsü, rate limiting ve sunucu güvenlik başlıklarını test eden kapsamlı bir test süitine sahiptir:</p>
 <ul>
 <li><strong>145 Test Senaryosu:</strong> Tamamı bağımsız ve deterministik çalışan birim &amp; entegrasyon testleri.</li>
-<li><strong>%95+ Kod Kapsamı:</strong> Kritik çekirdek katmanlar (<code>crypto.js</code>, <code>database.js</code>, <code>server.js</code>, <code>socket.js</code>) v8 motoruyla izlenir.</li>
+<li><strong>%94+ Kod Kapsamı:</strong> Kritik çekirdek katmanlar (<code>crypto.js</code>, <code>database.js</code>, <code>server.js</code>, <code>socket.js</code>) v8 motoruyla izlenir.</li>
 </ul>
 <pre class="prettyprint source lang-bash"><code># Tüm testleri çalıştır ve kapsam (coverage) raporu üret
 npm test
@@ -324,8 +336,12 @@ npm run test:watch
 # Yalnızca kapsam raporunu terminalde ve HTML olarak derle
 npm run test:coverage
 </code></pre>
-<h3>Windows İçin Tek Tıkla Test:</h3>
-<p>Windows ortamında doğrudan <code>run_tests.bat</code> dosyasını çalıştırabilirsiniz. Testler bittiğinde <code>coverage/index.html</code> raporunu otomatik olarak varsayılan tarayıcınızda açar.</p>
+<h3>2. JSDoc Otomatik Dökümantasyon Üretimi</h3>
+<p>Tüm modüller standart JSDoc kurallarıyla belgelenmiştir. Tek bir komutla zengin HTML dökümanları üretilebilir:</p>
+<pre class="prettyprint source lang-bash"><code># JSDoc HTML API dökümantasyonunu derle (docs/api/ klasörüne)
+npm run docs
+</code></pre>
+<p>Derleme sonrası <code>docs/api/index.html</code> dosyasını tarayıcınızda açarak tüm fonksiyon parametrelerini, veri tiplerini ve modülleri inceleyebilirsiniz.</p>
 <hr>
 <h2>🔐 Güvenlik Mimarisi</h2>
 <table>
@@ -353,19 +369,29 @@ npm run test:coverage
 <td>İstemci tarafı XSS ve CDN zehirlenmesi (CDN Compromise)</td>
 </tr>
 <tr>
+<td><strong>Inline Handler Temizliği (SEC-13)</strong></td>
+<td>HTML içerisindeki tüm inline <code>onclick</code>/<code>onsubmit</code> nitelikleri kaldırılmış, CSP uyumlu <code>addEventListener</code> yapısına geçilmiştir.</td>
+<td>CSP ihlali ve kod enjeksiyonu zafiyetleri</td>
+</tr>
+<tr>
 <td><strong>CSWSH Savunması</strong></td>
 <td>Socket.IO bağlantılarında origin whitelist ve sandboxed <code>null</code> origin engelleme uygulanır.</td>
 <td>Siteler Arası WebSocket Ele Geçirme (Cross-Site WebSocket Hijacking)</td>
 </tr>
 <tr>
-<td><strong>BOLA Koruması</strong></td>
-<td>Mesaj iptal (<code>revoke_packet</code>) isteklerinde paket sahibinin kimliği sunucu tarafında doğrulanır.</td>
-<td>Başka kullanıcıların mesajlarını yetkisizce silme (Broken Object Level Authorization)</td>
+<td><strong>BOLA / IDOR Koruması</strong></td>
+<td>Mesaj iptal (<code>revoke_packet</code>) isteklerinde paket sahibinin kimliği sunucu oturumu (<code>socket.user.userId</code>) ile doğrulanır.</td>
+<td>Başka kullanıcıların mesajlarını yetkisizce silme</td>
 </tr>
 <tr>
-<td><strong>XSS Korumalı Linkleme</strong></td>
-<td>URL'ler ayrıştırılırken DOM String interpolation yerine <code>document.createTextNode</code> ve protokol doğrulaması (<code>http:</code>, <code>https:</code>) kullanılır.</td>
-<td>XSS (Cross-Site Scripting) ve sahte protokol enjeksiyonu (<code>javascript:</code>)</td>
+<td><strong>XSS Korumalı Linkleme &amp; Dosyalar</strong></td>
+<td>URL'ler ve dosya kartları oluşturulurken <code>document.createElement</code> ve <code>textContent</code> kullanılır (<code>innerHTML</code> engellenmiştir).</td>
+<td>Dosya adı veya link enjeksiyonlu DOM XSS</td>
+</tr>
+<tr>
+<td><strong>Kesin TTL İmhası (SEC-18)</strong></td>
+<td>Zaman aşımına uğramış iletiler sekme odağı değiştiğinde (<code>visibilitychange</code>) anında temizlenir.</td>
+<td>Arka plan zamanlayıcı uyuması nedeniyle süresi dolan mesajın ekranda kalması</td>
 </tr>
 <tr>
 <td><strong>JWT Doğrulamalı Socket</strong></td>
@@ -374,13 +400,13 @@ npm run test:coverage
 </tr>
 <tr>
 <td><strong>Gelişmiş Rate Limiting</strong></td>
-<td>IP bazlı giriş, kayıt, mesaj gönderimi, profil güncelleme ve arama isteklerine sınır uygulanır.</td>
+<td>IP bazlı giriş, kayıt, mesaj gönderimi, profil güncelleme, arama ve silme isteklerine sınır uygulanır.</td>
 <td>Brute-force ve Hizmet Dışı Bırakma (DoS)</td>
 </tr>
 <tr>
 <td><strong>HTTP Güvenlik Başlıkları</strong></td>
 <td>HSTS (1 yıl), <code>X-Content-Type-Options: nosniff</code>, <code>X-Frame-Options: DENY</code>, <code>X-XSS-Protection: 0</code>.</td>
-<td>Clickjacking, MIME-sniffing, eski tarayıcı XSS filtre zaafiyetleri</td>
+<td>Clickjacking, MIME-sniffing, eski tarayıcı filtre zaafiyetleri</td>
 </tr>
 <tr>
 <td><strong>MITM Doğrulaması</strong></td>
@@ -405,7 +431,7 @@ npm run test:coverage
 </li>
 <li><strong>Profil ve Avatar Özelleştirme:</strong>
 <ul>
-<li>Sol üstteki profil fotoğrafı alanına veya <strong>Ayarlar (⚙️) -&gt; Profil</strong> sekmesine tıklayarak avatar yükleyin (200 KB güvenlik sınırı).</li>
+<li>Sol üstteki profil fotoğrafı alanına veya <strong>Ayarlar (⚙️) -&gt; Profil</strong> sekmesine tıklayarak avatar yükleyin (istemcide otomatik kare kırpılır ve sıkıştırılır).</li>
 </ul>
 </li>
 <li><strong>Bağlantı Kurma &amp; Ajan Arama:</strong>
@@ -444,27 +470,27 @@ npm run test:coverage
 </ol>
 <hr>
 <h2>🗺️ Geliştirme Durumu ve Yol Haritası</h2>
-<p>Mevcut sürüm: <strong>v10 (Cyber-HUD Edition)</strong></p>
+<p>Mevcut sürüm: <strong>v10 (Cyber-HUD Edition — Production Ready)</strong></p>
 <ul>
 <li>[x] <strong>FAZ 1 — Güvenlik Temelleri:</strong> Bağımsız HMAC-SHA256 JWT, IP tabanlı Rate Limiting, Express Güvenlik Başlıkları, Katı CSP (<code>script-src 'self'</code>), Parmak İzi (SHA-256 Fingerprint) Doğrulama.</li>
-<li>[x] <strong>FAZ 2 — Backend &amp; Mimari:</strong> SQLite WAL mimarisi, Asenkron kuyruklama, 7 günlük GC, Hibrit Dağıtım (Cloudflare Pages + Docker), Turso Cloud SQLite desteği.</li>
+<li>[x] <strong>FAZ 2 — Backend &amp; Mimari:</strong> SQLite WAL mimarisi, Asenkron kuyruklama, 7 günlük GC, Hibrit Dağıtım (Cloudflare Pages + Docker), Turso Cloud SQLite (@libsql/client) desteği.</li>
 <li>[x] <strong>FAZ 3 — Masaüstü ve Platformlar:</strong> Electron entegrasyonu, Windows (Setup + Portable), Linux (.deb + .AppImage), macOS (.dmg + .zip) derleme iş akışları.</li>
-<li>[x] <strong>FAZ 4 — Kullanıcı Deneyimi ve Yönetim:</strong> Profil avatarı, şifre değiştirme, güvenli hesap silme, kullanıcı arama, bağlantı onaylama (Request/Accept/Reject) akışı, sıfır dış CDN mimarisi.</li>
-<li>[x] <strong>FAZ 5 — Test &amp; Güvenilirlik:</strong> Vitest test altyapısı, 145 birim/entegrasyon testi, %95+ kod kapsama oranı.</li>
+<li>[x] <strong>FAZ 4 — Kullanıcı Deneyimi ve Yönetim:</strong> Profil avatarı, şifre değiştirme, güvenli hesap silme, kullanıcı arama, bağlantı onaylama (Request/Accept/Reject) akışı, sıfır dış CDN mimarisi, PDF ve görsel paylaşımı, ses efektleri.</li>
+<li>[x] <strong>FAZ 5 — Test &amp; Dökümantasyon:</strong> Vitest test altyapısı, 145 birim/entegrasyon testi, %94+ kod kapsama oranı, standart Türkçe JSDoc açıklamaları, <code>npm run docs</code> ile HTML API dökümantasyonu.</li>
 <li>[ ] <strong>Gelecek Planlar (FAZ 6):</strong>
 <ul>
-<li>Double Ratchet protokolü ile her mesaj başına İleriye Dönük Gizlilik (Forward Secrecy).</li>
-<li>Ed25519 dijital imzaları ile paket bütünlüğü ve kaynak inkar edilemezliği (Non-repudiation).</li>
-<li>Çoklu katılımcılı şifreli grup sohbetleri.</li>
+<li>WebRTC mesh mimarisiyle uçtan uca şifreli P2P sesli ve görüntülü arama.</li>
+<li>Çoklu katılımcılı şifreli grup sohbetleri (Group MLS / Ratchet).</li>
+<li>Çoklu cihaz senkronizasyonu ve QR ile anahtar aktarımı.</li>
 </ul>
 </li>
 </ul>
-<p>Ayrıntılı yol haritası için <a href="docs/PROGRESS.md">docs/PROGRESS.md</a> ve <a href="docs/OPTIMIZATIONS.md">docs/OPTIMIZATIONS.md</a> belgelerine göz atabilirsiniz.</p>
+<p>Ayrıntılı teknik detaylar için <a href="docs/PROGRESS.md">docs/PROGRESS.md</a>, <a href="docs/OPTIMIZATIONS.md">docs/OPTIMIZATIONS.md</a>, <a href="docs/DEPLOYMENT.md">docs/DEPLOYMENT.md</a> ve <a href="docs/AGENTS.md">docs/AGENTS.md</a> belgelerine göz atabilirsiniz.</p>
 <hr>
 <h2>🤝 Katkıda Bulunma</h2>
 <p>Projeye katkıda bulunurken lütfen aşağıdaki temel ilkelere sadık kalın:</p>
 <ul>
-<li><strong>Dil:</strong> Kod ve API değişkenleri İngilizce; kullanıcı arayüzü metinleri ve toast mesajları Türkçe.</li>
+<li><strong>Dil:</strong> Kod ve API değişkenleri İngilizce; kullanıcı arayüzü metinleri ve toast mesajları Türkçe; yorumlar Türkçe JSDoc.</li>
 <li><strong>Mimari:</strong> Frontend saf Vanilla JS (Framework/Bundler kullanılmaz).</li>
 <li><strong>Kriptografi:</strong> Yalnızca tarayıcı yerel <code>window.crypto.subtle</code> API'si (Harici JS kripto paketleri eklenemez).</li>
 <li><strong>Güvenlik Politikası:</strong> Dış CDN bağımlılığı eklenmemeli, tüm üçüncü taraf kütüphaneler <code>public/vendor/</code> altında yerel barındırılmalıdır.</li>
@@ -494,7 +520,7 @@ npm run test:coverage
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 21:35:39 GMT+0300 (Türkiye Standart Saati)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 21:48:28 GMT+0300 (Türkiye Standart Saati)
 </footer>
 
 <script> prettyPrint(); </script>
