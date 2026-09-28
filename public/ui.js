@@ -734,12 +734,17 @@ function updateMyAvatarUI() {
  * @function finishLoginSetup
  * @returns {void}
  */
-function finishLoginSetup() {
+async function finishLoginSetup() {
     playSound('success'); showToast("Doğrulama başarılı!", 'success');
     // Scroll-to-bottom FAB başlat
     setTimeout(initScrollToBottomFab, 200); // DOM hazır olunca bağla
     loadContactsFromVault(); loadSecretsFromVault();
-    initEcdhKeys().then(() => { socket.emit('publish_public_key', myPublicKeyJwk); });
+    try {
+        await initEcdhKeys();
+        if (myPublicKeyJwk) socket.emit('publish_public_key', myPublicKeyJwk);
+    } catch (e) {
+        console.error('[!] initEcdhKeys hatası:', e);
+    }
     
     if (myContacts.length > 0) {
         safeEmit('join_status_rooms', myContacts.map(c => c.id));
@@ -1611,7 +1616,19 @@ async function sendSecurePacket() {
     } catch (e) { playSound('error'); showToast("Şifreleme hatası oluştu.", 'error'); return; }
 
     const packetId = crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase();
-    const packet = { id: packetId, senderId: currentUser.userId, targetId: activeTarget.id, textPayload: encryptedText, filePayload: encryptedFile, fileName: activeFileName || null, ttl: ttl > 0 ? ttl : null, timestamp: new Date().getTime(), messageIndex: msgIndex };
+    const packet = { 
+        id: packetId, 
+        senderId: currentUser.userId, 
+        targetId: activeTarget.id, 
+        textPayload: encryptedText, 
+        filePayload: encryptedFile, 
+        fileName: activeFileName || null, 
+        ttl: ttl > 0 ? ttl : null, 
+        timestamp: new Date().getTime(), 
+        messageIndex: msgIndex,
+        cachedText: rawText || null,
+        cachedFile: activeFileBase64 || null
+    };
     
     appendMessageToUI(packetId, 'SEN', rawText, activeFileBase64, true, false, packet.ttl, packet.timestamp, activeFileName);
     await savePacketToVault(activeTarget.id, packet);
@@ -1633,12 +1650,24 @@ async function sendSecurePacket() {
     isCurrentlyTyping = false;
     safeEmit('stop_typing', { targetId: activeTarget.id });
     
-    safeEmit('send_secure_packet', packet, (res) => { 
+    const wirePacket = {
+        id: packet.id,
+        senderId: packet.senderId,
+        targetId: packet.targetId,
+        textPayload: packet.textPayload,
+        filePayload: packet.filePayload,
+        fileName: packet.fileName,
+        ttl: packet.ttl,
+        timestamp: packet.timestamp,
+        messageIndex: packet.messageIndex
+    };
+
+    safeEmit('send_secure_packet', wirePacket, (res) => { 
         if (res && res.queued) showToast("Kişi çevrimdışı, mesaj kuyruğa eklendi.", 'warning');
         else if (res && res.error === "RATE_LIMIT") { playSound('error'); showToast("Çok hızlı mesaj gönderiyorsunuz, lütfen bekleyin.", 'error'); }
     });
     
-    const pSize = new Blob([JSON.stringify(packet)]).size;
+    const pSize = new Blob([JSON.stringify(wirePacket)]).size;
     document.getElementById('packetSizeDisplay').innerText = `[(${(pSize / 1024).toFixed(1)} KB)]`;
     if (hasFile) clearFileInput();
 }
@@ -1653,40 +1682,9 @@ async function sendSecurePacket() {
  * @returns {Promise<Object|null>} Çözülmüş mesaj veri nesnesi veya geçersizse/süresi dolmuşsa null.
  */
 async function decryptPacketForDisplay(packet, contactInfo) {
-    let decryptedText = null; let decryptedFile = null; let hasError = false;
     const isMine = packet.senderId === currentUser.userId;
     const peerId = isMine ? packet.targetId : packet.senderId;
-    const cryptoKey = derivedSecrets[peerId] || (contactInfo ? contactInfo.key : null);
 
-    if (!cryptoKey || cryptoKey.trim() === '') { hasError = 'no_key'; } 
-    else {
-        try {
-            // [ECDHE] KDF Ratchet: messageIndex varsa ratchet ile deşifre et
-            const useRatchet = typeof decryptWithRatchet === 'function' 
-                && packet.messageIndex !== null && packet.messageIndex !== undefined
-                && hasRatchetSession(peerId);
-            
-            if (useRatchet) {
-                if (packet.textPayload) { 
-                    decryptedText = await decryptWithRatchet(packet.textPayload, peerId, packet.messageIndex); 
-                    if (!decryptedText) hasError = true; 
-                }
-                if (packet.filePayload) { 
-                    decryptedFile = await decryptWithRatchet(packet.filePayload, peerId, packet.messageIndex + 1); 
-                    if (!decryptedFile || (!decryptedFile.startsWith("data:image") && !decryptedFile.startsWith("data:application/pdf"))) hasError = true; 
-                }
-            } else {
-                // Geriye uyumluluk: Eski statik anahtar ile deşifreleme
-                if (packet.textPayload) { decryptedText = await decryptGCM(packet.textPayload, cryptoKey); if (!decryptedText) hasError = true; }
-                if (packet.filePayload) { 
-                    decryptedFile = await decryptGCM(packet.filePayload, cryptoKey); 
-                    if (!decryptedFile.startsWith("data:image") && !decryptedFile.startsWith("data:application/pdf")) hasError = true; 
-                }
-            }
-        } catch(e) { hasError = true; }
-    }
-
-    const senderLabel = isMine ? 'SEN' : packet.senderId;
     let remainingTtl = null;
     if (packet.ttl) {
         const elapsedSeconds = Math.round((Date.now() - packet.timestamp) / 1000);
@@ -1696,6 +1694,88 @@ async function decryptPacketForDisplay(packet, contactInfo) {
             return null; 
         }
     }
+
+    const senderLabel = isMine ? 'SEN' : packet.senderId;
+
+    // 1. Kasada daha önce çözülmüş / saklanmış düz metin varsa doğrudan kullan
+    if (packet.cachedText !== undefined || packet.cachedFile !== undefined) {
+        return { 
+            id: packet.id, 
+            sender: senderLabel, 
+            text: packet.cachedText || null, 
+            file: packet.cachedFile || null, 
+            fileName: packet.fileName || null, 
+            isMine, 
+            isError: false, 
+            ttl: remainingTtl, 
+            timestamp: packet.timestamp 
+        };
+    }
+
+    let decryptedText = null; let decryptedFile = null; let hasError = false;
+    let cryptoKey = derivedSecrets[peerId] || (contactInfo ? contactInfo.key : null);
+
+    if (!cryptoKey && typeof ensureSharedSecret === 'function') {
+        await ensureSharedSecret(peerId);
+        cryptoKey = derivedSecrets[peerId] || (contactInfo ? contactInfo.key : null);
+    }
+
+    if (!cryptoKey || cryptoKey.trim() === '') { 
+        hasError = 'no_key'; 
+    } else {
+        try {
+            // [ECDHE] KDF Ratchet: Karşı tarafın mesajı ise ve messageIndex varsa ratchet ile deşifre et
+            const useRatchet = !isMine && typeof decryptWithRatchet === 'function' 
+                && packet.messageIndex !== null && packet.messageIndex !== undefined
+                && hasRatchetSession(peerId);
+            
+            if (useRatchet) {
+                if (packet.textPayload) { 
+                    decryptedText = await decryptWithRatchet(packet.textPayload, peerId, packet.messageIndex); 
+                }
+                if (packet.filePayload) { 
+                    const fileIndex = packet.textPayload ? (packet.messageIndex + 1) : packet.messageIndex;
+                    decryptedFile = await decryptWithRatchet(packet.filePayload, peerId, fileIndex); 
+                }
+                // Ratchet başarısız olduysa veya null döndüyse statik anahtar ile fallback dene
+                if ((packet.textPayload && !decryptedText) || (packet.filePayload && !decryptedFile)) {
+                    if (packet.textPayload && !decryptedText) {
+                        decryptedText = await decryptGCM(packet.textPayload, cryptoKey).catch(() => null);
+                    }
+                    if (packet.filePayload && !decryptedFile) {
+                        decryptedFile = await decryptGCM(packet.filePayload, cryptoKey).catch(() => null);
+                    }
+                }
+            } else {
+                // Statik anahtar ile deşifreleme
+                if (packet.textPayload) { 
+                    decryptedText = await decryptGCM(packet.textPayload, cryptoKey); 
+                }
+                if (packet.filePayload) { 
+                    decryptedFile = await decryptGCM(packet.filePayload, cryptoKey); 
+                }
+            }
+
+            if (packet.textPayload && decryptedText === null) {
+                hasError = true;
+            }
+            if (packet.filePayload) {
+                if (!decryptedFile || (!decryptedFile.startsWith("data:image") && !decryptedFile.startsWith("data:application/pdf"))) {
+                    hasError = true;
+                }
+            }
+
+            // Başarıyla çözüldüyse kasada önbelleğe al
+            if (!hasError && (decryptedText !== null || decryptedFile !== null)) {
+                packet.cachedText = decryptedText;
+                packet.cachedFile = decryptedFile;
+                savePacketToVault(peerId, packet).catch(() => {});
+            }
+        } catch (e) { 
+            hasError = true; 
+        }
+    }
+
     return { id: packet.id, sender: senderLabel, text: decryptedText, file: decryptedFile, fileName: packet.fileName || null, isMine, isError: hasError, ttl: remainingTtl, timestamp: packet.timestamp };
 }
 
