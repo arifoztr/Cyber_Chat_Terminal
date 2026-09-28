@@ -811,6 +811,8 @@ function handleDisconnectUI() {
     document.getElementById('packetSizeDisplay').innerText = "";
     
     Object.keys(_activeTimers).forEach(id => { clearInterval(_activeTimers[id]); delete _activeTimers[id]; });
+    // [GÜVENLİK] Tüm kriptografik durumu bellekten güvenle temizle (ratchet zincirleri, geçici anahtarlar, AES önbellek)
+    if (typeof wipeAllCryptoState === 'function') wipeAllCryptoState();
     Object.keys(_aesKeyCache).forEach(k => delete _aesKeyCache[k]);
     if (localTypingTimeout) { clearTimeout(localTypingTimeout); localTypingTimeout = null; }
     isCurrentlyTyping = false;
@@ -1067,8 +1069,10 @@ function removeContact(targetId, event) {
             } catch (_) {}
         }
 
-        // 5. Türetilmiş ECDH şifreleme anahtarlarını sil
-        if (derivedSecrets[targetId]) {
+        // 5. Türetilmiş ECDH şifreleme anahtarlarını ve ratchet zincirini güvenle sil
+        if (typeof wipeTargetCryptoState === 'function') {
+            wipeTargetCryptoState(targetId);
+        } else if (derivedSecrets[targetId]) {
             delete derivedSecrets[targetId];
             saveSecretsToVault();
         }
@@ -1587,13 +1591,27 @@ async function sendSecurePacket() {
     msgInput.value = '';
 
     let encryptedText = null; let encryptedFile = null;
+    let msgIndex = null; // KDF Ratchet mesaj indeksi
     try {
-        if (rawText) encryptedText = await encryptGCM(rawText, activeTarget.key);
-        if (hasFile) encryptedFile = await encryptGCM(activeFileBase64, activeTarget.key);
+        // [ECDHE] KDF Ratchet aktifse mesaj bazlı anahtar rotasyonu kullan
+        if (typeof hasRatchetSession === 'function' && hasRatchetSession(activeTarget.id)) {
+            if (rawText) {
+                const result = await encryptWithRatchet(rawText, activeTarget.id);
+                if (result) { encryptedText = result.ciphertext; msgIndex = result.messageIndex; }
+            }
+            if (hasFile) {
+                const result = await encryptWithRatchet(activeFileBase64, activeTarget.id);
+                if (result) { encryptedFile = result.ciphertext; if (msgIndex === null) msgIndex = result.messageIndex; }
+            }
+        } else {
+            // Geriye uyumluluk: Eski statik anahtar ile şifreleme
+            if (rawText) encryptedText = await encryptGCM(rawText, activeTarget.key);
+            if (hasFile) encryptedFile = await encryptGCM(activeFileBase64, activeTarget.key);
+        }
     } catch (e) { playSound('error'); showToast("Şifreleme hatası oluştu.", 'error'); return; }
 
     const packetId = crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase();
-    const packet = { id: packetId, senderId: currentUser.userId, targetId: activeTarget.id, textPayload: encryptedText, filePayload: encryptedFile, fileName: activeFileName || null, ttl: ttl > 0 ? ttl : null, timestamp: new Date().getTime() };
+    const packet = { id: packetId, senderId: currentUser.userId, targetId: activeTarget.id, textPayload: encryptedText, filePayload: encryptedFile, fileName: activeFileName || null, ttl: ttl > 0 ? ttl : null, timestamp: new Date().getTime(), messageIndex: msgIndex };
     
     appendMessageToUI(packetId, 'SEN', rawText, activeFileBase64, true, false, packet.ttl, packet.timestamp, activeFileName);
     await savePacketToVault(activeTarget.id, packet);
@@ -1643,10 +1661,27 @@ async function decryptPacketForDisplay(packet, contactInfo) {
     if (!cryptoKey || cryptoKey.trim() === '') { hasError = 'no_key'; } 
     else {
         try {
-            if (packet.textPayload) { decryptedText = await decryptGCM(packet.textPayload, cryptoKey); if (!decryptedText) hasError = true; }
-            if (packet.filePayload) { 
-                decryptedFile = await decryptGCM(packet.filePayload, cryptoKey); 
-                if (!decryptedFile.startsWith("data:image") && !decryptedFile.startsWith("data:application/pdf")) hasError = true; 
+            // [ECDHE] KDF Ratchet: messageIndex varsa ratchet ile deşifre et
+            const useRatchet = typeof decryptWithRatchet === 'function' 
+                && packet.messageIndex !== null && packet.messageIndex !== undefined
+                && hasRatchetSession(peerId);
+            
+            if (useRatchet) {
+                if (packet.textPayload) { 
+                    decryptedText = await decryptWithRatchet(packet.textPayload, peerId, packet.messageIndex); 
+                    if (!decryptedText) hasError = true; 
+                }
+                if (packet.filePayload) { 
+                    decryptedFile = await decryptWithRatchet(packet.filePayload, peerId, packet.messageIndex + 1); 
+                    if (!decryptedFile || (!decryptedFile.startsWith("data:image") && !decryptedFile.startsWith("data:application/pdf"))) hasError = true; 
+                }
+            } else {
+                // Geriye uyumluluk: Eski statik anahtar ile deşifreleme
+                if (packet.textPayload) { decryptedText = await decryptGCM(packet.textPayload, cryptoKey); if (!decryptedText) hasError = true; }
+                if (packet.filePayload) { 
+                    decryptedFile = await decryptGCM(packet.filePayload, cryptoKey); 
+                    if (!decryptedFile.startsWith("data:image") && !decryptedFile.startsWith("data:application/pdf")) hasError = true; 
+                }
             }
         } catch(e) { hasError = true; }
     }

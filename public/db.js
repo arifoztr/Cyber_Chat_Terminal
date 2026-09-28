@@ -296,6 +296,7 @@ function loadContactsFromVault() {
 
 /**
  * Kullanıcının CryptoKey nesnelerini (privateKey, publicKey, publicJwk) IndexedDB cryptoKeys kasasına yazar.
+ * Electron ortamında publicJwk verisi safeStorage (Windows DPAPI / macOS Keychain) ile şifrelenerek saklanır.
  * @async
  * @function saveCryptoKeyToVault
  * @param {string} userId - Kullanıcı kimliği.
@@ -307,7 +308,29 @@ async function saveCryptoKeyToVault(userId, keyData) {
         const db = await openVaultDB();
         const tx = db.transaction('cryptoKeys', 'readwrite');
         const store = tx.objectStore('cryptoKeys');
-        store.put({ userId, ...keyData });
+        
+        let dataToSave = { userId, ...keyData };
+        
+        // [GÜVENLİK] Electron ortamında publicJwk'yı safeStorage ile şifrele (DPAPI/Keychain)
+        if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.secureEncrypt) {
+            try {
+                const isAvailable = await window.electronAPI.isSecureStorageAvailable();
+                if (isAvailable && keyData.publicJwk) {
+                    const jwkStr = JSON.stringify(keyData.publicJwk);
+                    const encrypted = await window.electronAPI.secureEncrypt(jwkStr);
+                    if (encrypted) {
+                        dataToSave.publicJwkEncrypted = encrypted;
+                        dataToSave.publicJwkProtected = true;
+                        // Şifresiz JWK'yı kaldır — diske sadece şifreli versiyon yazılır
+                        delete dataToSave.publicJwk;
+                    }
+                }
+            } catch (e) {
+                console.warn('[!] safeStorage şifreleme hatası, düz metin kaydediliyor:', e);
+            }
+        }
+        
+        store.put(dataToSave);
         return new Promise((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
     } catch (e) {
         console.error('[!] saveCryptoKeyToVault hatası:', e);
@@ -316,6 +339,7 @@ async function saveCryptoKeyToVault(userId, keyData) {
 
 /**
  * Kullanıcının saklanan CryptoKey nesnelerini IndexedDB cryptoKeys deposundan yükler.
+ * Electron ortamında safeStorage ile şifrelenmiş publicJwk verisi otomatik olarak çözülür.
  * @async
  * @function loadCryptoKeyFromVault
  * @param {string} userId - Kullanıcı kimliği.
@@ -329,7 +353,28 @@ async function loadCryptoKeyFromVault(userId) {
         const store = tx.objectStore('cryptoKeys');
         const request = store.get(userId);
         return new Promise((resolve, reject) => {
-            request.onsuccess = () => resolve(request.result || null);
+            request.onsuccess = async () => {
+                const result = request.result || null;
+                if (!result) return resolve(null);
+                
+                // [GÜVENLİK] safeStorage ile şifrelenmiş publicJwk'yı çöz
+                if (result.publicJwkProtected && result.publicJwkEncrypted) {
+                    if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.secureDecrypt) {
+                        try {
+                            const decrypted = await window.electronAPI.secureDecrypt(result.publicJwkEncrypted);
+                            if (decrypted) {
+                                result.publicJwk = JSON.parse(decrypted);
+                            }
+                        } catch (e) {
+                            console.error('[!] safeStorage çözme hatası:', e);
+                        }
+                    }
+                    delete result.publicJwkEncrypted;
+                    delete result.publicJwkProtected;
+                }
+                
+                resolve(result);
+            };
             request.onerror = () => reject(request.error);
         });
     } catch (e) {

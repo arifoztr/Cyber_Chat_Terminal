@@ -67,10 +67,12 @@ function bindSocketEvents() {
 
     socket.off('ecdh_offer');
     /**
-     * Karşı taraftan gelen ECDH anahtar anlaşması teklifini (offer) işler.
-     * Kişi listede yoksa ekler, ortak sırrı türetir ve ecdh_answer ile yanıt döner.
+     * Karşı taraftan gelen ECDHE anahtar anlaşması teklifini (offer) işler.
+     * Kişi listede yoksa ekler, geçici anahtar üretip ortak sırrı türetir,
+     * KDF Ratchet zincirini başlatır ve ecdh_answer ile yanıt döner.
+     * Geriye dönük uyumluluk: ephemeralPublicKeyJwk yoksa eski statik ECDH protokolünü kullanır.
      * @async
-     * @param {Object} data - Teklif bilgileri ({ senderId: string, publicKeyJwk: JsonWebKey }).
+     * @param {Object} data - Teklif bilgileri ({ senderId, publicKeyJwk, ephemeralPublicKeyJwk? }).
      */
     socket.on('ecdh_offer', async (data) => {
         let contact = myContacts.find(c => c.id === data.senderId);
@@ -91,28 +93,30 @@ function bindSocketEvents() {
             });
         }
         try {
-            const secret = await deriveSharedSecret(data.publicKeyJwk);
-            derivedSecrets[data.senderId] = secret; saveSecretsToVault();
-            contact.key = secret;
+            const result = await handleEcdhOffer(data);
+            derivedSecrets[data.senderId] = result.secret;
+            contact.key = result.secret;
             contact.ecdhStatus = 'established';
             saveContactsToVault();
             renderContactsSidebarDebounced();
-        } catch(e) {}
-        safeEmit('ecdh_answer', { targetId: data.senderId, senderId: currentUser.userId, publicKeyJwk: myPublicKeyJwk });
+            safeEmit('ecdh_answer', result.answerData);
+        } catch(e) {
+            console.error('[!] ECDHE offer işleme hatası:', e);
+        }
     });
 
     socket.off('ecdh_answer');
     /**
-     * Bizim gönderdiğimiz ECDH teklifine karşı tarafın verdiği yanıtı (answer) işler.
-     * Ortak sırrı türetir ve sohbet arayüzünü aktif hale getirir.
+     * Bizim gönderdiğimiz ECDHE teklifine karşı tarafın verdiği yanıtı (answer) işler.
+     * Geçici anahtarlardan ortak sırrı türetir, KDF Ratchet zincirini başlatır ve sohbet arayüzünü aktif hale getirir.
      * @async
-     * @param {Object} data - Yanıt bilgileri ({ senderId: string, publicKeyJwk: JsonWebKey }).
+     * @param {Object} data - Yanıt bilgileri ({ senderId, publicKeyJwk, ephemeralPublicKeyJwk? }).
      */
     socket.on('ecdh_answer', async (data) => {
         if (derivedSecrets[data.senderId]) return;
         try {
-            const secret = await deriveSharedSecret(data.publicKeyJwk);
-            derivedSecrets[data.senderId] = secret; saveSecretsToVault();
+            const secret = await handleEcdhAnswer(data);
+            derivedSecrets[data.senderId] = secret;
             let contact = myContacts.find(c => c.id === data.senderId);
             if (contact) {
                 contact.key = secret;
@@ -124,7 +128,9 @@ function bindSocketEvents() {
             if (activeTarget && activeTarget.id === data.senderId) { 
                 enableChatUI(); showToast(`${data.senderId} ile şifreli bağlantı kuruldu!`, 'success'); 
             }
-        } catch(e) {}
+        } catch(e) {
+            console.error('[!] ECDHE answer işleme hatası:', e);
+        }
     });
 
     socket.off('receive_secure_packet');

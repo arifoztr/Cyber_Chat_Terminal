@@ -6,7 +6,7 @@
  * ve tek örnek kilidi (Single Instance Lock) mekanizmalarını yönetir.
  */
 
-const { app, BrowserWindow, shell, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, Menu, safeStorage } = require('electron');
 const path = require('path');
 
 /**
@@ -93,6 +93,45 @@ ipcMain.on('window-maximize', () => {
  */
 ipcMain.on('window-close', () => {
     if (mainWindow) mainWindow.close();
+});
+
+// === Electron safeStorage IPC Köprüsü (Windows DPAPI / macOS Keychain) ===
+
+/**
+ * İşletim sistemi düzeyinde şifreleme hizmeti kullanılabilir mi kontrol eder.
+ * Windows'ta DPAPI, macOS'ta Keychain, Linux'ta libsecret kullanır.
+ * @returns {Promise<boolean>}
+ */
+ipcMain.handle('safe-storage-available', () => {
+    return safeStorage.isEncryptionAvailable();
+});
+
+/**
+ * Düz metin veriyi işletim sistemi anahtarlığı ile şifreler.
+ * @param {Electron.IpcMainInvokeEvent} _event
+ * @param {string} plaintext - Şifrelenecek düz metin.
+ * @returns {Promise<string|null>} Base64 kodlu şifreli veri veya şifreleme yoksa null.
+ */
+ipcMain.handle('safe-storage-encrypt', (_event, plaintext) => {
+    if (!safeStorage.isEncryptionAvailable()) return null;
+    return safeStorage.encryptString(plaintext).toString('base64');
+});
+
+/**
+ * İşletim sistemi anahtarlığı ile şifrelenmiş veriyi çözer.
+ * @param {Electron.IpcMainInvokeEvent} _event
+ * @param {string} base64Cipher - Base64 kodlu şifreli veri.
+ * @returns {Promise<string|null>} Çözülmüş düz metin veya şifreleme yoksa null.
+ */
+ipcMain.handle('safe-storage-decrypt', (_event, base64Cipher) => {
+    if (!safeStorage.isEncryptionAvailable()) return null;
+    try {
+        const buffer = Buffer.from(base64Cipher, 'base64');
+        return safeStorage.decryptString(buffer);
+    } catch (e) {
+        console.error('[!] safeStorage decrypt hatası:', e);
+        return null;
+    }
 });
 
 // Tek örnek kilidi (Single Instance Lock) — Uygulamanın birden fazla kopyasının aynı anda açılmasını önler

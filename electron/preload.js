@@ -49,5 +49,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
      * @function
      * @returns {void}
      */
-    close: () => ipcRenderer.send('window-close')
+    close: () => ipcRenderer.send('window-close'),
+
+    // === safeStorage Güvenli Depolama Köprüsü ===
+
+    /**
+     * İşletim sistemi düzeyinde şifreleme (DPAPI/Keychain) kullanılabilir mi kontrol eder.
+     * @function
+     * @returns {Promise<boolean>}
+     */
+    isSecureStorageAvailable: () => ipcRenderer.invoke('safe-storage-available'),
+
+    /**
+     * Düz metni işletim sistemi anahtarlığı ile şifreler.
+     * @function
+     * @param {string} plaintext - Şifrelenecek düz metin.
+     * @returns {Promise<string|null>} Base64 şifreli veri.
+     */
+    secureEncrypt: (plaintext) => ipcRenderer.invoke('safe-storage-encrypt', plaintext),
+
+    /**
+     * İşletim sistemi anahtarlığı ile şifrelenmiş veriyi çözer.
+     * @function
+     * @param {string} base64Cipher - Base64 şifreli veri.
+     * @returns {Promise<string|null>} Çözülmüş düz metin.
+     */
+    secureDecrypt: (base64Cipher) => ipcRenderer.invoke('safe-storage-decrypt', base64Cipher)
 });
