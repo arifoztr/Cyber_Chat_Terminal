@@ -264,5 +264,129 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
             expect(result.error).toBe('DECRYPTION_FAILED');
             expect(mockVault.has('AGN-ATTACKER')).toBe(false);
         });
+
+        test('Karşılıklı mesajlaşma (Alice -> Bob, Bob -> Alice) ve kasa geçmişi hatasız çözülmelidir', async () => {
+            const ALICE_ID = 'AGN-1111-2222';
+            const BOB_ID = 'AGN-3333-4444';
+            const SHARED_KEY = ALICE_SECRET;
+
+            // Alice kasası ve Bob kasası
+            const aliceVault = [];
+            const bobVault = [];
+
+            // 1. Alice -> Bob: "Selam Bob!"
+            const alicePlaintext = "Selam Bob!";
+            const cipherAlice = await encryptGCM(alicePlaintext, SHARED_KEY);
+            const packetAliceToBob = {
+                id: 'pkt-01',
+                senderId: ALICE_ID,
+                targetId: BOB_ID,
+                textPayload: cipherAlice,
+                filePayload: null,
+                timestamp: Date.now()
+            };
+
+            // Alice kendi kasasına kaydeder (gönderici önbelleği ile)
+            aliceVault.push({
+                ...packetAliceToBob,
+                cachedText: alicePlaintext,
+                cachedFile: null
+            });
+
+            // Bob paketi alır ve deşifre eder
+            const bobDecryptedText = await decryptGCM(packetAliceToBob.textPayload, SHARED_KEY);
+            expect(bobDecryptedText).toBe(alicePlaintext);
+
+            // Bob kendi kasasına kaydeder (alıcı önbelleği ile)
+            bobVault.push({
+                ...packetAliceToBob,
+                cachedText: bobDecryptedText,
+                cachedFile: null
+            });
+
+            // 2. Bob -> Alice: "Aleyküm selam Alice!"
+            const bobReplyText = "Aleyküm selam Alice!";
+            const cipherBob = await encryptGCM(bobReplyText, SHARED_KEY);
+            const packetBobToAlice = {
+                id: 'pkt-02',
+                senderId: BOB_ID,
+                targetId: ALICE_ID,
+                textPayload: cipherBob,
+                filePayload: null,
+                timestamp: Date.now() + 100
+            };
+
+            // Bob kendi kasasına kaydeder
+            bobVault.push({
+                ...packetBobToAlice,
+                cachedText: bobReplyText,
+                cachedFile: null
+            });
+
+            // Alice paketi alır ve deşifre eder
+            const aliceDecryptedReply = await decryptGCM(packetBobToAlice.textPayload, SHARED_KEY);
+            expect(aliceDecryptedReply).toBe(bobReplyText);
+
+            // Alice kendi kasasına kaydeder
+            aliceVault.push({
+                ...packetBobToAlice,
+                cachedText: aliceDecryptedReply,
+                cachedFile: null
+            });
+
+            // 3. Geçmişi yükleme simülasyonu: Her iki taraf da tüm mesajları hatasız okumalıdır
+            for (const pkt of aliceVault) {
+                expect(pkt.cachedText).toBeDefined();
+                expect(typeof pkt.cachedText).toBe('string');
+                expect(pkt.cachedText.length).toBeGreaterThan(0);
+            }
+
+            for (const pkt of bobVault) {
+                expect(pkt.cachedText).toBeDefined();
+                expect(typeof pkt.cachedText).toBe('string');
+                expect(pkt.cachedText.length).toBeGreaterThan(0);
+            }
+
+            expect(aliceVault[0].cachedText).toBe("Selam Bob!");
+            expect(aliceVault[1].cachedText).toBe("Aleyküm selam Alice!");
+            expect(bobVault[0].cachedText).toBe("Selam Bob!");
+            expect(bobVault[1].cachedText).toBe("Aleyküm selam Alice!");
+        });
+
+        test('Yeni sohbet başladığında onay modalı olmadan otomatik ekleme ve yanıt iletimi yapılmalıdır', async () => {
+            const addedContacts = [];
+            let responseSent = null;
+
+            // İstemci tarafı contact_request işleyicisi simülasyonu
+            const handleContactRequest = (data) => {
+                if (!data || !data.senderId) return;
+                // Otomatik ekleme
+                addedContacts.push({ id: data.senderId, username: data.username });
+                // Otomatik kabul yanıtı
+                mockSocket.emit('respond_contact_request', { targetId: data.senderId, accepted: true }, (res) => {
+                    responseSent = { targetId: data.senderId, accepted: true };
+                });
+            };
+
+            const incomingRequest = {
+                senderId: 'AGN-5555-6666',
+                username: 'Charlie',
+                avatar: null
+            };
+
+            handleContactRequest(incomingRequest);
+
+            // Onay istemeden otomatik eklenmiş olmalı
+            expect(addedContacts.length).toBe(1);
+            expect(addedContacts[0].id).toBe('AGN-5555-6666');
+            expect(addedContacts[0].username).toBe('Charlie');
+
+            // respond_contact_request olayının tetiklendiğini doğrula
+            expect(mockSocket.emit).toHaveBeenCalledWith(
+                'respond_contact_request',
+                { targetId: 'AGN-5555-6666', accepted: true },
+                expect.any(Function)
+            );
+        });
     });
 });

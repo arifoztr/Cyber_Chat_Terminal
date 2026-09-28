@@ -750,7 +750,8 @@ module.exports = function setupSockets(io) {
             const safeData = {
                 targetId: data.targetId,
                 senderId: socket.user.userId,
-                publicKeyJwk: data.publicKeyJwk
+                publicKeyJwk: data.publicKeyJwk,
+                ephemeralPublicKeyJwk: data.ephemeralPublicKeyJwk || null
             };
             const targetSockets = onlineNodes.get(data.targetId);
             if (targetSockets) targetSockets.forEach(sid => io.to(sid).emit('ecdh_offer', safeData));
@@ -759,7 +760,7 @@ module.exports = function setupSockets(io) {
         /**
          * ECDH anahtar anlaşması yanıtını (answer) teklif sahibine güvenle iletir.
          * @name ecdh_answer
-         * @param {Object} data - Yanıt verisi ({ targetId, publicKeyJwk }).
+         * @param {Object} data - Yanıt verisi ({ targetId, publicKeyJwk, ephemeralPublicKeyJwk? }).
          */
         socket.on('ecdh_answer', (data) => {
             if (!socket.user || !data || !data.targetId) return;
@@ -768,7 +769,8 @@ module.exports = function setupSockets(io) {
             const safeData = {
                 targetId: data.targetId,
                 senderId: socket.user.userId,
-                publicKeyJwk: data.publicKeyJwk
+                publicKeyJwk: data.publicKeyJwk,
+                ephemeralPublicKeyJwk: data.ephemeralPublicKeyJwk || null
             };
             const targetSockets = onlineNodes.get(data.targetId);
             if (targetSockets) targetSockets.forEach(sid => io.to(sid).emit('ecdh_answer', safeData));

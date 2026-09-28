@@ -113,7 +113,6 @@ function bindSocketEvents() {
      * @param {Object} data - Yanıt bilgileri ({ senderId, publicKeyJwk, ephemeralPublicKeyJwk? }).
      */
     socket.on('ecdh_answer', async (data) => {
-        if (derivedSecrets[data.senderId]) return;
         try {
             const secret = await handleEcdhAnswer(data);
             derivedSecrets[data.senderId] = secret;
@@ -160,15 +159,19 @@ function bindSocketEvents() {
         }
         await ensureSharedSecret(packet.senderId);
         senderContact = myContacts.find(c => c.id === packet.senderId);
-        await savePacketToVault(packet.senderId, packet);
         
         if (activeTarget && activeTarget.id === packet.senderId) {
-            playSound('transit'); await processIncomingPacket(packet, senderContact);
+            playSound('transit'); 
+            await processIncomingPacket(packet, senderContact);
         } else {
+            if (typeof decryptPacketForDisplay === 'function') {
+                await decryptPacketForDisplay(packet, senderContact);
+            }
             playSound('success'); unreadCounts[packet.senderId] = (unreadCounts[packet.senderId] || 0) + 1;
             const notifSender = senderContact && senderContact.username ? `${senderContact.username} (${packet.senderId})` : packet.senderId;
             renderContactsSidebar(); showToast(`${notifSender} yeni mesaj gönderdi.`, 'info');
         }
+        await savePacketToVault(packet.senderId, packet);
     });
 
     socket.off('packet_revoked');
@@ -189,11 +192,24 @@ function bindSocketEvents() {
 
     socket.off('contact_request');
     /**
-     * Gelen kişi ekleme isteği bildirimini karşılar ve kullanıcıya onay modalını açar.
+     * Gelen yeni sohbet/kişi ekleme bildirimini karşılar.
+     * Onay modalı göstermeden kişiyi otomatik olarak listeye ekler, şifreleme tünelini kurar ve kabul yanıtı döner.
      * @param {Object} data - İstek verisi ({ senderId: string, username: string, avatar: string|null }).
      */
     socket.on('contact_request', (data) => {
-        showContactRequest(data);
+        if (!data || !data.senderId) return;
+        addContact(data.senderId, data.username);
+        let contact = myContacts.find(c => c.id === data.senderId);
+        if (contact && data.avatar) {
+            contact.avatar = data.avatar;
+            saveContactsToVault();
+        }
+        renderContactsSidebar();
+        ensureSharedSecret(data.senderId);
+        safeEmit('respond_contact_request', { targetId: data.senderId, accepted: true });
+        const name = data.username ? `${data.username} (${data.senderId})` : data.senderId;
+        showToast(`${name} sizinle sohbet başlattı.`, 'info');
+        playSound('transit');
     });
 
     socket.off('contact_request_response');
