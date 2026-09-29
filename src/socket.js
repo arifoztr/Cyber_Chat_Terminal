@@ -697,7 +697,13 @@ module.exports = function setupSockets(io) {
                 const validPackets = db.queue[userId].filter(p => !isPacketExpired(p));
 
                 if (validPackets.length > 0) {
-                    validPackets.forEach(packet => { io.to(socket.id).emit('receive_secure_packet', packet); });
+                    validPackets.forEach(packet => {
+                        if (packet.type === 'session_reset') {
+                            io.to(socket.id).emit('session_reset', packet);
+                        } else {
+                            io.to(socket.id).emit('receive_secure_packet', packet);
+                        }
+                    });
                 }
 
                 delete db.queue[userId];
@@ -774,6 +780,50 @@ module.exports = function setupSockets(io) {
             };
             const targetSockets = onlineNodes.get(data.targetId);
             if (targetSockets) targetSockets.forEach(sid => io.to(sid).emit('ecdh_answer', safeData));
+        });
+
+        /**
+         * İki taraflı kriptografik oturum sıfırlama olayını iletir.
+         * A kişisi sohbeti veya anahtarları sildiğinde
+         * B kişisinin de eski anahtarları imha etmesini sağlar.
+         * @name reset_chat_session
+         * @param {Object} data - Sıfırlama verisi ({ targetId }).
+         * @param {function(Object): void} [callback] - Geri çağırma ({ success: boolean }).
+         */
+        socket.on('reset_chat_session', async (data, callback) => {
+            if (!socket.user || !data || !data.targetId) {
+                if (callback) callback({ success: false });
+                return;
+            }
+            if (!checkRateLimit(ip, 'reset_session', 30, 60000)) {
+                if (callback) callback({ success: false, error: 'RATE_LIMIT' });
+                return;
+            }
+
+            const targetId = data.targetId;
+            const senderId = socket.user.userId;
+            const resetEvent = {
+                type: 'session_reset',
+                senderId: senderId,
+                targetId: targetId,
+                timestamp: Date.now()
+            };
+
+            const targetSockets = onlineNodes.get(targetId);
+            if (targetSockets && targetSockets.size > 0) {
+                targetSockets.forEach(sid => io.to(sid).emit('session_reset', resetEvent));
+                if (callback) callback({ success: true, queued: false });
+            } else {
+                if (!db.queue[targetId]) db.queue[targetId] = [];
+                db.queue[targetId] = db.queue[targetId].filter(p => !isPacketExpired(p) && p.senderId !== senderId);
+
+                if (db.queue[targetId].length >= MAX_QUEUE_SIZE) {
+                    db.queue[targetId].shift();
+                }
+                db.queue[targetId].push(resetEvent);
+                await dbManager.saveDatabase();
+                if (callback) callback({ success: true, queued: true });
+            }
         });
 
         /**

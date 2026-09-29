@@ -1082,6 +1082,9 @@ function removeContact(targetId, event) {
             saveSecretsToVault();
         }
 
+        // [GÜVENLİK FIX] Karşı tarafın da eski oturum anahtarlarını silmesi için iki taraflı sıfırlama sinyali gönder
+        safeEmit('reset_chat_session', { targetId: targetId });
+
         // 6. Eğer aktif sohbet buysa ekranı sıfırla
         if (activeTarget && activeTarget.id === targetId) {
             activeTarget = null;
@@ -1257,9 +1260,36 @@ function clearActiveChat() {
                 localStorage.removeItem(`cyber_history_idx_${currentUser.userId}_${targetId}`);
             } catch (_) {}
         }
+
+        // [GÜVENLİK FIX] İki taraflı kriptografik oturum sıfırlama
+        if (typeof wipeTargetCryptoState === 'function') {
+            wipeTargetCryptoState(targetId);
+        }
+        if (typeof derivedSecrets !== 'undefined' && derivedSecrets[targetId]) {
+            delete derivedSecrets[targetId];
+        }
+        activeTarget.key = null;
+        activeTarget.ecdhStatus = 'pending';
+        let contact = myContacts.find(c => c.id === targetId);
+        if (contact) {
+            contact.key = null;
+            contact.ecdhStatus = 'pending';
+            saveContactsToVault();
+            renderContactsSidebarDebounced();
+        }
+        updateChatHeaderUI();
+
+        // Karşı tarafa da oturumu sıfırlaması için sinyal gönder
+        safeEmit('reset_chat_session', { targetId: targetId });
+
         renderLogPlaceholder(document.getElementById('chatLog'), '📭', '// BELLEK SIFIRLANDI //', false);
-        showToast("Sohbet geçmişi temizlendi.", 'success');
+        showToast("Sohbet geçmişi ve oturum anahtarları sıfırlandı.", 'success');
         playSound('destroy');
+
+        // Yeni el sıkışma için hazırla
+        if (typeof initiateEcdhHandshake === 'function' && activeTarget.isOnline) {
+            initiateEcdhHandshake(targetId);
+        }
     });
 }
 
@@ -1583,8 +1613,21 @@ function handleContactSubmit() {
  */
 async function sendSecurePacket() {
     if (!activeTarget) return;
-    const sharedSecret = derivedSecrets[activeTarget.id];
-    if (!sharedSecret) { playSound('error'); showToast("Şifreleme anahtarı bekleniyor...", 'warning'); return; }
+    let sharedSecret = derivedSecrets[activeTarget.id];
+    if (!sharedSecret) {
+        if (typeof ensureSharedSecret === 'function') {
+            await ensureSharedSecret(activeTarget.id);
+            sharedSecret = derivedSecrets[activeTarget.id];
+        }
+    }
+    if (!sharedSecret) {
+        if (typeof initiateEcdhHandshake === 'function' && activeTarget.isOnline) {
+            initiateEcdhHandshake(activeTarget.id);
+        }
+        playSound('error');
+        showToast("Şifreleme anahtarı oluşturuluyor, lütfen birkaç saniye sonra tekrar deneyin...", 'warning');
+        return;
+    }
     
     
     activeTarget.key = sharedSecret; playSound('type');
@@ -1745,6 +1788,15 @@ async function decryptPacketForDisplay(packet, contactInfo) {
                     if (packet.filePayload && !decryptedFile) {
                         decryptedFile = await decryptGCM(packet.filePayload, cryptoKey).catch(() => null);
                     }
+                }
+            } else if (!isMine && packet.messageIndex !== null && packet.messageIndex !== undefined && !hasRatchetSession(peerId)) {
+                // [GÜVENLİK FIX] Karşı taraf ratchet oturumuyla şifrelemiş fakat bu tarafta oturum sıfırlanmış / silinmiş
+                hasError = 'session_desync';
+                if (typeof initiateEcdhHandshake === 'function') {
+                    initiateEcdhHandshake(peerId);
+                }
+                if (typeof safeEmit === 'function') {
+                    safeEmit('reset_chat_session', { targetId: peerId });
                 }
             } else {
                 // Statik anahtar ile deşifreleme
@@ -1989,6 +2041,8 @@ function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl
 
     if (isError === 'no_key') {
         const errDiv = document.createElement('div'); errDiv.className = 'border-l-4 border-yellow-500 bg-yellow-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-yellow-400 my-1 max-w-[90%] sm:max-w-sm    font-bold tracking-wider'; errDiv.innerText = '[!] UYARI: ANAHTAR EŞLEŞMEDİ.'; msgDiv.appendChild(errDiv);
+    } else if (isError === 'session_desync') {
+        const errDiv = document.createElement('div'); errDiv.className = 'border-l-4 border-amber-500 bg-amber-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-amber-400 my-1 max-w-[90%] sm:max-w-sm    font-bold tracking-wider'; errDiv.innerText = '[!] UYARI: OTURUM SIFIRLANMIŞ / YENİDEN EL SIKIŞMA BAŞLATILDI.'; msgDiv.appendChild(errDiv);
     } else if (isError) {
         const errDiv = document.createElement('div'); errDiv.className = 'border-l-4 border-red-500 bg-red-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-red-400 my-1 max-w-[90%] sm:max-w-sm    font-bold tracking-wider'; errDiv.innerText = '[!] KRİTİK: PAKET BÜTÜNLÜĞÜ BOZUK!'; msgDiv.appendChild(errDiv);
     } else {
