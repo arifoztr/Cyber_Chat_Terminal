@@ -17,5 +17,6 @@ data/
 dist/
 coverage/
 tests/test_temp.sqlite*
+Cyber_Chat_Terminal/
 
 

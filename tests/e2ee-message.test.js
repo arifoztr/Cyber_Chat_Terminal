@@ -15,6 +15,7 @@ const jest = globalThis.jest || globalThis.vi;
 const crypto = globalThis.crypto;
 
 // Test edilecek kripto yardımcıları
+import cryptoModule from '../public/crypto.js';
 const {
     hexToBytes,
     bufferToBase64,
@@ -22,7 +23,7 @@ const {
     encryptGCM,
     decryptGCM,
     _aesKeyCache
-} = require('../public/crypto.js');
+} = cryptoModule;
 
 describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
     // 256-bit (64 hex karakter) test anahtarları
