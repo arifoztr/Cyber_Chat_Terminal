@@ -220,4 +220,47 @@ function bindSocketEvents() {
     socket.on('contact_request_response', (data) => {
         showContactRequestResponse(data);
     });
+
+    socket.off('session_reset');
+    /**
+     * Karşı tarafın sohbet geçmişini veya şifreleme anahtarlarını sildiğini karşılar.
+     * Asimetrik durum ve paket bütünlüğü hatalarını önlemek için yerel kriptografik oturumu sıfırlar.
+     * @param {Object} data - Sıfırlama bilgileri ({ senderId: string, timestamp: number }).
+     */
+    socket.on('session_reset', (data) => {
+        if (!data || !data.senderId) return;
+        const peerId = data.senderId;
+
+        // 1. Kriptografik durumu bellekten güvenle sil
+        if (typeof wipeTargetCryptoState === 'function') {
+            wipeTargetCryptoState(peerId);
+        }
+        if (typeof derivedSecrets !== 'undefined' && derivedSecrets[peerId]) {
+            delete derivedSecrets[peerId];
+        }
+
+        // 2. Kişi listesindeki ecdhStatus durumunu 'pending' ve anahtarı null yap
+        let contact = myContacts.find(c => c.id === peerId);
+        if (contact) {
+            contact.key = null;
+            contact.ecdhStatus = 'pending';
+            saveContactsToVault();
+            renderContactsSidebarDebounced();
+        }
+
+        // 3. Eğer şu an açık olan sohbet buysa başlığı ve arayüzü güncelle
+        if (activeTarget && activeTarget.id === peerId) {
+            activeTarget.key = null;
+            activeTarget.ecdhStatus = 'pending';
+            updateChatHeaderUI();
+            const name = contact && contact.username ? `${contact.username} (${peerId})` : peerId;
+            showToast(`${name} sohbet oturumunu sıfırladı. Yeni mesajda anahtar yeniden anlaşılacak.`, 'info');
+            playSound('destroy');
+
+            // Yeni bir el sıkışma başlatarak kanalı hazırla
+            if (typeof initiateEcdhHandshake === 'function' && activeTarget.isOnline) {
+                initiateEcdhHandshake(peerId);
+            }
+        }
+    });
 }

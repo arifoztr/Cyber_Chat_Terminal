@@ -761,6 +761,40 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             expect(sentAnswer.data.senderId).toBe('AGN-BOB');
         });
 
+        it('reset_chat_session: transmits session_reset to online peer and queues when offline', async () => {
+            const cb = vi.fn();
+            // 1. Online peer: Alice sends reset to Bob
+            await aliceSocket._trigger('reset_chat_session', { targetId: 'AGN-BOB' }, cb);
+            expect(cb).toHaveBeenCalledWith({ success: true, queued: false });
+
+            const sentReset = emittedEvents.find(e => e.event === 'session_reset' && e.target === 'sock-bob');
+            expect(sentReset).toBeDefined();
+            expect(sentReset.data.senderId).toBe('AGN-ALICE');
+            expect(sentReset.data.targetId).toBe('AGN-BOB');
+            expect(sentReset.data.type).toBe('session_reset');
+
+            // 2. Offline peer: Bob goes offline, Alice sends reset to Bob
+            onlineNodes.delete('AGN-BOB');
+            const cbOffline = vi.fn();
+            await aliceSocket._trigger('reset_chat_session', { targetId: 'AGN-BOB' }, cbOffline);
+            expect(cbOffline).toHaveBeenCalledWith({ success: true, queued: true });
+
+            const db = dbManager.getDB();
+            expect(db.queue['AGN-BOB']).toBeDefined();
+            const queuedReset = db.queue['AGN-BOB'].find(p => p.type === 'session_reset');
+            expect(queuedReset).toBeDefined();
+            expect(queuedReset.senderId).toBe('AGN-ALICE');
+
+            // 3. Bob comes back online and triggers client_ready
+            emittedEvents.length = 0;
+            onlineNodes.set('AGN-BOB', new Set(['sock-bob']));
+            await bobSocket._trigger('client_ready');
+
+            const deliveredReset = emittedEvents.find(e => e.event === 'session_reset' && e.target === 'sock-bob');
+            expect(deliveredReset).toBeDefined();
+            expect(deliveredReset.data.senderId).toBe('AGN-ALICE');
+        });
+
         it('send_secure_packet: transmits directly to online recipient and rejects spoofing', async () => {
             const cb = vi.fn();
 
@@ -1051,6 +1085,18 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             aliceSocket.user = null;
             await aliceSocket._trigger('ecdh_offer', { targetId: 'AGN-BOB' });
             await aliceSocket._trigger('ecdh_answer', { targetId: 'AGN-BOB' });
+
+            // reset_chat_session edge cases
+            const cbReset = vi.fn();
+            aliceSocket.user = { email: 'alice@cyber.local', username: 'Alice', userId: 'AGN-ALICE' };
+            await aliceSocket._trigger('reset_chat_session', null, cbReset);
+            expect(cbReset).toHaveBeenCalledWith({ success: false });
+            await aliceSocket._trigger('reset_chat_session', {}, cbReset);
+            expect(cbReset).toHaveBeenCalledWith({ success: false });
+
+            aliceSocket.user = null;
+            await aliceSocket._trigger('reset_chat_session', { targetId: 'AGN-BOB' }, cbReset);
+            expect(cbReset).toHaveBeenCalledWith({ success: false });
         });
     });
 
