@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import http from 'http';
-const dbManager = require('../src/database');
-const { app, isOriginAllowed, gracefulShutdown, startServer } = require('../src/server');
+const dbManager = require('../src/database.js');
+import serverModule from '../src/server.js';
+const { app, isOriginAllowed, gracefulShutdown, startServer } = serverModule;
 
 describe('Server & Express Infrastructure Tests', () => {
     const originalEnv = { ...process.env };
@@ -246,6 +247,131 @@ describe('Server & Express Infrastructure Tests', () => {
 
             expect(saveImmediateSpy).toHaveBeenCalled();
             expect(exitSpy).toHaveBeenCalledWith(0);
+            consoleSpy.mockRestore();
+        });
+    });
+
+    describe('HTTP Rate Limiting, Error Handling, and Route Edge Cases', () => {
+        it('HTTP rate limiter: bypasses /socket.io/ and blocks requests when limit exceeds 120/min', () => {
+            const rateLimitMiddleware = app._router.stack.find(s => s.name === '<anonymous>' && s.handle.length === 3 && s.handle.toString().includes('httpRateLimits')).handle;
+
+            // 1. /socket.io/ bypass
+            const nextSocket = vi.fn();
+            rateLimitMiddleware({ url: '/socket.io/?EIO=4' }, {}, nextSocket);
+            expect(nextSocket).toHaveBeenCalled();
+
+            // 2. Normal requests under limit
+            const ip = '198.51.100.55';
+            const mockReq = { url: '/api/v1/test', ip };
+            for (let i = 0; i < 120; i++) {
+                const nextFn = vi.fn();
+                rateLimitMiddleware(mockReq, {}, nextFn);
+                expect(nextFn).toHaveBeenCalled();
+            }
+
+            // 3. 120th request exceeds limit -> 429 status
+            let statusCode = null;
+            let jsonPayload = null;
+            const mockRes = {
+                status: (c) => {
+                    statusCode = c;
+                    return { json: (b) => { jsonPayload = b; } };
+                }
+            };
+            rateLimitMiddleware(mockReq, mockRes, () => {});
+            expect(statusCode).toBe(429);
+            expect(jsonPayload).toEqual({ error: 'Çok fazla istek yapıldı. Lütfen bir dakika bekleyin.' });
+        });
+
+        it('HTTP rate limiter: periodic interval cleans up expired entries', async () => {
+            vi.useFakeTimers();
+            const rateLimitMiddleware = app._router.stack.find(s => s.name === '<anonymous>' && s.handle.length === 3 && s.handle.toString().includes('httpRateLimits')).handle;
+            const ip = '198.51.100.77';
+            rateLimitMiddleware({ url: '/test-exp', ip }, {}, () => {});
+
+            // Advance timers by 65 seconds to trigger interval and delete expired record
+            await vi.advanceTimersByTimeAsync(65000);
+            vi.useRealTimers();
+        });
+
+        it('GET /health route handler: executes and returns status 200 with timestamp', () => {
+            const healthLayer = app._router.stack.find(s => s.route && s.route.path === '/health');
+            const handler = healthLayer.route.stack[0].handle;
+            let statusCode = null;
+            let jsonPayload = null;
+            const mockRes = {
+                status: (c) => {
+                    statusCode = c;
+                    return { json: (b) => { jsonPayload = b; } };
+                }
+            };
+            handler({}, mockRes);
+            expect(statusCode).toBe(200);
+            expect(jsonPayload.status).toBe('ok');
+            expect(typeof jsonPayload.timestamp).toBe('string');
+        });
+
+        it('GET / route handler: sets Cache-Control no-cache and sends index.html', () => {
+            const rootLayer = app._router.stack.find(s => s.route && s.route.path === '/');
+            const handler = rootLayer.route.stack[0].handle;
+            const mockRes = {
+                setHeader: vi.fn(),
+                sendFile: vi.fn()
+            };
+            handler({}, mockRes);
+            expect(mockRes.setHeader).toHaveBeenCalledWith('Cache-Control', expect.stringContaining('no-store'));
+            expect(mockRes.sendFile).toHaveBeenCalledWith(expect.stringContaining('index.html'));
+        });
+
+        it('404 middleware: bypasses /socket.io/ and returns 404 for unknown endpoints', () => {
+            const notFoundMiddleware = app._router.stack.find(s => s.name === '<anonymous>' && s.handle.length === 3 && s.handle.toString().includes('Endpoint bulunamadı')).handle;
+
+            const nextSocket = vi.fn();
+            notFoundMiddleware({ url: '/socket.io/?EIO=4' }, {}, nextSocket);
+            expect(nextSocket).toHaveBeenCalled();
+
+            let statusCode = null;
+            let jsonPayload = null;
+            const mockRes = {
+                status: (c) => {
+                    statusCode = c;
+                    return { json: (b) => { jsonPayload = b; } };
+                }
+            };
+            notFoundMiddleware({ url: '/non-existent-page' }, mockRes, () => {});
+            expect(statusCode).toBe(404);
+            expect(jsonPayload).toEqual({ error: 'Endpoint bulunamadı.' });
+        });
+
+        it('500 error handler: logs error and returns err.status or 500 json response', () => {
+            const errorHandler = app._router.stack.find(s => s.handle.length === 4).handle;
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            // Default 500
+            let status500 = null;
+            let body500 = null;
+            const res500 = {
+                status: (c) => {
+                    status500 = c;
+                    return { json: (b) => { body500 = b; } };
+                }
+            };
+            errorHandler(new Error('Fatal unhandled error'), {}, res500, () => {});
+            expect(status500).toBe(500);
+            expect(body500).toEqual({ error: 'Sunucu hatası oluştu.' });
+            expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Unhandled HTTP Error:'), 'Fatal unhandled error');
+
+            // Custom error status
+            let statusCustom = null;
+            const resCustom = {
+                status: (c) => {
+                    statusCustom = c;
+                    return { json: () => {} };
+                }
+            };
+            errorHandler({ status: 403, message: 'Forbidden access' }, {}, resCustom, () => {});
+            expect(statusCustom).toBe(403);
+
             consoleSpy.mockRestore();
         });
     });

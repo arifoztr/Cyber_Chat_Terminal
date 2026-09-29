@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vite
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const dbManager = require('../src/database');
-const setupSockets = require('../src/socket');
+import setupSockets from '../src/socket.js';
 const { signJWT, verifyJWT, revokeToken, getClientIp, revokedTokens, onlineNodes, DUMMY_HASH, MAX_QUEUE_SIZE } = setupSockets._internals;
 
 describe('Socket.io Architecture & Security Test Suite', () => {
@@ -141,7 +141,29 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             // Corrupt base64 in body (triggers catch)
             expect(verifyJWT(`${h}.%%%notbase64%%%.${s}`)).toBeNull();
         });
+
+        it('verifyJWT: catches JSON parse error on valid signature with invalid JSON payload (line 160)', () => {
+            const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+            const invalidJsonPayload = Buffer.from('NOT_VALID_JSON_{{').toString('base64url');
+            const sig = crypto.createHmac('sha256', setupSockets._internals.JWT_SECRET).update(`${header}.${invalidJsonPayload}`).digest('base64url');
+            const token = `${header}.${invalidJsonPayload}.${sig}`;
+
+            expect(verifyJWT(token)).toBeNull();
+        });
+
+        it('should load JWT_SECRET from environment when >= 32 characters (line 39)', () => {
+            const originalSecret = process.env.JWT_SECRET;
+            process.env.JWT_SECRET = 'a'.repeat(32);
+            delete require.cache[require.resolve('../src/socket.js')];
+            const freshSocketModule = require('../src/socket.js');
+            expect(freshSocketModule._internals.JWT_SECRET).toBe('a'.repeat(32));
+            if (originalSecret) process.env.JWT_SECRET = originalSecret;
+            else delete process.env.JWT_SECRET;
+            delete require.cache[require.resolve('../src/socket.js')];
+            require('../src/socket.js');
+        });
     });
+
 
     // ────────────────────────────────────────────────────────────────────────
     // 2. IP Extraction & Proxy Security (SEC-07)
@@ -362,6 +384,15 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
             await socket._trigger('register', { email: 'err@cyber.local', password: 'password123', username: 'ErrUser' }, cb);
             expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'Sunucu hatası oluştu. Lütfen tekrar deneyin.' }));
+        });
+
+        it('should reject registration if email is already in use (lines 361-363)', async () => {
+            const db = dbManager.getDB();
+            db.users['taken@cyber.local'] = { email: 'taken@cyber.local', username: 'Existing' };
+            const cb = vi.fn();
+
+            await socket._trigger('register', { email: 'taken@cyber.local', password: 'password123', username: 'Newbie' }, cb);
+            expect(cb).toHaveBeenCalledWith({ success: false, message: 'Bu e-posta adresi zaten kullanımda.' });
         });
     });
 
@@ -614,9 +645,13 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             await socket._trigger('change_password', { oldPassword: 'wrongOldPassword', newPassword: 'newValidPassword123' }, cb);
             expect(cb).toHaveBeenCalledWith({ success: false, message: 'Mevcut şifre hatalı.' });
 
-            // Success
+            // Success & Multi-socket invalidation (line 596)
+            onlineNodes.set(testUser.userId, new Set([socket.id, 'sock-other-tab']));
             await socket._trigger('change_password', { oldPassword: 'oldPassword123', newPassword: 'newValidPassword123' }, cb);
             expect(cb).toHaveBeenCalledWith({ success: true });
+            const invalidatedEvent = emittedEvents.find(e => e.target === 'sock-other-tab' && e.event === 'session_invalidated');
+            expect(invalidatedEvent).toBeDefined();
+            expect(invalidatedEvent.data.message).toContain('Şifreniz değiştirildiği için');
 
             // Error handling
             vi.spyOn(bcrypt, 'compare').mockRejectedValueOnce(new Error('Bcrypt crash'));
@@ -1172,6 +1207,118 @@ describe('Socket.io Architecture & Security Test Suite', () => {
                 await socket._trigger('send_secure_packet', { senderId: 'AGN-RL', targetId: 'AGN-BOB', ciphertext: 'data' }, cbSend);
             }
             expect(cbSend).toHaveBeenLastCalledWith({ queued: false, error: 'RATE_LIMIT' });
+
+        });
+
+        it('should hit rate limits for register, login, and reset_chat_session', async () => {
+            const socket = createMockSocket({ handshake: { address: '203.0.113.111' } });
+            connectionHandler(socket);
+            socket.user = { email: 'fastrl@cyber.local', username: 'FastRl', password: 'pwd', userId: 'AGN-FASTRL' };
+            dbManager.getDB().users[socket.user.email] = socket.user;
+
+            const hashSpy = vi.spyOn(bcrypt, 'hash').mockResolvedValue('fastHash');
+            const compareSpy = vi.spyOn(bcrypt, 'compare').mockResolvedValue(false);
+
+            // Exhaust register (limit 20) -> lines 333-334
+            const cbReg = vi.fn();
+            for (let i = 0; i < 21; i++) {
+                await socket._trigger('register', { email: `reg_${i}@cyber.local`, password: 'password123', username: `RegUser${i}` }, cbReg);
+            }
+            expect(cbReg).toHaveBeenLastCalledWith({ success: false, message: expect.stringContaining('SİBER SAVUNMA: Çok fazla kayıt denemesi') });
+
+            // Exhaust login (limit 30) -> lines 408-409
+            const cbLogin = vi.fn();
+            for (let i = 0; i < 31; i++) {
+                await socket._trigger('login', { email: 'user@cyber.local', password: 'wrongpassword' }, cbLogin);
+            }
+            expect(cbLogin).toHaveBeenLastCalledWith({ success: false, message: expect.stringContaining('SİBER SAVUNMA: Çok fazla giriş denemesi') });
+
+            // Exhaust reset_chat_session (limit 30) -> lines 799-800
+            const cbResetRL = vi.fn();
+            for (let i = 0; i < 31; i++) {
+                await socket._trigger('reset_chat_session', { targetId: 'AGN-BOB' }, cbResetRL);
+            }
+            expect(cbResetRL).toHaveBeenLastCalledWith({ success: false, error: 'RATE_LIMIT' });
+
+            hashSpy.mockRestore();
+            compareSpy.mockRestore();
+        });
+
+
+        it('reset_chat_session: drops oldest packet when offline target queue reaches MAX_QUEUE_SIZE (line 821)', async () => {
+            const socket = createMockSocket();
+            connectionHandler(socket);
+            socket.user = { email: 'resetq@cyber.local', username: 'ResetQ', userId: 'AGN-RESETQ' };
+            const db = dbManager.getDB();
+            db.queue['AGN-TARGET-OFFLINE'] = [];
+            for (let i = 0; i < MAX_QUEUE_SIZE; i++) {
+                db.queue['AGN-TARGET-OFFLINE'].push({ id: `p-${i}`, senderId: 'AGN-OTHER', timestamp: Date.now() });
+            }
+            expect(db.queue['AGN-TARGET-OFFLINE'].length).toBe(MAX_QUEUE_SIZE);
+
+            const cb = vi.fn();
+            await socket._trigger('reset_chat_session', { targetId: 'AGN-TARGET-OFFLINE' }, cb);
+
+            expect(cb).toHaveBeenCalledWith({ success: true, queued: true });
+            expect(db.queue['AGN-TARGET-OFFLINE'].length).toBe(MAX_QUEUE_SIZE);
+            expect(db.queue['AGN-TARGET-OFFLINE'][db.queue['AGN-TARGET-OFFLINE'].length - 1].type).toBe('session_reset');
+        });
+
+        it('checkRateLimit: resets count to 1 when current time exceeds resetAt window (lines 234-236)', () => {
+            const socketInst = setupSockets(io);
+            const { checkRateLimit, rateLimits } = socketInst;
+            const ip = '198.51.100.123';
+            checkRateLimit(ip, 'test_action', 10, 1000);
+            const rec = rateLimits.get(`${ip}:test_action`);
+            expect(rec.count).toBe(1);
+
+            // Simulate expired resetAt
+            rec.resetAt = Date.now() - 5000;
+            const allowed = checkRateLimit(ip, 'test_action', 10, 1000);
+            expect(allowed).toBe(true);
+            expect(rec.count).toBe(1);
+            expect(rec.resetAt).toBeGreaterThan(Date.now());
+        });
+
+        it('recordFailedLogin & checkFailedLoginLimit: tracks multiple attempts and enforces limit (lines 255 & 269)', () => {
+            const socketInst = setupSockets(io);
+            const { checkFailedLoginLimit, recordFailedLogin, failedLoginAttempts } = socketInst;
+            const ip = '198.51.100.222';
+
+            expect(checkFailedLoginLimit(ip)).toBe(true);
+            recordFailedLogin(ip); // first attempt (count: 1)
+            expect(failedLoginAttempts.get(ip).count).toBe(1);
+
+            recordFailedLogin(ip); // second attempt (count: 2) -> line 269
+            expect(failedLoginAttempts.get(ip).count).toBe(2);
+            expect(checkFailedLoginLimit(ip)).toBe(true); // line 255 (count < 5)
+
+            // Hit 5 failed attempts
+            for (let i = 0; i < 3; i++) recordFailedLogin(ip);
+            expect(checkFailedLoginLimit(ip)).toBe(false);
+
+            // After resetAt expiry, checkFailedLoginLimit returns true
+            failedLoginAttempts.get(ip).resetAt = Date.now() - 1000;
+            expect(checkFailedLoginLimit(ip)).toBe(true);
+            recordFailedLogin(ip); // resets record
+            expect(failedLoginAttempts.get(ip).count).toBe(1);
+        });
+
+        it('periodic intervals: clean up expired rateLimits, failedLoginAttempts, and revokedTokens (lines 102-104 & 284-289)', async () => {
+            vi.useFakeTimers();
+            const socketInst = setupSockets(io);
+            const { rateLimits, failedLoginAttempts } = socketInst;
+            rateLimits.set('exp:test', { count: 5, resetAt: Date.now() - 1000 });
+            failedLoginAttempts.set('198.51.100.999', { count: 3, resetAt: Date.now() - 1000 });
+            revokedTokens.set('exp-token', Date.now() - 1000);
+
+            // Advance by 65 seconds (for 60000ms rate limit & failedLoginAttempts interval)
+            await vi.advanceTimersByTimeAsync(65000);
+            expect(rateLimits.has('exp:test')).toBe(false);
+            expect(failedLoginAttempts.has('198.51.100.999')).toBe(false);
+
+            vi.useRealTimers();
         });
     });
 });
+

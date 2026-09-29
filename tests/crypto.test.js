@@ -495,5 +495,219 @@ describe('Crypto & E2EE Unit Tests', () => {
             cryptoModule.acceptNewFingerprint(null, null);
         });
     });
+
+    describe('ECDHE, KDF Ratchet & Memory Hygiene Unit Tests', () => {
+        let alicePair, aliceJwk;
+        let bobPair, bobJwk;
+
+        beforeEach(async () => {
+            cryptoModule.wipeAllCryptoState();
+            alicePair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+            aliceJwk = await crypto.subtle.exportKey('jwk', alicePair.publicKey);
+            bobPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+            bobJwk = await crypto.subtle.exportKey('jwk', bobPair.publicKey);
+            globalThis.currentUser = { userId: 'AGN-ALICE' };
+        });
+
+        afterEach(() => {
+            cryptoModule.wipeAllCryptoState();
+            delete globalThis.currentUser;
+            delete globalThis.socket;
+            delete globalThis.safeEmit;
+        });
+
+        it('getAesGcmKey: returns cached CryptoKey on second call and getAesGcmKeyFromBytes imports key', async () => {
+            const secret = 'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
+            const key1 = await cryptoModule.getAesGcmKey(secret);
+            const key2 = await cryptoModule.getAesGcmKey(secret);
+            expect(key1).toBe(key2);
+
+            const rawBytes = new Uint8Array(32).fill(42);
+            const keyFromBytes = await cryptoModule.getAesGcmKeyFromBytes(rawBytes);
+            expect(keyFromBytes).toBeDefined();
+            expect(keyFromBytes.algorithm.name).toBe('AES-GCM');
+        });
+
+        it('Ratchet Chain: initializes, checks session, encrypts and decrypts in-order and out-of-order', async () => {
+            const sharedSecretBytes = new Uint8Array(32).fill(9);
+
+            // Alice initializes ratchet with Bob
+            globalThis.currentUser = { userId: 'AGN-ALICE' };
+            await cryptoModule.initRatchetChain('AGN-BOB', new Uint8Array(sharedSecretBytes));
+            expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(true);
+            expect(cryptoModule.hasRatchetSession('AGN-NONEXISTENT')).toBe(false);
+
+            // Alice encrypts 3 messages
+            const enc0 = await cryptoModule.encryptWithRatchet('Message 0', 'AGN-BOB');
+            const enc1 = await cryptoModule.encryptWithRatchet('Message 1', 'AGN-BOB');
+            const enc2 = await cryptoModule.encryptWithRatchet('Message 2', 'AGN-BOB');
+
+            expect(enc0.messageIndex).toBe(0);
+            expect(enc1.messageIndex).toBe(1);
+            expect(enc2.messageIndex).toBe(2);
+
+            // Bob initializes ratchet with Alice
+            globalThis.currentUser = { userId: 'AGN-BOB' };
+            await cryptoModule.initRatchetChain('AGN-ALICE', new Uint8Array(sharedSecretBytes));
+
+            // Bob receives message 2 FIRST (out-of-order)
+            const dec2 = await cryptoModule.decryptWithRatchet(enc2.ciphertext, 'AGN-ALICE', 2);
+            expect(dec2).toBe('Message 2');
+
+            // Bob receives message 0 (from skipped keys)
+            const dec0 = await cryptoModule.decryptWithRatchet(enc0.ciphertext, 'AGN-ALICE', 0);
+            expect(dec0).toBe('Message 0');
+
+            // Bob receives message 1 (from skipped keys)
+            const dec1 = await cryptoModule.decryptWithRatchet(enc1.ciphertext, 'AGN-ALICE', 1);
+            expect(dec1).toBe('Message 1');
+        });
+
+        it('Ratchet edge cases: returns null when session missing or decryption fails', async () => {
+            // Missing session for encrypt
+            const nullEnc = await cryptoModule.encryptWithRatchet('text', 'AGN-NO-SESSION');
+            expect(nullEnc).toBeNull();
+
+            // Missing session for decrypt
+            const nullDec = await cryptoModule.decryptWithRatchet('cipher', 'AGN-NO-SESSION', 0);
+            expect(nullDec).toBeNull();
+
+            // Corrupted ciphertext triggers error catch block
+            const sharedSecretBytes = new Uint8Array(32).fill(11);
+            globalThis.currentUser = { userId: 'AGN-ALICE' };
+            await cryptoModule.initRatchetChain('AGN-BOB', new Uint8Array(sharedSecretBytes));
+            const validEnc = await cryptoModule.encryptWithRatchet('Secret Info', 'AGN-BOB');
+
+            globalThis.currentUser = { userId: 'AGN-BOB' };
+            await cryptoModule.initRatchetChain('AGN-ALICE', new Uint8Array(sharedSecretBytes));
+
+            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            // Corrupt base64 data
+            const corruptedCipher = cryptoModule.bufferToBase64(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]));
+            const failedDec = await cryptoModule.decryptWithRatchet(corruptedCipher, 'AGN-ALICE', 0);
+            expect(failedDec).toBeNull();
+            expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Ratchet deşifreleme hatası'), expect.any(Error));
+            consoleSpy.mockRestore();
+        });
+
+        it('Ephemeral keypair: generates, derives secret, throws on missing key, and wipes key', async () => {
+            // Alice generates ephemeral key for Bob
+            const ephAliceJwk = await cryptoModule.generateEphemeralKeyPair('AGN-BOB');
+            expect(ephAliceJwk).toBeDefined();
+            expect(ephAliceJwk.kty).toBe('EC');
+
+            // Bob generates ephemeral key for Alice
+            const ephBobJwk = await cryptoModule.generateEphemeralKeyPair('AGN-ALICE');
+            expect(ephBobJwk).toBeDefined();
+
+            // Derive shared secret from both sides
+            const aliceDerived = await cryptoModule.deriveEphemeralSecret('AGN-BOB', ephBobJwk);
+            const bobDerived = await cryptoModule.deriveEphemeralSecret('AGN-ALICE', ephAliceJwk);
+
+            expect(aliceDerived).toBeInstanceOf(Uint8Array);
+            expect(bobDerived).toBeInstanceOf(Uint8Array);
+            expect(Array.from(aliceDerived)).toEqual(Array.from(bobDerived));
+
+            // Missing ephemeral key throws error
+            await expect(cryptoModule.deriveEphemeralSecret('AGN-UNKNOWN', ephBobJwk))
+                .rejects.toThrow('Geçici anahtar bulunamadı');
+
+            // Wipe ephemeral key
+            cryptoModule.wipeEphemeralKey('AGN-BOB');
+            cryptoModule.wipeEphemeralKey('AGN-NOT-THERE'); // safe no-op
+        });
+
+        it('initiateEcdhHandshake: returns early if missing key/socket and emits ecdh_offer when configured', async () => {
+            // Early return branches
+            cryptoModule.setMyPublicKeyJwk(null);
+            globalThis.socket = null;
+            await cryptoModule.initiateEcdhHandshake('AGN-BOB');
+
+            // Valid emission
+            cryptoModule.setMyPublicKeyJwk(aliceJwk);
+            globalThis.socket = {};
+            let emitted = null;
+            globalThis.safeEmit = (event, data) => { emitted = { event, data }; };
+
+            await cryptoModule.initiateEcdhHandshake('AGN-BOB');
+            expect(emitted).toBeDefined();
+            expect(emitted.event).toBe('ecdh_offer');
+            expect(emitted.data.targetId).toBe('AGN-BOB');
+            expect(emitted.data.senderId).toBe('AGN-ALICE');
+            expect(emitted.data.publicKeyJwk).toEqual(aliceJwk);
+            expect(emitted.data.ephemeralPublicKeyJwk).toBeDefined();
+        });
+
+        it('handleEcdhOffer and handleEcdhAnswer: handles both ephemeral and legacy fallback protocols', async () => {
+            // 1. Ephemeral Protocol:
+            // Alice initiates offer
+            cryptoModule.setMyPublicKeyJwk(aliceJwk);
+            cryptoModule.setMyEcdhKeyPair(alicePair);
+            globalThis.socket = {};
+            let offerPayload = null;
+            globalThis.safeEmit = (event, data) => { offerPayload = data; };
+            await cryptoModule.initiateEcdhHandshake('AGN-BOB');
+
+            // Bob handles offer
+            globalThis.currentUser = { userId: 'AGN-BOB' };
+            cryptoModule.setMyPublicKeyJwk(bobJwk);
+            cryptoModule.setMyEcdhKeyPair(bobPair);
+            const offerResp = await cryptoModule.handleEcdhOffer(offerPayload);
+            expect(offerResp.answerData.ephemeralPublicKeyJwk).toBeDefined();
+            expect(typeof offerResp.secret).toBe('string');
+
+            // Alice handles answer
+            globalThis.currentUser = { userId: 'AGN-ALICE' };
+            const aliceSecret = await cryptoModule.handleEcdhAnswer(offerResp.answerData);
+            expect(aliceSecret).toBe(offerResp.secret);
+
+            // 2. Legacy Fallback Protocol (no ephemeral key in payload):
+            // Bob handles legacy offer without ephemeral
+            globalThis.currentUser = { userId: 'AGN-BOB' };
+            const legacyOfferResp = await cryptoModule.handleEcdhOffer({
+                senderId: 'AGN-ALICE',
+                publicKeyJwk: aliceJwk
+            });
+            expect(legacyOfferResp.answerData.ephemeralPublicKeyJwk).toBeUndefined();
+            expect(typeof legacyOfferResp.secret).toBe('string');
+
+            // Alice handles legacy answer without ephemeral
+            globalThis.currentUser = { userId: 'AGN-ALICE' };
+            cryptoModule.setMyPublicKeyJwk(aliceJwk);
+            cryptoModule.setMyEcdhKeyPair(alicePair);
+            const legacyAliceSecret = await cryptoModule.handleEcdhAnswer({
+                senderId: 'AGN-BOB',
+                publicKeyJwk: bobJwk
+            });
+            expect(legacyAliceSecret).toBe(legacyOfferResp.secret);
+        });
+
+        it('Memory hygiene: wipeTargetCryptoState and wipeAllCryptoState clean all keys and state', async () => {
+            const dummyBytes = new Uint8Array(32).fill(1);
+            globalThis.currentUser = { userId: 'AGN-ALICE' };
+            await cryptoModule.initRatchetChain('AGN-BOB', new Uint8Array(dummyBytes));
+            await cryptoModule.generateEphemeralKeyPair('AGN-BOB');
+            cryptoModule.setDerivedSecrets({ 'AGN-BOB': 'dummysecret' });
+
+            expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(true);
+            expect(cryptoModule.getDerivedSecrets()['AGN-BOB']).toBeDefined();
+
+            // Wipe specific target
+            cryptoModule.wipeTargetCryptoState('AGN-BOB');
+            expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(false);
+            expect(cryptoModule.getDerivedSecrets()['AGN-BOB']).toBeUndefined();
+
+            // Populate multiple targets and wipe all
+            await cryptoModule.initRatchetChain('AGN-BOB', new Uint8Array(dummyBytes));
+            await cryptoModule.generateEphemeralKeyPair('AGN-BOB');
+            cryptoModule.setMyPublicKeyJwk(aliceJwk);
+            cryptoModule.setMyEcdhKeyPair(alicePair);
+
+            cryptoModule.wipeAllCryptoState();
+            expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(false);
+            expect(cryptoModule.getMyPublicKeyJwk()).toBeNull();
+            expect(cryptoModule.getMyEcdhKeyPair()).toBeNull();
+        });
+    });
 });
 

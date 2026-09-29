@@ -199,6 +199,19 @@ describe('Database & Queue Management Tests', () => {
             const rows = await internals.sqliteAll('SELECT * FROM users');
             expect(rows).toHaveLength(0);
         });
+
+        it('syncMemoryToSqlite: should delete users from DB that are not in memory', async () => {
+            await internals.sqliteRun('INSERT OR IGNORE INTO users (email, username, password, userId) VALUES (?, ?, ?, ?)',
+                ['stale@cyber.local', 'Stale', 'pwd', 'AGN-STALE-1']);
+            const db = dbManager.getDB();
+            db.users['active@cyber.local'] = { email: 'active@cyber.local', username: 'Active', password: 'pwd', userId: 'AGN-ACT-1' };
+            delete db.users['stale@cyber.local'];
+
+            await internals.syncMemoryToSqlite();
+
+            const stale = await internals.sqliteGet('SELECT * FROM users WHERE email = ?', ['stale@cyber.local']);
+            expect(stale).toBeUndefined();
+        });
     });
 
     describe('saveDatabase Debounce & saveDatabaseImmediate', () => {
@@ -508,6 +521,88 @@ describe('Database & Queue Management Tests', () => {
             const index = dbManager.getUserIdIndex();
             expect(index['AGN-TURSO-1']).toBe('turso@cyber.local');
         });
+
+        it('queryGet, syncMemoryToSql, and initDB should delegate to Turso when tursoClient is present', async () => {
+            internals.setTursoClient(mockTursoClient);
+
+            // queryGet in Turso mode (line 225)
+            const row = await internals.queryGet('SELECT * FROM users WHERE email = ?', ['turso@cyber.local']);
+            expect(row).toBeDefined();
+            expect(row.email).toBe('turso@cyber.local');
+
+            // syncMemoryToSql in Turso mode (line 387)
+            await internals.syncMemoryToSql();
+            expect(mockTursoClient.batch).toHaveBeenCalled();
+
+            // initDB in Turso mode (line 608)
+            await dbManager.initDB();
+            expect(mockTursoClient.execute).toHaveBeenCalled();
+
+            // Clean up: restore SQLite mode
+            internals.setTursoClient(null);
+        });
+
+        it('startGarbageCollector should clean expired packets periodically and catch errors', async () => {
+            vi.useFakeTimers();
+
+            // Add expired and fresh packets to DB for existing user AGN-TURSO-1
+            const expireOld = Date.now() - (dbManager.MAX_PACKET_AGE_MS + 5000);
+            await internals.queryRun('INSERT INTO queue (targetId, packet, timestamp) VALUES (?, ?, ?)',
+                ['AGN-TURSO-1', JSON.stringify({ id: 'p-old-gc' }), expireOld]);
+            await internals.queryRun('INSERT INTO queue (targetId, packet, timestamp) VALUES (?, ?, ?)',
+                ['AGN-TURSO-1', JSON.stringify({ id: 'p-fresh-gc' }), Date.now()]);
+
+            dbManager.startGarbageCollector();
+
+            // Advance by 1 hour (3600000 ms)
+            await vi.advanceTimersByTimeAsync(3600000);
+
+            const db = dbManager.getDB();
+            expect(db.queue['AGN-TURSO-1']).toBeDefined();
+            expect(db.queue['AGN-TURSO-1'][0].id).toBe('t-pkt-1');
+
+            // Test catch block (line 635)
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            internals.setTursoClient(mockTursoClient);
+            mockTursoClient.execute.mockRejectedValueOnce(new Error('Simulated GC failure'));
+
+            await vi.advanceTimersByTimeAsync(3600000);
+            expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Garbage Collector hatası'), expect.any(Error));
+
+            internals.setTursoClient(null);
+            errorSpy.mockRestore();
+            vi.useRealTimers();
+        });
+
+        it('should create database directory if it does not exist and handle mkdir errors (lines 33-34)', () => {
+            const testDir = path.join(__dirname, 'nonexistent_test_subdir');
+            if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true, force: true });
+            process.env.DB_PATH = path.join(testDir, 'db.sqlite');
+
+            delete require.cache[require.resolve('../src/database.js')];
+            require('../src/database.js');
+            expect(fs.existsSync(testDir)).toBe(true);
+            fs.rmSync(testDir, { recursive: true, force: true });
+
+            // Test line 34 catch block
+            const failDir = path.join(__dirname, 'nonexistent_fail_subdir');
+            process.env.DB_PATH = path.join(failDir, 'db.sqlite');
+            const mkdirSpy = vi.spyOn(fs, 'mkdirSync').mockImplementationOnce(() => {
+                throw new Error('Disk write error');
+            });
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+            delete require.cache[require.resolve('../src/database.js')];
+            require('../src/database.js');
+            expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Veritabanı dizini oluşturulamadı'), expect.any(Error));
+
+            errorSpy.mockRestore();
+            mkdirSpy.mockRestore();
+            process.env.DB_PATH = testDbPath;
+            delete require.cache[require.resolve('../src/database.js')];
+            require('../src/database.js');
+        });
     });
 });
+
 

@@ -1041,7 +1041,11 @@ module.exports = function setupSockets(io) {
     return {
         checkRateLimit,
         rateLimits,
-        onlineNodes
+        onlineNodes,
+        checkFailedLoginLimit,
+        recordFailedLogin,
+        resetFailedLogin,
+        failedLoginAttempts
     };
 };
 
@@ -1053,5 +1057,6 @@ module.exports._internals = {
     revokedTokens,
     onlineNodes,
     DUMMY_HASH,
-    MAX_QUEUE_SIZE
+    MAX_QUEUE_SIZE,
+    get JWT_SECRET() { return JWT_SECRET; }
 };
