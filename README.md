@@ -1,14 +1,17 @@
-# 🔐 Siber E2EE Sohbet Terminali (v10 Cyber-HUD Edition)
+# 🔐 Siber E2EE Sohbet Terminali (v1)
 
 > **Uçtan Uca Şifreli (E2EE) P2P Sohbet Terminali** — Sunucu sadece signaling ve relay görevi görür; şifreli içerikleri asla çözemez, inceleyemez veya loglayamaz.
 
-![Version](https://img.shields.io/badge/version-v10_Cyber--HUD-blueviolet)
+![Version](https://img.shields.io/badge/version-v1.0.0-blueviolet)
 ![License](https://img.shields.io/badge/license-ISC-green)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
-![Tests](https://img.shields.io/badge/tests-145%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-173%20passed-brightgreen)
 ![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)
-![JSDoc](https://img.shields.io/badge/JSDoc-100%25_Documented-blue)
+![Key Exchange](https://img.shields.io/badge/Key_Exchange-ECDHE_(P--256)-blue)
+![Ratchet](https://img.shields.io/badge/Ratchet-HKDF--SHA256-purple)
+![PFS](https://img.shields.io/badge/PFS-Perfect_Forward_Secrecy-brightgreen)
 ![E2EE](https://img.shields.io/badge/E2EE-AES--256--GCM-orange)
+![Storage](https://img.shields.io/badge/Storage-safeStorage_(DPAPI%2FKeychain)-cyan)
 ![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
 ![SQLite](https://img.shields.io/badge/sqlite-WAL_Mode-blue)
 ![Turso](https://img.shields.io/badge/turso-libSQL_ready-00EB8A)
@@ -18,15 +21,19 @@
 
 ## 📌 Proje Özeti
 
-Bu proje, modern web tarayıcıları ve yerel masaüstü uygulamaları arasında **ECDH (Elliptic-curve Diffie–Hellman, P-256)** ile asenkron anahtar takası yapılan, tüm metin ve dosya içeriklerinin **AES-GCM-256** ile istemci tarafında şifrelendiği uçtan uca korumalı bir P2P sohbet platformudur. 
+Bu proje, modern web tarayıcıları ve yerel masaüstü uygulamaları arasında **ECDHE (Elliptic-curve Diffie–Hellman Ephemeral, P-256)** ile her oturum için dinamik tek kullanımlık geçici anahtarlar üreten, her mesajda **KDF Ratchet (HKDF-SHA256)** zinciri ile anahtar rotasyonu yapan ve tüm içerikleri **AES-GCM-256** ile şifreleyen askeri düzeyde korumalı bir P2P sohbet platformudur. 
 
-Sunucu mimarisi **Zero-Knowledge (Sıfır Bilgi)** prensibiyle tasarlanmıştır. Sunucu yalnızca relay vazifesi görür; iletilen mesaj paketlerinin veya dosyaların şifresini çözebilecek anahtarlara hiçbir zaman sahip olamaz.
+Sistem, **Mükemmel İleriye Dönük Gizlilik (Perfect Forward Secrecy - PFS)** ve **İhlal Sonrası Güvenlik (Post-Compromise Security)** garantisi sunar. Sunucu mimarisi **Zero-Knowledge (Sıfır Bilgi)** prensibiyle tasarlanmıştır; sunucu yalnızca relay görevi görür, iletilen mesaj paketlerinin veya dosyaların şifresini çözebilecek anahtarlara hiçbir zaman sahip olamaz.
 
 ---
 
 ### 🌟 Öne Çıkan Özellikler
 
-- 🔐 **Askeri Düzey E2EE Şifreleme:** İstemciler arası ECDH (P-256) anahtar anlaşması ve her paket için rastgele 12-byte IV (Initialization Vector) ile AES-GCM-256 şifreleme (Tamamen yerel Web Crypto API).
+- 🔐 **Askeri Düzey E2EE & ECDHE:** İstemciler arası oturum bazlı geçici (ephemeral) P-256 anahtar çiftleri ile ECDHE el sıkışması; kalıcı kimlik anahtarları tehlikeye girse dahi geçmiş oturum trafiği asla çözülemez (**PFS - Perfect Forward Secrecy**).
+- ⚙️ **KDF Ratchet Zinciri (Mesaj Başına Anahtar Rotasyonu):** Signal protokolü esintili HKDF-SHA256 tabanlı simetrik cırcır (ratchet) mimarisi. Her gönderilen ve alınan mesaj için tek kullanımlık benzersiz anahtar türetilir; eski anahtarlar derhal bellekten sıfırlanarak (`fill(0)`) imha edilir.
+- 🔀 **Sıra Dışı Paket Toleransı (Out-of-Order Handling):** Ağ gecikmeleri nedeniyle sıra dışı gelen paketler için atlanan mesaj anahtarları (`_skippedMessageKeys`) önbelleğe alınır; paketler desync (senkronizasyon kaybı) olmadan eksiksiz çözülür.
+- 🔒 **Bellek Hijyeni & Dışa Aktarılamaz Anahtarlar (`extractable: false`):** Kriptografik anahtarlar Web Crypto katmanında kilitlenir; XSS durumunda bile JavaScript ile belleğe dökülemez. Oturum anahtarları `sessionStorage`'a yazılmaz, tamponlar sıfırlanır (`zeroization`).
+- 🛡️ **Donanım / İşletim Sistemi Kasası (Electron safeStorage):** Masaüstü uygulamasında depolanan IndexedDB anahtarları ve yetki belirteçleri Windows'ta DPAPI, macOS'ta Keychain ve Linux'ta Secret Service API'si ile şifrelenir.
 - 🛡️ **Sıfır Dış CDN & Sıkı CSP:** Tüm istemci kütüphaneleri (Tailwind CSS, Socket.IO, QR Code) yerel (`public/vendor/`) olarak barındırılır. Katı Content-Security-Policy kuralları ile üçüncü taraf kaynak ve script enjeksiyonları tamamen engellenmiştir.
 - 💻 **Çapraz Platform Masaüstü:** Electron tabanlı güvenli masaüstü istemcisi; **Windows** (`.exe`), **Linux** (`.deb`, `.AppImage`) ve **macOS** (`.dmg`, `.zip`) için optimize derlemeler.
 - 👤 **Profil & Hesap Yönetimi:** Kullanıcı avatarı belirleme/güncelleme (Canvas üzerinde istemci tarafı optimizasyon), eski şifre doğrulamalı şifre güncelleme ve tüm verileri, kuyrukları anında temizleyen güvenli hesap silme.
@@ -39,7 +46,7 @@ Sunucu mimarisi **Zero-Knowledge (Sıfır Bilgi)** prensibiyle tasarlanmıştır
 - 🪪 **Parmak İzi (Fingerprint) Doğrulama:** Ortadaki Adam (MITM) saldırılarını engellemek amacıyla ECDH açık anahtarları üzerinden SHA-256 parmak izi ve Safety Number doğrulama rehberi.
 - 🔊 **Siber Ses Geri Bildirimleri:** Web Audio API sentezleyici ile üretilen fütüristik siber ses efektleri (yazma, paket iletimi, hata, başarı sesleri).
 - ⚡ **Yazıyor... & Durum Takibi:** Gerçek zamanlı yazıyor göstergesi, çevrimiçi/çevrimdışı durum takibi ve bağlantı koptuğunda otomatik yeniden bağlanma (Auto-reconnect) katmanı.
-- 🧪 **Kapsamlı Test Altyapısı:** Vitest ve v8 coverage motoru ile koşan 145 birim, entegrasyon ve kripto testi (%94+ kod kapsama oranı).
+- 🧪 **Kapsamlı Test Altyapısı:** Vitest ve v8 coverage motoru ile koşan 173 birim, entegrasyon ve kripto testi (%95+ kod kapsama oranı).
 - 📚 **Tam JSDoc Dökümantasyonu:** Kod tabanındaki tüm backend, istemci ve Electron modülleri JSDoc standartlarında açıklanmış, `npm run docs` ile tek tıkla zengin HTML dökümantasyonu üretilebilir.
 
 ---
@@ -50,12 +57,12 @@ Sunucu mimarisi **Zero-Knowledge (Sıfır Bilgi)** prensibiyle tasarlanmıştır
 |------|----------------------|----------|
 | **Frontend** | Vanilla JavaScript (ES6+), Tailwind CSS (Yerel) | Framework bağımsız, harici CDN gerektirmeyen, hafif ve ultra hızlı arayüz |
 | **Backend** | Node.js, Express, Socket.IO | Asenkron, modüler, olay tabanlı sinyal ve relay sunucusu |
-| **Kriptografi** | Web Crypto API (`window.crypto.subtle`) | Tarayıcı yerel ECDH (P-256), AES-GCM-256, SHA-256, PBKDF2 |
+| **Kriptografi & Protokol** | Web Crypto API (`window.crypto.subtle`), HKDF-SHA256 | Tarayıcı yerel ECDHE (P-256), KDF Ratchet, AES-GCM-256, SHA-256, PBKDF2 |
 | **Masaüstü** | Electron 44, electron-builder | Sandbox, Context Isolation ve tekil oturum kilidi (Single Instance Lock) |
 | **Kimlik & Oturum** | JWT (HMAC-SHA256) + bcrypt | Bağımlılıksız token imzalama, güvenli şifre hashleme |
 | **Veritabanı** | Hibrit: SQLite (WAL Modu) veya Turso Bulut SQLite (@libsql/client) | Ortam değişkeniyle yerel SQLite veya bulut veritabanı seçimi; bellek-içi önbellek ve debounced flush |
-| **İstemci Depolama** | IndexedDB (Vault) | Mesaj geçmişi ve kriptografik anahtarlar sadece istemcide |
-| **Test & Kalite** | Vitest, @vitest/coverage-v8 | 145 test senaryosu, %94+ test kapsamı |
+| **İstemci Depolama** | IndexedDB (Vault) + Electron safeStorage | Mesaj geçmişi istemcide; masaüstünde DPAPI / Keychain ile şifreli donanım kasası |
+| **Test & Kalite** | Vitest, @vitest/coverage-v8 | 173 test senaryosu, %95+ test kapsamı |
 | **Dökümantasyon** | JSDoc 3, Markdown Eklentisi | HTML API dökümantasyon motoru (`npm run docs`) |
 | **Tipografi & Stil** | Inter, JetBrains Mono | Okunabilir modern siber terminal estetiği |
 
@@ -156,7 +163,7 @@ npm run desktop:build
 Cyber Chat Terminal, GitHub Actions tarafından otomatik derlenen **`.deb`** (Debian/Ubuntu) ve **`.AppImage`** paketleriyle Linux'ta yerel masaüstü uygulaması olarak çalıştırılabilir.
 
 #### Paketi İndirme
-GitHub reposundaki **[Releases](https://github.com/arifoztr/Cyber_Chat_Terminal/releases)** sayfasından en güncel `cyber_x.x.x_amd64.deb` veya `Cyber Chat Terminal-x.x.x.AppImage` dosyasını indirin.
+GitHub reposundaki **[Releases](https://github.com/Arif8054/Cyber_Chat_Terminal/releases)** sayfasından en güncel `cyber_x.x.x_amd64.deb` veya `Cyber Chat Terminal-x.x.x.AppImage` dosyasını indirin.
 
 #### `.deb` Paketi ile Kurulum (Debian / Ubuntu / Mint)
 ```bash
@@ -211,7 +218,7 @@ npm run desktop:build:mac
 
 #### 1. Depoyu Klonlayın
 ```bash
-git clone https://github.com/arifoztr/Cyber_Chat_Terminal.git
+git clone https://github.com/Arif8054/Cyber_Chat_Terminal.git
 cd Cyber_Chat_Terminal
 ```
 
@@ -268,8 +275,8 @@ docker run -d -p 3000:3000 -v $(pwd)/data:/app/data -e DB_PATH=/app/data/databas
 
 ### 1. Otomatik Test Paketi (Vitest)
 Proje, E2EE el sıkışması, simetrik şifreleme/çözme, veritabanı sürücüsü, rate limiting ve sunucu güvenlik başlıklarını test eden kapsamlı bir test süitine sahiptir:
-- **145 Test Senaryosu:** Tamamı bağımsız ve deterministik çalışan birim & entegrasyon testleri.
-- **%94+ Kod Kapsamı:** Kritik çekirdek katmanlar (`crypto.js`, `database.js`, `server.js`, `socket.js`) v8 motoruyla izlenir.
+- **173 Test Senaryosu:** Tamamı bağımsız ve deterministik çalışan birim & entegrasyon testleri.
+- **%95+ Kod Kapsamı:** Kritik çekirdek katmanlar (`crypto.js`, `database.js`, `server.js`, `socket.js`) v8 motoruyla izlenir.
 
 ```bash
 # Tüm testleri çalıştır ve kapsam (coverage) raporu üret
@@ -294,10 +301,87 @@ Derleme sonrası `docs/api/index.html` dosyasını tarayıcınızda açarak tüm
 
 ---
 
+## 🧬 Kriptografik Mimari ve KDF Ratchet Şeması
+
+Cyber Chat Terminal, Signal protokolünün temel güvenlik prensiplerini modern Web Crypto standartlarına uyarlayarak **ECDHE (Ephemeral Diffie–Hellman)** ve **KDF Ratchet (HKDF-SHA256)** zincir mekanizmasını uygular.
+
+### 1. Uçtan Uca ECDHE El Sıkışması ve Oturum Yaşam Döngüsü
+
+İstemciler kalıcı kimlik anahtarlarını (Identity Key, P-256) asla doğrudan mesaj şifrelemede kullanmaz. Her oturum başlangıcında tek kullanımlık geçici (ephemeral) bir P-256 anahtar çifti oluşturulur:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Alice as 👩‍💻 İstemci (Alice)
+    participant Server as 🌐 Zero-Knowledge Sunucu (Relay)
+    actor Bob as 👨‍💻 İstemci (Bob)
+
+    Note over Alice,Bob: 1. AŞAMA: Dinamik ECDHE Oturum El Sıkışması
+    Alice->>Alice: Geçici Anahtar Çifti Üret (ephPrivA, ephPubA)<br/>[extractable: false]
+    Alice->>Server: ecdhe_handshake_init { targetId: Bob, ephemeralPublicJwk: ephPubA }
+    Server->>Bob: ecdhe_handshake_init iletisi
+    Bob->>Bob: Geçici Anahtar Çifti Üret (ephPrivB, ephPubB)<br/>deriveBits(ECDH, ephPubA, ephPrivB) -> Ortak Sır<br/>HKDF-SHA256(Ortak Sır, 'ratchet-root-key') -> RootKey
+    Bob->>Server: ecdhe_handshake_reply { targetId: Alice, ephemeralPublicJwk: ephPubB }
+    Server->>Alice: ecdhe_handshake_reply iletisi
+    Alice->>Alice: deriveBits(ECDH, ephPubB, ephPrivA) -> Ortak Sır<br/>HKDF-SHA256(Ortak Sır, 'ratchet-root-key') -> RootKey
+    Note over Alice,Bob: Geçici özel anahtarlar silinir, RootKey'den zincir anahtarları türetilir
+
+    Note over Alice,Bob: 2. AŞAMA: KDF Ratchet ile Mesaj Başına İleriye Dönük Gizlilik (PFS)
+    loop Her Tekil Mesaj İletiminde
+        Alice->>Alice: advanceChain(sendChainKey) -> { messageKey, nextChainKey }<br/>sendCounter++<br/>AES-GCM-256 ile şifrele (12-byte IV)<br/>messageKey.fill(0) [Bellek Temizliği]
+        Alice->>Server: send_secure_packet { ciphertext, messageIndex: N }
+        Server->>Bob: relay_packet
+        Bob->>Bob: advanceChain(recvChainKey) -> { messageKey, nextChainKey }<br/>recvCounter++ (Sıra dışıysa skipped keys saklanır)<br/>AES-GCM-256 ile deşifre et<br/>messageKey.fill(0) [Bellek Temizliği]
+    end
+```
+
+### 2. KDF Ratchet Zincir Mimarisi (Key Derivation Flow)
+
+KDF Ratchet, her mesaj için tek yönlü bir kriptografik fonksiyon (HKDF-SHA256) kullanarak anahtar durumunu sürekli ileri öteler. Böylece:
+1. **İleriye Dönük Gizlilik (Forward Secrecy):** Mevcut veya gelecekteki bir zincir anahtarı ele geçirilse bile, tek yönlü HKDF fonksiyonu geriye işletilemeyeceğinden geçmiş mesaj anahtarları türetilemez.
+2. **İhlal Sonrası Güvenlik (Post-Compromise Security):** Kullanılan veya atlanan tüm geçici anahtarlar `Uint8Array.fill(0)` ile sıfırlanarak RAM üzerinden kalıcı olarak silinir.
+3. **Sıra Dışı Paket Kurtarma (Out-of-Order Delivery):** Mesajlar ağ gecikmesi nedeniyle karışık gelse bile alıcı taraf zinciri hedef indekse kadar işletir, atlanan indekslerin anahtarlarını (`_skippedMessageKeys`) önbelleğe alır ve geciken paket ulaştığında anında çözer.
+
+```mermaid
+flowchart TD
+    subgraph Handshake["1. ECDHE Oturum El Sıkışması"]
+        EphA["Alice Geçici Anahtar (P-256 Ephemeral)"]
+        EphB["Bob Geçici Anahtar (P-256 Ephemeral)"]
+        ECDH_Out["Ham Ortak Sır (256-bit Shared Secret)"]
+        EphA --> ECDH_Out
+        EphB --> ECDH_Out
+    end
+
+    subgraph KDF_Root["2. HKDF Kök & Deterministik Zincir Türetimi"]
+        RootKey["Kök Anahtar: HKDF-SHA256(Secret, 'ratchet-root-key')"]
+        ECDH_Out --> RootKey
+        SendChain["Gönderme Zinciri: HKDF(RootKey, 'chain-A')"]
+        RecvChain["Alma Zinciri: HKDF(RootKey, 'chain-B')"]
+        RootKey --> SendChain
+        RootKey --> RecvChain
+    end
+
+    subgraph Ratchet_Step["3. Mesaj Başına KDF Adımı (advanceChain)"]
+        SendChain --> Step["HKDF Ratchet İlerlemesi"]
+        Step --> MsgKey["Tek Kullanımlık Mesaj Anahtarı (256-bit)"]
+        Step --> NextChain["Sonraki Zincir Anahtarı (nextChainKey)"]
+        
+        MsgKey --> Encrypt["AES-GCM-256 Şifreleme (12-byte IV)"]
+        Encrypt --> Zeroize["Bellek Hijyeni: messageKey.fill(0)"]
+    end
+```
+
+---
+
 ## 🔐 Güvenlik Mimarisi
 
 | Güvenlik Katmanı | Uygulanan Mekanizma | Korunan Risk |
 |------------------|----------------------|--------------|
+| **ECDHE & PFS (İleriye Dönük Gizlilik)** | Her oturumda tek kullanımlık geçici P-256 anahtar çifti üretilir; el sıkışma bitiminde özel anahtar bellekten silinir. | Kalıcı kimlik anahtarı çalınsa dahi geçmiş oturum trafiğinin deşifre edilmesi |
+| **KDF Ratchet (Mesaj Bazlı Rotasyon)** | HKDF-SHA256 ile her tekil mesaj için benzersiz AES anahtarı üretilir ve zincir anında ilerletilir. | Tek bir mesaj anahtarı ele geçirilse dahi diğer mesajların tehlikeye girmesi |
+| **Dışa Aktarılamaz Anahtarlar (`extractable: false`)** | Özel anahtarlar Web Crypto katmanında kilitlenir; JavaScript belleğinden string/JWK olarak okunamaz. | XSS durumunda özel anahtarların saldırgan sunucusuna sızdırılması |
+| **Bellek Hijyeni (Zeroization)** | Kök anahtar, mesaj anahtarları ve ara bayt dizileri işi biter bitmez `Uint8Array.fill(0)` ile RAM'den temizlenir. | Bellek dökümü (RAM dump) ve Cold Boot saldırıları |
+| **İşletim Sistemi Kasası (Electron safeStorage)** | Masaüstü istemcisinde hassas anahtarlar Windows DPAPI, macOS Keychain veya Linux Secret Service ile şifrelenir. | Sabit diskten veya yerel dosyalardan IndexedDB anahtarlarının çalınması |
 | **Zero-Knowledge Relay** | Sunucu yalnızca şifreli zarfı (ciphertext + IV) iletir. Anahtarlar hiçbir zaman sunucuya gönderilmez. | Sunucu ihlali veya dinleme durumunda veri sızıntısı |
 | **Native Web Crypto** | Harici JS kripto kütüphaneleri kullanılmaz; tarayıcının yerleşik `window.crypto.subtle` API'si kullanılır. | Üçüncü taraf kütüphane arka kapıları (Supply Chain Attacks) |
 | **Sıkı CSP & Sıfır Dış CDN** | `script-src 'self'` direktifi; tüm scriptler `public/vendor/` dizininden sunulur. Harici script yüklenemez. | İstemci tarafı XSS ve CDN zehirlenmesi (CDN Compromise) |
@@ -341,13 +425,13 @@ Derleme sonrası `docs/api/index.html` dosyasını tarayıcınızda açarak tüm
 
 ## 🗺️ Geliştirme Durumu ve Yol Haritası
 
-Mevcut sürüm: **v10 (Cyber-HUD Edition — Production Ready)**
+Mevcut sürüm: **v1.0 (Production Ready)**
 
 - [x] **FAZ 1 — Güvenlik Temelleri:** Bağımsız HMAC-SHA256 JWT, IP tabanlı Rate Limiting, Express Güvenlik Başlıkları, Katı CSP (`script-src 'self'`), Parmak İzi (SHA-256 Fingerprint) Doğrulama.
 - [x] **FAZ 2 — Backend & Mimari:** SQLite WAL mimarisi, Asenkron kuyruklama, 7 günlük GC, Hibrit Dağıtım (Cloudflare Pages + Docker), Turso Cloud SQLite (@libsql/client) desteği.
-- [x] **FAZ 3 — Masaüstü ve Platformlar:** Electron entegrasyonu, Windows (Setup + Portable), Linux (.deb + .AppImage), macOS (.dmg + .zip) derleme iş akışları.
+- [x] **FAZ 3 — Kriptografik Mimari & Masaüstü:** ECDHE dinamik geçici anahtar takası (PFS), KDF Ratchet (HKDF-SHA256 mesaj rotasyonu), bellek hijyeni (zeroization), Electron safeStorage (DPAPI/Keychain) ve çoklu platform derlemeleri (Windows, Linux, macOS).
 - [x] **FAZ 4 — Kullanıcı Deneyimi ve Yönetim:** Profil avatarı, şifre değiştirme, güvenli hesap silme, kullanıcı arama, bağlantı onaylama (Request/Accept/Reject) akışı, sıfır dış CDN mimarisi, PDF ve görsel paylaşımı, ses efektleri.
-- [x] **FAZ 5 — Test & Dökümantasyon:** Vitest test altyapısı, 145 birim/entegrasyon testi, %94+ kod kapsama oranı, standart Türkçe JSDoc açıklamaları, `npm run docs` ile HTML API dökümantasyonu.
+- [x] **FAZ 5 — Test & Dökümantasyon:** Vitest test altyapısı, 173 birim/entegrasyon testi, %95+ kod kapsama oranı, standart Türkçe JSDoc açıklamaları, `npm run docs` ile HTML API dökümantasyonu.
 - [ ] **Gelecek Planlar (FAZ 6):** 
   - WebRTC mesh mimarisiyle uçtan uca şifreli P2P sesli ve görüntülü arama.
   - Çoklu katılımcılı şifreli grup sohbetleri (Group MLS / Ratchet).
@@ -364,7 +448,7 @@ Projeye katkıda bulunurken lütfen aşağıdaki temel ilkelere sadık kalın:
 - **Mimari:** Frontend saf Vanilla JS (Framework/Bundler kullanılmaz).
 - **Kriptografi:** Yalnızca tarayıcı yerel `window.crypto.subtle` API'si (Harici JS kripto paketleri eklenemez).
 - **Güvenlik Politikası:** Dış CDN bağımlılığı eklenmemeli, tüm üçüncü taraf kütüphaneler `public/vendor/` altında yerel barındırılmalıdır.
-- **Test Bütünlüğü:** Yapılan her değişiklik sonrası `npm test` ile 145 testin hatasız geçtiği doğrulanmalıdır.
+- **Test Bütünlüğü:** Yapılan her değişiklik sonrası `npm test` (veya Windows'ta `npm.cmd test`) ile 173 testin hatasız geçtiği doğrulanmalıdır.
 
 ---
 

@@ -38,10 +38,16 @@
     <div class="container-overview">
     
         
-            <div class="description"><p>Kriptografi ve Anahtar Yönetimi Modülü.
-Web Crypto API kullanarak ECDH (P-256) anahtar çifti oluşturma, HKDF ile 256-bit AES anahtar türetimi (NIST SP 800-56A),
-AES-GCM (12-bayt IV) şifreleme ve deşifreleme, SHA-256 parmak izi (fingerprint) ve Signal tarzı Güvenlik Numarası (Safety Number)
-üretim ve doğrulama mekanizmalarını yönetir.</p></div>
+            <div class="description"><p>Kriptografi ve Anahtar Yönetimi Modülü (v2 — ECDHE + KDF Ratchet).
+Web Crypto API kullanarak:</p>
+<ul>
+<li>Kalıcı kimlik anahtarı (Identity Key, P-256 ECDH) — IndexedDB'de saklanır, sadece el sıkışmada kullanılır.</li>
+<li>Oturum bazlı geçici anahtar çifti (Ephemeral Key, ECDHE) — her el sıkışmada yeniden üretilir, PFS sağlar.</li>
+<li>KDF Zinciri (HKDF-SHA256 Ratchet) — her mesajda anahtar rotasyonu yaparak ileriye dönük gizlilik sağlar.</li>
+<li>AES-GCM-256 (12-bayt IV) şifreleme / deşifreleme.</li>
+<li>SHA-256 parmak izi ve Signal tarzı Güvenlik Numarası üretimi.</li>
+<li>Bellek hijyeni: Uint8Array + fill(0) ile anahtar silme, sessionStorage'a sır yazılmaz.</li>
+</ul></div>
         
 
         
@@ -147,7 +153,8 @@ AES-GCM (12-bayt IV) şifreleme ve deşifreleme, SHA-256 parmak izi (fingerprint
 
 
 <div class="description">
-    <p>Hedef kullanıcılara göre türetilmiş paylaşılan sırlar (targetUserId -&gt; hexSecret).</p>
+    <p>Hedef kullanıcılara göre türetilmiş paylaşılan sırlar (targetUserId → hexSecret).
+Geriye dönük uyumluluk için korunur. Yeni oturumlarda rootKey olarak kullanılır.</p>
 </div>
 
 
@@ -195,7 +202,7 @@ AES-GCM (12-bayt IV) şifreleme ve deşifreleme, SHA-256 parmak izi (fingerprint
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line33">line 33</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line43">line 43</a>
     </li></ul></dd>
     
 
@@ -219,7 +226,8 @@ AES-GCM (12-bayt IV) şifreleme ve deşifreleme, SHA-256 parmak izi (fingerprint
 
 
 <div class="description">
-    <p>Yerel istemcinin aktif ECDH anahtar çifti ({ privateKey: CryptoKey, publicKey: CryptoKey }).</p>
+    <p>Yerel istemcinin kalıcı kimlik ECDH anahtar çifti.
+Bu anahtar IndexedDB'de saklanır ve hiçbir zaman dışa aktarılmaz (extractable: false).</p>
 </div>
 
 
@@ -270,7 +278,7 @@ AES-GCM (12-bayt IV) şifreleme ve deşifreleme, SHA-256 parmak izi (fingerprint
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line21">line 21</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line30">line 30</a>
     </li></ul></dd>
     
 
@@ -294,7 +302,7 @@ AES-GCM (12-bayt IV) şifreleme ve deşifreleme, SHA-256 parmak izi (fingerprint
 
 
 <div class="description">
-    <p>Yerel istemcinin JSON Web Key (JWK) formatındaki açık anahtarı.</p>
+    <p>Yerel istemcinin JWK formatındaki açık kimlik anahtarı (paylaşılabilir).</p>
 </div>
 
 
@@ -345,7 +353,7 @@ AES-GCM (12-bayt IV) şifreleme ve deşifreleme, SHA-256 parmak izi (fingerprint
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line27">line 27</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line36">line 36</a>
     </li></ul></dd>
     
 
@@ -497,7 +505,7 @@ AES-GCM (12-bayt IV) şifreleme ve deşifreleme, SHA-256 parmak izi (fingerprint
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line397">line 397</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line877">line 877</a>
     </li></ul></dd>
     
 
@@ -534,6 +542,161 @@ AES-GCM (12-bayt IV) şifreleme ve deşifreleme, SHA-256 parmak izi (fingerprint
     <dd>
         
 <span class="param-type">void</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~advanceChain"><span class="type-signature">(async, inner) </span>advanceChain<span class="signature">(chainKey)</span><span class="type-signature"> &rarr; {Promise.&lt;{messageKey: Uint8Array, nextChainKey: Uint8Array}>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Bir zincir anahtarından mesaj anahtarı türetir ve zinciri bir adım ilerletir.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>chainKey</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Uint8Array</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Mevcut zincir anahtarı.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line254">line 254</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;{messageKey: Uint8Array, nextChainKey: Uint8Array}></span>
 
 
     </dd>
@@ -652,7 +815,7 @@ AES-GCM (12-bayt IV) şifreleme ve deşifreleme, SHA-256 parmak izi (fingerprint
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line81">line 81</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line139">line 139</a>
     </li></ul></dd>
     
 
@@ -815,7 +978,7 @@ Büyük veriler için 8KB'lık parçalar (chunks) kullanarak yığın taşmasın
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line64">line 64</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line122">line 122</a>
     </li></ul></dd>
     
 
@@ -845,6 +1008,165 @@ Büyük veriler için 8KB'lık parçalar (chunks) kullanarak yığın taşmasın
         
 <div class="param-desc">
     <p>Base64 kodlu dize.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">string</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~bytesToHex"><span class="type-signature">(inner) </span>bytesToHex<span class="signature">(bytes)</span><span class="type-signature"> &rarr; {string}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Uint8Array bayt dizisini onaltılık (hex) dizeye dönüştürür.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>bytes</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Uint8Array</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Bayt dizisi.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line86">line 86</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Onaltılık dize.</p>
 </div>
 
 
@@ -998,7 +1320,7 @@ Verinin ilk 12 baytını IV, geri kalanını şifreli metin olarak ayrıştırı
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line115">line 115</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line177">line 177</a>
     </li></ul></dd>
     
 
@@ -1085,6 +1407,396 @@ Verinin ilk 12 baytını IV, geri kalanını şifreli metin olarak ayrıştırı
     
 
     
+    <h4 class="name" id="~decryptWithRatchet"><span class="type-signature">(async, inner) </span>decryptWithRatchet<span class="signature">(base64Data, senderId, messageIndex)</span><span class="type-signature"> &rarr; {Promise.&lt;(string|null)>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>KDF Ratchet ile şifreli mesajı çözer.
+Mesaj indeksine göre alım zincirini ilerletir veya önceden türetilmiş anahtarları kullanır.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>base64Data</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Base64 şifreli veri.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>senderId</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Gönderici kullanıcı ID.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>messageIndex</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Mesajın zincir indeksi.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line304">line 304</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Çözülmüş düz metin veya başarısızsa null.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;(string|null)></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~deriveEphemeralSecret"><span class="type-signature">(async, inner) </span>deriveEphemeralSecret<span class="signature">(targetId, theirEphemeralPublicJwk)</span><span class="type-signature"> &rarr; {Promise.&lt;Uint8Array>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Geçici özel anahtarı kullanarak ECDHE ortak sırrı türetir.
+NIST SP 800-56A: Ham ECDH çıktısı HKDF ile AES anahtarına dönüştürülür.
+Türetim sonrası geçici özel anahtar referansı bellekten kaldırılır.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>targetId</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Hedef kullanıcı ID.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>theirEphemeralPublicJwk</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">JsonWebKey</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Karşı tarafın geçici açık anahtarı.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line399">line 399</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>256-bit türetilmiş ortak anahtar (ham baytlar).</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;Uint8Array></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
     <h4 class="name" id="~deriveSharedSecret"><span class="type-signature">(async, inner) </span>deriveSharedSecret<span class="signature">(theirPublicJwk)</span><span class="type-signature"> &rarr; {Promise.&lt;string>}</span></h4>
     
 
@@ -1094,8 +1806,10 @@ Verinin ilk 12 baytını IV, geri kalanını şifreli metin olarak ayrıştırı
 
 <div class="description">
     <p>Karşı tarafın JWK açık anahtarı ve yerel özel anahtar ile ECDH ortak sırrı türetir.
-NIST SP 800-56A standardına uygun olarak ham ortak bitler HKDF (HMAC-SHA-256) fonksiyonundan geçirilerek
-kriptografik olarak güçlü 256-bit AES anahtarı elde edilir.</p>
+NIST SP 800-56A standardına uygun olarak ham ortak bitler HKDF fonksiyonundan geçirilerek
+kriptografik olarak güçlü 256-bit AES anahtarı elde edilir.
+NOT: Bu fonksiyon geriye dönük uyumluluk için korunmuştur. Yeni el sıkışmalarda
+deriveEphemeralSecret() tercih edilmelidir.</p>
 </div>
 
 
@@ -1188,7 +1902,7 @@ kriptografik olarak güçlü 256-bit AES anahtarı elde edilir.</p>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line208">line 208</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line528">line 528</a>
     </li></ul></dd>
     
 
@@ -1371,7 +2085,7 @@ kriptografik olarak güçlü 256-bit AES anahtarı elde edilir.</p>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line93">line 93</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line155">line 155</a>
     </li></ul></dd>
     
 
@@ -1412,6 +2126,189 @@ kriptografik olarak güçlü 256-bit AES anahtarı elde edilir.</p>
     <dd>
         
 <span class="param-type">Promise.&lt;string></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~encryptWithRatchet"><span class="type-signature">(async, inner) </span>encryptWithRatchet<span class="signature">(text, targetId)</span><span class="type-signature"> &rarr; {Promise.&lt;({ciphertext: string, messageIndex: number}|null)>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>KDF Ratchet ile mesajı şifreler.
+Her çağrıda gönderme zinciri bir adım ilerler ve benzersiz bir mesaj anahtarı kullanılır.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>text</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Şifrelenecek düz metin.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>targetId</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Hedef kullanıcı ID.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line269">line 269</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Şifreli metin ve mesaj indeksi.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;({ciphertext: string, messageIndex: number}|null)></span>
 
 
     </dd>
@@ -1532,7 +2429,7 @@ ve ortak anahtar türetilerek saklanır.</p>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line237">line 237</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line553">line 553</a>
     </li></ul></dd>
     
 
@@ -1573,6 +2470,166 @@ ve ortak anahtar türetilerek saklanır.</p>
     <dd>
         
 <span class="param-type">Promise.&lt;boolean></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~generateEphemeralKeyPair"><span class="type-signature">(async, inner) </span>generateEphemeralKeyPair<span class="signature">(targetId)</span><span class="type-signature"> &rarr; {Promise.&lt;JsonWebKey>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Belirtilen hedef kullanıcı için oturum bazlı geçici (ephemeral) ECDH anahtar çifti üretir.
+Özel anahtar extractable: false olarak oluşturulur — JS tarafından dışa aktarılamaz.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>targetId</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Hedef kullanıcı ID.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line373">line 373</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Geçici açık anahtar (JWK).</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;JsonWebKey></span>
 
 
     </dd>
@@ -1692,7 +2749,7 @@ ve ortak anahtar türetilerek saklanır.</p>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line319">line 319</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line799">line 799</a>
     </li></ul></dd>
     
 
@@ -1875,7 +2932,7 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line337">line 337</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line817">line 817</a>
     </li></ul></dd>
     
 
@@ -2034,7 +3091,7 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line49">line 49</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line96">line 96</a>
     </li></ul></dd>
     
 
@@ -2075,6 +3132,639 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
     <dd>
         
 <span class="param-type">Promise.&lt;CryptoKey></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~getAesGcmKeyFromBytes"><span class="type-signature">(async, inner) </span>getAesGcmKeyFromBytes<span class="signature">(rawKeyBytes)</span><span class="type-signature"> &rarr; {Promise.&lt;CryptoKey>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Uint8Array ham baytlarından AES-GCM CryptoKey nesnesi oluşturur (önbellek kullanmaz).</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>rawKeyBytes</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Uint8Array</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>256-bit ham anahtar baytları.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line111">line 111</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>AES-GCM CryptoKey nesnesi.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;CryptoKey></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~handleEcdhAnswer"><span class="type-signature">(async, inner) </span>handleEcdhAnswer<span class="signature">(data)</span><span class="type-signature"> &rarr; {Promise.&lt;string>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Gelen ECDHE yanıtını (answer) işler ve ortak sırrı türetir.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>data</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Yanıt verisi ({ senderId, publicKeyJwk, ephemeralPublicKeyJwk }).</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line673">line 673</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Türetilmiş ortak sır (hex).</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;string></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~handleEcdhOffer"><span class="type-signature">(async, inner) </span>handleEcdhOffer<span class="signature">(data)</span><span class="type-signature"> &rarr; {Promise.&lt;{answerData: Object, secret: string}>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Gelen ECDHE teklifini (offer) işler ve yanıt (answer) hazırlar.
+Geçici anahtar çifti üretir, ortak sırrı türetir ve KDF ratchet zincirini başlatır.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>data</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Teklif verisi ({ senderId, publicKeyJwk, ephemeralPublicKeyJwk }).</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line625">line 625</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Yanıt verisi ve türetilmiş sır.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;{answerData: Object, secret: string}></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~hasRatchetSession"><span class="type-signature">(inner) </span>hasRatchetSession<span class="signature">(targetId)</span><span class="type-signature"> &rarr; {boolean}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Belirtilen hedef için aktif bir KDF Ratchet zinciri olup olmadığını kontrol eder.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>targetId</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Hedef kullanıcı ID.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line359">line 359</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">boolean</span>
 
 
     </dd>
@@ -2193,7 +3883,7 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line35">line 35</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line72">line 72</a>
     </li></ul></dd>
     
 
@@ -2251,6 +3941,294 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
     
 
     
+    <h4 class="name" id="~hkdfDerive"><span class="type-signature">(async, inner) </span>hkdfDerive<span class="signature">(ikm, info, salt<span class="signature-attributes">opt</span>, lengthBits<span class="signature-attributes">opt</span>)</span><span class="type-signature"> &rarr; {Promise.&lt;Uint8Array>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>HKDF-SHA256 ile giriş anahtar materyalinden belirtilen uzunlukta anahtar türetir.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+        <th>Attributes</th>
+        
+
+        
+        <th>Default</th>
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>ikm</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Uint8Array</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>Giriş Anahtar Materyali (Input Keying Material).</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>info</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
+            
+
+            <td class="description last"><p>Bağlam etiketi (context info).</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>salt</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    'CyberChat-E2EE-v2'
+                
+                </td>
+            
+
+            <td class="description last"><p>HKDF tuzu.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>lengthBits</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">number</span>
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    256
+                
+                </td>
+            
+
+            <td class="description last"><p>Türetilecek anahtar uzunluğu (bit).</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line201">line 201</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Türetilmiş anahtar baytları.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;Uint8Array></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
     <h4 class="name" id="~initEcdhKeys"><span class="type-signature">(async, inner) </span>initEcdhKeys<span class="signature">()</span><span class="type-signature"> &rarr; {Promise.&lt;void>}</span></h4>
     
 
@@ -2259,7 +4237,7 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
 
 
 <div class="description">
-    <p>Kullanıcının ECDH anahtar çiftini başlatır.</p>
+    <p>Kullanıcının kimlik ECDH anahtar çiftini başlatır.</p>
 <ol>
 <li>Öncelik: IndexedDB güvenli kasasından CryptoKey olarak yükler.</li>
 <li>Geriye dönük uyumluluk: localStorage'da eski anahtar varsa IndexedDB'ye taşır ve localStorage'ı temizler.</li>
@@ -2308,7 +4286,7 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line135">line 135</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line440">line 440</a>
     </li></ul></dd>
     
 
@@ -2362,7 +4340,7 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
     
 
     
-    <h4 class="name" id="~initiateEcdhHandshake"><span class="type-signature">(inner) </span>initiateEcdhHandshake<span class="signature">(targetId)</span><span class="type-signature"> &rarr; {void}</span></h4>
+    <h4 class="name" id="~initRatchetChain"><span class="type-signature">(async, inner) </span>initRatchetChain<span class="signature">(targetId, sharedSecretBytes)</span><span class="type-signature"> &rarr; {Promise.&lt;void>}</span></h4>
     
 
     
@@ -2370,7 +4348,188 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
 
 
 <div class="description">
-    <p>Hedef kullanıcıya WebSocket üzerinden ECDH teklifi (offer) göndererek anahtar anlaşmasını başlatır.</p>
+    <p>Bir hedef kullanıcı ile KDF Ratchet zincirini başlatır.
+Paylaşılan sırdan (rootKey) deterministik olarak gönderme ve alma zincir anahtarları türetilir.
+Kullanıcı ID'leri sıralanarak her iki tarafta da aynı sonuç üretilmesi garanti edilir.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>targetId</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Hedef kullanıcı ID.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>sharedSecretBytes</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Uint8Array</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>ECDHE'den türetilmiş ham paylaşılan sır.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line223">line 223</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;void></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~initiateEcdhHandshake"><span class="type-signature">(async, inner) </span>initiateEcdhHandshake<span class="signature">(targetId)</span><span class="type-signature"> &rarr; {Promise.&lt;void>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Hedef kullanıcıya WebSocket üzerinden ECDHE teklifi (offer) göndererek anahtar anlaşmasını başlatır.
+Yeni mimari: Geçici (ephemeral) anahtar çifti üretilir ve kimlik açık anahtarı ile birlikte gönderilir.</p>
 </div>
 
 
@@ -2463,7 +4622,7 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line288">line 288</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line603">line 603</a>
     </li></ul></dd>
     
 
@@ -2499,7 +4658,7 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
     </dt>
     <dd>
         
-<span class="param-type">void</span>
+<span class="param-type">Promise.&lt;void></span>
 
 
     </dd>
@@ -2525,7 +4684,9 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
 
 
 <div class="description">
-    <p>Oturum deposundan (sessionStorage) türetilmiş sırları yükler.</p>
+    <p>Önceki oturumdan sırları yükler.
+[GÜVENLİK FIX] sessionStorage'dan artık okunmaz — sırlar oturum başına ECDHE ile yeniden türetilir.
+Geriye dönük uyumluluk: Eski sessionStorage kalıntılarını temizler.</p>
 </div>
 
 
@@ -2569,7 +4730,7 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line306">line 306</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line722">line 722</a>
     </li></ul></dd>
     
 
@@ -2631,7 +4792,10 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
 
 
 <div class="description">
-    <p>Türetilmiş ortak sırları (derivedSecrets) geçici oturum deposuna (sessionStorage) kaydeder.</p>
+    <p>Türetilmiş sırları kaydeder.
+[GÜVENLİK FIX] sessionStorage'a artık YAZILMAZ.
+Sırlar yalnızca bellekte tutulur — uygulama kapandığında otomatik olarak yok olur.
+Geriye dönük uyumluluk: Fonksiyon çağrılarının kırılmaması için boş bırakılmıştır.</p>
 </div>
 
 
@@ -2675,7 +4839,7 @@ Her iki tarafın açık anahtarları alfabetik sıralanarak birleştirilir ve SH
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line299">line 299</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line705">line 705</a>
     </li></ul></dd>
     
 
@@ -2831,7 +4995,7 @@ Anahtar değişikliği varsa (olası MITM) kullanıcıyı uyarır.</p>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line359">line 359</a>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line839">line 839</a>
     </li></ul></dd>
     
 
@@ -2884,6 +5048,368 @@ Anahtar değişikliği varsa (olası MITM) kullanıcıyı uyarır.</p>
 
 
         
+            
+
+    
+
+    
+    <h4 class="name" id="~wipeAllCryptoState"><span class="type-signature">(inner) </span>wipeAllCryptoState<span class="signature">()</span><span class="type-signature"></span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Tüm kriptografik durumu bellekten güvenle temizler (oturum kapatma / bağlantı kopması).</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line765">line 765</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~wipeEphemeralKey"><span class="type-signature">(inner) </span>wipeEphemeralKey<span class="signature">(targetId)</span><span class="type-signature"></span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Belirtilen hedef için geçici anahtar bilgilerini tamamen temizler.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>targetId</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Hedef kullanıcı ID.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line425">line 425</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~wipeTargetCryptoState"><span class="type-signature">(inner) </span>wipeTargetCryptoState<span class="signature">(targetId)</span><span class="type-signature"></span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Belirtilen hedef için tüm kriptografik oturum durumunu bellekten güvenle temizler.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>targetId</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Temizlenecek hedef kullanıcı ID.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_crypto.js.html">public/crypto.js</a>, <a href="public_crypto.js.html#line738">line 738</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
     
 
     
@@ -2905,7 +5431,7 @@ Anahtar değişikliği varsa (olası MITM) kullanıcıyı uyarır.</p>
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 21:48:28 GMT+0300 (Türkiye Standart Saati)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Wed Sep 30 2026 16:13:51 GMT+0300 (Türkiye Standart Saati)
 </footer>
 
 <script> prettyPrint(); </script>

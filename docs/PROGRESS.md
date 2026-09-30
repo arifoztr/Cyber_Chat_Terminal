@@ -1,8 +1,8 @@
 # PROJE İLERLEME DURUMU (PROGRESS & ROADMAP)
 
-**Mevcut Sürüm:** v10 (Cyber-HUD Edition — Production Ready)  
-**Son Güncelleme:** 2026-09-26  
-**Durum:** Kararlı (Stable), 145/145 Test Başarılı (%94+ Kod Kapsamı), Tam JSDoc Dökümante.
+**Mevcut Sürüm:** v1.0 (Production Ready)  
+**Son Güncelleme:** 2026-09-30  
+**Durum:** Kararlı (Stable), 173/173 Test Başarılı (%95+ Kod Kapsamı), Tam JSDoc Dökümante.
 
 ---
 
@@ -20,9 +20,12 @@
 * **[x] Çevrimdışı Mesaj Kuyruğu:** Alıcının çevrimdışı olduğu durumlarda şifreli mesajların sunucuda güvenle kuyruğa alınması ve bağlantı kurulduğunda iletilmesi.
 * **[x] Otomatik Çöp Toplayıcı (Garbage Collector):** 7 günden eski veya süresi dolan paketlerin otomatik imhası.
 
-### FAZ 3 — Kriptografik Yapı ve İmha Protokolleri ✅
+### FAZ 3 — Kriptografik Yapı, ECDHE ve KDF Ratchet Protokolleri ✅
 * **[x] Uçtan Uca Şifreleme (E2EE):** İstemci tarafında `window.crypto.subtle` ile AES-256-GCM veri şifreleme/deşifreleme.
-* **[x] ECDH Anahtar Takası:** İstemciler arasında P-256 eğrisi üzerinden asenkron paylaşılan gizli anahtar (Shared Secret) türetimi.
+* **[x] ECDHE Dinamik El Sıkışması (PFS):** P-256 eğrisinde oturum bazlı tek kullanımlık geçici anahtar çifti türetimi (Perfect Forward Secrecy).
+* **[x] KDF Ratchet Zinciri (HKDF-SHA256):** Mesaj başına simetrik anahtar rotasyonu ve sıra dışı paket önbelleği (`_skippedMessageKeys`).
+* **[x] Bellek Hijyeni & extractable: false:** Kriptografik anahtarların dışa aktarımının engellenmesi ve `Uint8Array.fill(0)` ile sıfırlanması.
+* **[x] Donanım/İşletim Sistemi Kasası:** Electron safeStorage (Windows DPAPI, macOS Keychain) ile yerel anahtar şifreleme.
 * **[x] Parmak İzi & Güvenlik Numarası:** İki tarafın iletişimini doğrulayan SHA-256 Safety Number / Parmak izi üretimi.
 * **[x] Geri Çekme (Revoke) Protokolü:** Gönderilen mesajların hem yerel kasadan hem karşı taraftan kalıcı olarak silinmesi (BOLA/IDOR korumalı).
 * **[x] Kendi Kendini İmha (TTL):** Zaman ayarlı mesajlar ve sekme arka plandayken süresi dolan paketlerin anında imha edilmesi (`visibilitychange` - SEC-18).
@@ -33,10 +36,10 @@
 * **[x] Medya ve Dosya Paylaşımı:** 5 MB'a kadar resim (otomatik optimize) ve PDF belgelerinin şifreli aktarımı, indirilmesi ve görüntülenmesi.
 * **[x] Güvenli DOM Renderlama:** Dosya adları ve mesaj linklerinin XSS korumalı güvenli DOM API'leri ile oluşturulması.
 * **[x] Ses Efektleri:** Web Audio API sentezleyici ile üretilen fütüristik siber ses bildirimleri.
-* **[x] Duyarlı HUD Arayüzü:** Mobil ve masaüstü ekran boyutlarına tam uyumlu dinamik terminal arayüzü.
+* **[x] Duyarlı Terminal Arayüzü:** Mobil ve masaüstü ekran boyutlarına tam uyumlu dinamik terminal arayüzü.
 
 ### FAZ 5 — Test, Masaüstü ve Dökümantasyon ✅
-* **[x] Kapsamlı Test Paketi:** Vitest ile 6 test dosyasında **145/145 geçen test**, %94+ kod kapsamı (`npm.cmd test`).
+* **[x] Kapsamlı Test Paketi:** Vitest ile 6 test dosyasında **173/173 geçen test**, %95+ kod kapsamı (`npm.cmd test`).
 * **[x] Masaüstü Uygulaması (Electron):** Güvenli BrowserWindow, ContextBridge preload API, izole sandbox (`npm run desktop:start`).
 * **[x] Standart JSDoc Dökümantasyonu:** Tüm backend, client ve Electron modüllerinin Türkçe JSDoc ile etiketlenmesi.
 * **[x] Otomatik Dökümantasyon Derlemesi:** `jsdoc.json` ve `npm run docs` ile `docs/api` altında zengin HTML döküman üretimi.
@@ -52,5 +55,5 @@
 
 ---
 
-**Son Güncelleme:** 2026-09-26  
+**Son Güncelleme:** 2026-09-30  
 **Geliştirici:** Arif8054

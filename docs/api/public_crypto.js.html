@@ -29,36 +29,73 @@
             <pre class="prettyprint source linenums"><code>/**
  * @file crypto.js
  * @module CryptoModule
- * @description Kriptografi ve Anahtar Yönetimi Modülü.
- * Web Crypto API kullanarak ECDH (P-256) anahtar çifti oluşturma, HKDF ile 256-bit AES anahtar türetimi (NIST SP 800-56A),
- * AES-GCM (12-bayt IV) şifreleme ve deşifreleme, SHA-256 parmak izi (fingerprint) ve Signal tarzı Güvenlik Numarası (Safety Number)
- * üretim ve doğrulama mekanizmalarını yönetir.
+ * @description Kriptografi ve Anahtar Yönetimi Modülü (v2 — ECDHE + KDF Ratchet).
+ * Web Crypto API kullanarak:
+ *   - Kalıcı kimlik anahtarı (Identity Key, P-256 ECDH) — IndexedDB'de saklanır, sadece el sıkışmada kullanılır.
+ *   - Oturum bazlı geçici anahtar çifti (Ephemeral Key, ECDHE) — her el sıkışmada yeniden üretilir, PFS sağlar.
+ *   - KDF Zinciri (HKDF-SHA256 Ratchet) — her mesajda anahtar rotasyonu yaparak ileriye dönük gizlilik sağlar.
+ *   - AES-GCM-256 (12-bayt IV) şifreleme / deşifreleme.
+ *   - SHA-256 parmak izi ve Signal tarzı Güvenlik Numarası üretimi.
+ *   - Bellek hijyeni: Uint8Array + fill(0) ile anahtar silme, sessionStorage'a sır yazılmaz.
  */
 
+// ============================================================
+// MODÜL DEĞİŞKENLERİ
+// ============================================================
+
 /**
- * Türetilmiş AES anahtarlarının önbelleği (hexSecret -> CryptoKey).
+ * Türetilmiş AES CryptoKey önbelleği (hex|base64 → CryptoKey).
  * @type {Object.&lt;string, CryptoKey>}
  * @private
  */
 const _aesKeyCache = {};
 
 /**
- * Yerel istemcinin aktif ECDH anahtar çifti ({ privateKey: CryptoKey, publicKey: CryptoKey }).
+ * Yerel istemcinin kalıcı kimlik ECDH anahtar çifti.
+ * Bu anahtar IndexedDB'de saklanır ve hiçbir zaman dışa aktarılmaz (extractable: false).
  * @type {CryptoKeyPair|null}
  */
 let myEcdhKeyPair = null;
 
 /**
- * Yerel istemcinin JSON Web Key (JWK) formatındaki açık anahtarı.
+ * Yerel istemcinin JWK formatındaki açık kimlik anahtarı (paylaşılabilir).
  * @type {JsonWebKey|null}
  */
 let myPublicKeyJwk = null;
 
 /**
- * Hedef kullanıcılara göre türetilmiş paylaşılan sırlar (targetUserId -> hexSecret).
+ * Hedef kullanıcılara göre türetilmiş paylaşılan sırlar (targetUserId → hexSecret).
+ * Geriye dönük uyumluluk için korunur. Yeni oturumlarda rootKey olarak kullanılır.
  * @type {Object.&lt;string, string>}
  */
 let derivedSecrets = {};
+
+/**
+ * Oturum bazlı geçici (ephemeral) anahtar çiftleri (targetUserId → { privateKey, publicKey, publicJwk }).
+ * El sıkışma tamamlandıktan sonra privateKey bellekten silinir.
+ * @type {Object.&lt;string, Object>}
+ * @private
+ */
+const _ephemeralKeyPairs = {};
+
+/**
+ * KDF Ratchet zincir durumları (targetUserId → { sendChainKey: Uint8Array, recvChainKey: Uint8Array, sendCounter, recvCounter }).
+ * @type {Object.&lt;string, Object>}
+ * @private
+ */
+const _ratchetState = {};
+
+/**
+ * Sıra dışı (out-of-order) gelen mesajlar için önceden türetilmiş mesaj anahtarları önbelleği.
+ * targetUserId → { messageIndex → Uint8Array }
+ * @type {Object.&lt;string, Object>}
+ * @private
+ */
+const _skippedMessageKeys = {};
+
+// ============================================================
+// YARDIMCI FONKSİYONLAR
+// ============================================================
 
 /**
  * Onaltılık (Hex) dizeyi Uint8Array bayt dizisine dönüştürür.
@@ -75,6 +112,16 @@ function hexToBytes(hex) {
 }
 
 /**
+ * Uint8Array bayt dizisini onaltılık (hex) dizeye dönüştürür.
+ * @function bytesToHex
+ * @param {Uint8Array} bytes - Bayt dizisi.
+ * @returns {string} Onaltılık dize.
+ */
+function bytesToHex(bytes) {
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
  * Onaltılık paylaşılan sırdan AES-GCM CryptoKey nesnesi içe aktarır ve önbelleğe alır.
  * @async
  * @function getAesGcmKey
@@ -87,6 +134,17 @@ async function getAesGcmKey(hexSecret) {
     const key = await crypto.subtle.importKey("raw", rawKey, "AES-GCM", false, ["encrypt", "decrypt"]);
     _aesKeyCache[hexSecret] = key;
     return key;
+}
+
+/**
+ * Uint8Array ham baytlarından AES-GCM CryptoKey nesnesi oluşturur (önbellek kullanmaz).
+ * @async
+ * @function getAesGcmKeyFromBytes
+ * @param {Uint8Array} rawKeyBytes - 256-bit ham anahtar baytları.
+ * @returns {Promise&lt;CryptoKey>} AES-GCM CryptoKey nesnesi.
+ */
+async function getAesGcmKeyFromBytes(rawKeyBytes) {
+    return await crypto.subtle.importKey("raw", rawKeyBytes, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 
 /**
@@ -117,6 +175,10 @@ function base64ToBuffer(base64) {
     const raw = atobFn(base64);
     return Uint8Array.from(raw, c => c.charCodeAt(0));
 }
+
+// ============================================================
+// AES-GCM ŞİFRELEME / DEŞİFRELEME (Alt Seviye)
+// ============================================================
 
 /**
  * Metni AES-GCM-256 ile şifreler.
@@ -160,8 +222,251 @@ async function decryptGCM(base64Data, hexSecret) {
     return new TextDecoder().decode(decrypted);
 }
 
+// ============================================================
+// KDF RATCHET — MESAJ BAZLI ANAHTAR ROTASYONU
+// ============================================================
+
 /**
- * Kullanıcının ECDH anahtar çiftini başlatır.
+ * HKDF-SHA256 ile giriş anahtar materyalinden belirtilen uzunlukta anahtar türetir.
+ * @async
+ * @function hkdfDerive
+ * @param {Uint8Array} ikm - Giriş Anahtar Materyali (Input Keying Material).
+ * @param {string} info - Bağlam etiketi (context info).
+ * @param {string} [salt='CyberChat-E2EE-v2'] - HKDF tuzu.
+ * @param {number} [lengthBits=256] - Türetilecek anahtar uzunluğu (bit).
+ * @returns {Promise&lt;Uint8Array>} Türetilmiş anahtar baytları.
+ */
+async function hkdfDerive(ikm, info, salt = 'CyberChat-E2EE-v2', lengthBits = 256) {
+    const hkdfKey = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
+    const saltBytes = new TextEncoder().encode(salt);
+    const infoBytes = new TextEncoder().encode(info);
+    const derivedBits = await crypto.subtle.deriveBits(
+        { name: 'HKDF', hash: 'SHA-256', salt: saltBytes, info: infoBytes },
+        hkdfKey,
+        lengthBits
+    );
+    return new Uint8Array(derivedBits);
+}
+
+/**
+ * Bir hedef kullanıcı ile KDF Ratchet zincirini başlatır.
+ * Paylaşılan sırdan (rootKey) deterministik olarak gönderme ve alma zincir anahtarları türetilir.
+ * Kullanıcı ID'leri sıralanarak her iki tarafta da aynı sonuç üretilmesi garanti edilir.
+ * @async
+ * @function initRatchetChain
+ * @param {string} targetId - Hedef kullanıcı ID.
+ * @param {Uint8Array} sharedSecretBytes - ECDHE'den türetilmiş ham paylaşılan sır.
+ * @returns {Promise&lt;void>}
+ */
+async function initRatchetChain(targetId, sharedSecretBytes) {
+    const myId = currentUser.userId;
+    // Deterministik sıralama: Her iki tarafta da aynı "chainA" ve "chainB" üretilir
+    const [first, second] = [myId, targetId].sort();
+    
+    const rootKey = await hkdfDerive(sharedSecretBytes, 'ratchet-root-key');
+    const chainKeyA = await hkdfDerive(rootKey, 'chain-' + first);
+    const chainKeyB = await hkdfDerive(rootKey, 'chain-' + second);
+
+    _ratchetState[targetId] = {
+        sendChainKey: (myId === first) ? chainKeyA : chainKeyB,
+        recvChainKey: (myId === first) ? chainKeyB : chainKeyA,
+        sendCounter: 0,
+        recvCounter: 0
+    };
+    _skippedMessageKeys[targetId] = {};
+
+    // rootKey artık gerekli değil — bellekten sil
+    rootKey.fill(0);
+}
+
+/**
+ * Bir zincir anahtarından mesaj anahtarı türetir ve zinciri bir adım ilerletir.
+ * @async
+ * @function advanceChain
+ * @param {Uint8Array} chainKey - Mevcut zincir anahtarı.
+ * @returns {Promise&lt;{ messageKey: Uint8Array, nextChainKey: Uint8Array }>}
+ */
+async function advanceChain(chainKey) {
+    const messageKey = await hkdfDerive(chainKey, 'msg-key');
+    const nextChainKey = await hkdfDerive(chainKey, 'chain-advance');
+    // Eski zincir anahtarını bellekten sil
+    chainKey.fill(0);
+    return { messageKey, nextChainKey };
+}
+
+/**
+ * KDF Ratchet ile mesajı şifreler.
+ * Her çağrıda gönderme zinciri bir adım ilerler ve benzersiz bir mesaj anahtarı kullanılır.
+ * @async
+ * @function encryptWithRatchet
+ * @param {string} text - Şifrelenecek düz metin.
+ * @param {string} targetId - Hedef kullanıcı ID.
+ * @returns {Promise&lt;{ ciphertext: string, messageIndex: number }|null>} Şifreli metin ve mesaj indeksi.
+ */
+async function encryptWithRatchet(text, targetId) {
+    const state = _ratchetState[targetId];
+    if (!state) return null;
+
+    const { messageKey, nextChainKey } = await advanceChain(state.sendChainKey);
+    state.sendChainKey = nextChainKey;
+    const messageIndex = state.sendCounter++;
+
+    try {
+        // messageKey (Uint8Array) ile AES-GCM şifreleme
+        const aesKey = await getAesGcmKeyFromBytes(messageKey);
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encoded = new TextEncoder().encode(text);
+        const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, aesKey, encoded);
+
+        const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+        combined.set(iv, 0);
+        combined.set(new Uint8Array(ciphertext), iv.length);
+
+        return { ciphertext: bufferToBase64(combined), messageIndex };
+    } finally {
+        // Mesaj anahtarını bellekten sil — tek kullanımlık
+        messageKey.fill(0);
+    }
+}
+
+/**
+ * KDF Ratchet ile şifreli mesajı çözer.
+ * Mesaj indeksine göre alım zincirini ilerletir veya önceden türetilmiş anahtarları kullanır.
+ * @async
+ * @function decryptWithRatchet
+ * @param {string} base64Data - Base64 şifreli veri.
+ * @param {string} senderId - Gönderici kullanıcı ID.
+ * @param {number} messageIndex - Mesajın zincir indeksi.
+ * @returns {Promise&lt;string|null>} Çözülmüş düz metin veya başarısızsa null.
+ */
+async function decryptWithRatchet(base64Data, senderId, messageIndex) {
+    const state = _ratchetState[senderId];
+    if (!state) return null;
+
+    let messageKey = null;
+
+    try {
+        // 1. Önceden türetilmiş (atlanmış) anahtarlarda kontrol et
+        const skipped = _skippedMessageKeys[senderId];
+        if (skipped &amp;&amp; skipped[messageIndex]) {
+            messageKey = skipped[messageIndex];
+            delete skipped[messageIndex];
+        } else {
+            // 2. Alım zincirini mesaj indeksine kadar ilerlet
+            while (state.recvCounter &lt; messageIndex) {
+                const { messageKey: skippedKey, nextChainKey } = await advanceChain(state.recvChainKey);
+                state.recvChainKey = nextChainKey;
+                // Atlanan anahtarları sakla (sıra dışı mesajlar için)
+                if (!_skippedMessageKeys[senderId]) _skippedMessageKeys[senderId] = {};
+                _skippedMessageKeys[senderId][state.recvCounter] = skippedKey;
+                state.recvCounter++;
+            }
+            // 3. Hedef indeksin anahtarını türet
+            const result = await advanceChain(state.recvChainKey);
+            messageKey = result.messageKey;
+            state.recvChainKey = result.nextChainKey;
+            state.recvCounter++;
+        }
+
+        // AES-GCM deşifreleme
+        const aesKey = await getAesGcmKeyFromBytes(messageKey);
+        const rawData = base64ToBuffer(base64Data);
+        const iv = rawData.slice(0, 12);
+        const data = rawData.slice(12);
+        const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, aesKey, data);
+        return new TextDecoder().decode(decrypted);
+    } catch (e) {
+        console.error('[!] Ratchet deşifreleme hatası:', e);
+        return null;
+    } finally {
+        // Mesaj anahtarını bellekten sil
+        if (messageKey) messageKey.fill(0);
+    }
+}
+
+/**
+ * Belirtilen hedef için aktif bir KDF Ratchet zinciri olup olmadığını kontrol eder.
+ * @function hasRatchetSession
+ * @param {string} targetId - Hedef kullanıcı ID.
+ * @returns {boolean}
+ */
+function hasRatchetSession(targetId) {
+    return !!_ratchetState[targetId];
+}
+
+// ============================================================
+// ECDHE — GEÇİCİ ANAHTAR ÇİFTİ ÜRETİMİ
+// ============================================================
+
+/**
+ * Belirtilen hedef kullanıcı için oturum bazlı geçici (ephemeral) ECDH anahtar çifti üretir.
+ * Özel anahtar extractable: false olarak oluşturulur — JS tarafından dışa aktarılamaz.
+ * @async
+ * @function generateEphemeralKeyPair
+ * @param {string} targetId - Hedef kullanıcı ID.
+ * @returns {Promise&lt;JsonWebKey>} Geçici açık anahtar (JWK).
+ */
+async function generateEphemeralKeyPair(targetId) {
+    const keyPair = await crypto.subtle.generateKey(
+        { name: 'ECDH', namedCurve: 'P-256' },
+        false,  // [GÜVENLİK] extractable: false — özel anahtar JS'den dışa aktarılamaz
+        ['deriveBits']
+    );
+    // Açık anahtarı paylaşmak için JWK'ya dönüştürmemiz gerekiyor,
+    // bu yüzden açık anahtarı ayrıca extractable: true olarak import ediyoruz
+    const pubJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
+
+    _ephemeralKeyPairs[targetId] = {
+        privateKey: keyPair.privateKey,
+        publicKey: keyPair.publicKey,
+        publicJwk: pubJwk
+    };
+    return pubJwk;
+}
+
+/**
+ * Geçici özel anahtarı kullanarak ECDHE ortak sırrı türetir.
+ * NIST SP 800-56A: Ham ECDH çıktısı HKDF ile AES anahtarına dönüştürülür.
+ * Türetim sonrası geçici özel anahtar referansı bellekten kaldırılır.
+ * @async
+ * @function deriveEphemeralSecret
+ * @param {string} targetId - Hedef kullanıcı ID.
+ * @param {JsonWebKey} theirEphemeralPublicJwk - Karşı tarafın geçici açık anahtarı.
+ * @returns {Promise&lt;Uint8Array>} 256-bit türetilmiş ortak anahtar (ham baytlar).
+ */
+async function deriveEphemeralSecret(targetId, theirEphemeralPublicJwk) {
+    const ephemeral = _ephemeralKeyPairs[targetId];
+    if (!ephemeral) throw new Error('Geçici anahtar bulunamadı: ' + targetId);
+
+    const theirKey = await crypto.subtle.importKey('jwk', theirEphemeralPublicJwk, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+    const rawBits = await crypto.subtle.deriveBits({ name: 'ECDH', public: theirKey }, ephemeral.privateKey, 256);
+
+    // [GÜVENLİK] Geçici özel anahtar artık gerekli değil — referansı kaldır
+    // CryptoKey nesnesi GC tarafından toplanacak (JS'de doğrudan sıfırlanamaz)
+    delete _ephemeralKeyPairs[targetId].privateKey;
+
+    // HKDF ile ham ECDH çıktısını güçlendir
+    const sharedBytes = await hkdfDerive(new Uint8Array(rawBits), 'ECDHE-SharedSecret-v2');
+    return sharedBytes;
+}
+
+/**
+ * Belirtilen hedef için geçici anahtar bilgilerini tamamen temizler.
+ * @function wipeEphemeralKey
+ * @param {string} targetId - Hedef kullanıcı ID.
+ */
+function wipeEphemeralKey(targetId) {
+    if (_ephemeralKeyPairs[targetId]) {
+        delete _ephemeralKeyPairs[targetId];
+    }
+}
+
+// ============================================================
+// KİMLİK ANAHTARI YÖNETİMİ (IndexedDB Kalıcı)
+// ============================================================
+
+/**
+ * Kullanıcının kimlik ECDH anahtar çiftini başlatır.
  * 1. Öncelik: IndexedDB güvenli kasasından CryptoKey olarak yükler.
  * 2. Geriye dönük uyumluluk: localStorage'da eski anahtar varsa IndexedDB'ye taşır ve localStorage'ı temizler.
  * 3. Hiç anahtar yoksa yeni P-256 ECDH çifti oluşturur ve IndexedDB'ye kaydeder.
@@ -196,7 +501,7 @@ async function initEcdhKeys() {
     if (legacyStored) {
         try {
             const parsed = JSON.parse(legacyStored);
-            const privKey = await crypto.subtle.importKey('jwk', parsed.privateJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+            const privKey = await crypto.subtle.importKey('jwk', parsed.privateJwk, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
             const pubKey = await crypto.subtle.importKey('jwk', parsed.publicJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
             
             myEcdhKeyPair = { privateKey: privKey, publicKey: pubKey };
@@ -219,8 +524,19 @@ async function initEcdhKeys() {
     }
 
     // 3. Hiç anahtar yoksa yeni ECDH çifti oluştur ve doğrudan IndexedDB'ye kaydet
-    myEcdhKeyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
-    myPublicKeyJwk = await crypto.subtle.exportKey('jwk', myEcdhKeyPair.publicKey);
+    // [GÜVENLİK] Özel anahtar extractable: false — JS'den dışa aktarılamaz
+    // Açık anahtar extractable: true — JWK olarak paylaşılması gerekiyor
+    const keyPair = await crypto.subtle.generateKey(
+        { name: 'ECDH', namedCurve: 'P-256' },
+        false, // extractable: false — XSS saldırısında exportKey ile sızdırılamaz
+        ['deriveBits']
+    );
+    // Açık anahtarı paylaşmak için exportable olarak yeniden import et
+    const pubJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
+    const exportablePubKey = await crypto.subtle.importKey('jwk', pubJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+    
+    myEcdhKeyPair = { privateKey: keyPair.privateKey, publicKey: exportablePubKey };
+    myPublicKeyJwk = pubJwk;
     
     await saveCryptoKeyToVault(currentUser.userId, {
         privateKey: myEcdhKeyPair.privateKey,
@@ -230,13 +546,19 @@ async function initEcdhKeys() {
 
     // Garanti olarak localStorage'da herhangi bir kalıntı olmadığından emin ol
     localStorage.removeItem('ecdh_keypair_' + currentUser.userId);
-    console.log('[+] Yeni ECDH anahtar çifti IndexedDB kasasında güvenle oluşturuldu.');
+    console.log('[+] Yeni ECDH kimlik anahtarı IndexedDB kasasında güvenle oluşturuldu (extractable: false).');
 }
+
+// ============================================================
+// PAYLAŞILAN SIR TÜRETİMİ (Geriye Uyumlu + ECDHE)
+// ============================================================
 
 /**
  * Karşı tarafın JWK açık anahtarı ve yerel özel anahtar ile ECDH ortak sırrı türetir.
- * NIST SP 800-56A standardına uygun olarak ham ortak bitler HKDF (HMAC-SHA-256) fonksiyonundan geçirilerek
+ * NIST SP 800-56A standardına uygun olarak ham ortak bitler HKDF fonksiyonundan geçirilerek
  * kriptografik olarak güçlü 256-bit AES anahtarı elde edilir.
+ * NOT: Bu fonksiyon geriye dönük uyumluluk için korunmuştur. Yeni el sıkışmalarda
+ * deriveEphemeralSecret() tercih edilmelidir.
  * @async
  * @function deriveSharedSecret
  * @param {JsonWebKey} theirPublicJwk - Karşı tarafın JWK açık anahtarı.
@@ -247,19 +569,13 @@ async function deriveSharedSecret(theirPublicJwk) {
     const rawBits = await crypto.subtle.deriveBits({ name: 'ECDH', public: theirKey }, myEcdhKeyPair.privateKey, 256);
     
     // [GÜVENLİK FIX] NIST SP 800-56A: Ham ECDH çıktısını HKDF ile AES anahtarına dönüştür
-    // Adım 1: Ham bitleri HKDF giriş anahtar materyali (IKM) olarak import et
-    const hkdfKey = await crypto.subtle.importKey('raw', rawBits, 'HKDF', false, ['deriveBits']);
+    const sharedBytes = await hkdfDerive(new Uint8Array(rawBits), 'AES-GCM-256-SharedKey', 'CyberChat-E2EE-v1');
+    const hexResult = bytesToHex(sharedBytes);
     
-    // Adım 2: Sabit salt ve bağlam etiketi ile 256-bit AES anahtarı türet
-    const salt = new TextEncoder().encode('CyberChat-E2EE-v1');
-    const info = new TextEncoder().encode('AES-GCM-256-SharedKey');
-    const derivedBits = await crypto.subtle.deriveBits(
-        { name: 'HKDF', hash: 'SHA-256', salt: salt, info: info },
-        hkdfKey,
-        256
-    );
+    // Ham baytları bellekten temizle
+    sharedBytes.fill(0);
     
-    return Array.from(new Uint8Array(derivedBits)).map(b => b.toString(16).padStart(2,'0')).join('');
+    return hexResult;
 }
 
 /**
@@ -294,7 +610,6 @@ async function ensureSharedSecret(targetId) {
                     
                     const secret = await deriveSharedSecret(res.publicKey);
                     derivedSecrets[targetId] = secret;
-                    saveSecretsToVault();
                     
                     let contact = myContacts.find(c => c.id === targetId);
                     if (contact) {
@@ -314,34 +629,199 @@ async function ensureSharedSecret(targetId) {
 }
 
 /**
- * Hedef kullanıcıya WebSocket üzerinden ECDH teklifi (offer) göndererek anahtar anlaşmasını başlatır.
+ * Hedef kullanıcıya WebSocket üzerinden ECDHE teklifi (offer) göndererek anahtar anlaşmasını başlatır.
+ * Yeni mimari: Geçici (ephemeral) anahtar çifti üretilir ve kimlik açık anahtarı ile birlikte gönderilir.
+ * @async
  * @function initiateEcdhHandshake
  * @param {string} targetId - Hedef kullanıcının ID'si.
- * @returns {void}
+ * @returns {Promise&lt;void>}
  */
-function initiateEcdhHandshake(targetId) {
+async function initiateEcdhHandshake(targetId) {
     if (!myPublicKeyJwk || !socket) return;
-    safeEmit('ecdh_offer', { targetId: targetId, senderId: currentUser.userId, publicKeyJwk: myPublicKeyJwk });
+
+    // Oturum bazlı geçici anahtar çifti üret
+    const ephemeralPubJwk = await generateEphemeralKeyPair(targetId);
+
+    safeEmit('ecdh_offer', { 
+        targetId: targetId, 
+        senderId: currentUser.userId, 
+        publicKeyJwk: myPublicKeyJwk,           // Kimlik açık anahtarı (parmak izi doğrulama için)
+        ephemeralPublicKeyJwk: ephemeralPubJwk   // Geçici açık anahtar (ECDHE için)
+    });
 }
 
 /**
- * Türetilmiş ortak sırları (derivedSecrets) geçici oturum deposuna (sessionStorage) kaydeder.
+ * Gelen ECDHE teklifini (offer) işler ve yanıt (answer) hazırlar.
+ * Geçici anahtar çifti üretir, ortak sırrı türetir ve KDF ratchet zincirini başlatır.
+ * @async
+ * @function handleEcdhOffer
+ * @param {Object} data - Teklif verisi ({ senderId, publicKeyJwk, ephemeralPublicKeyJwk }).
+ * @returns {Promise&lt;{ answerData: Object, secret: string }>} Yanıt verisi ve türetilmiş sır.
+ */
+async function handleEcdhOffer(data) {
+    const hasEphemeral = !!data.ephemeralPublicKeyJwk;
+
+    if (hasEphemeral) {
+        // === YENİ ECDHE PROTOKOLÜ ===
+        const myEphPubJwk = await generateEphemeralKeyPair(data.senderId);
+        const sharedBytes = await deriveEphemeralSecret(data.senderId, data.ephemeralPublicKeyJwk);
+        
+        // KDF Ratchet zincirini başlat
+        await initRatchetChain(data.senderId, sharedBytes);
+        
+        // Geriye uyumluluk: derivedSecrets'a hex olarak da kaydet
+        const hexSecret = bytesToHex(sharedBytes);
+        sharedBytes.fill(0); // Ham baytları temizle
+        
+        wipeEphemeralKey(data.senderId); // Geçici anahtar artık gereksiz
+
+        return {
+            answerData: {
+                targetId: data.senderId,
+                senderId: currentUser.userId,
+                publicKeyJwk: myPublicKeyJwk,
+                ephemeralPublicKeyJwk: myEphPubJwk
+            },
+            secret: hexSecret
+        };
+    } else {
+        // === ESKİ PROTOKOL (Geriye Uyumluluk) ===
+        const secret = await deriveSharedSecret(data.publicKeyJwk);
+        return {
+            answerData: {
+                targetId: data.senderId,
+                senderId: currentUser.userId,
+                publicKeyJwk: myPublicKeyJwk
+            },
+            secret: secret
+        };
+    }
+}
+
+/**
+ * Gelen ECDHE yanıtını (answer) işler ve ortak sırrı türetir.
+ * @async
+ * @function handleEcdhAnswer
+ * @param {Object} data - Yanıt verisi ({ senderId, publicKeyJwk, ephemeralPublicKeyJwk }).
+ * @returns {Promise&lt;string>} Türetilmiş ortak sır (hex).
+ */
+async function handleEcdhAnswer(data) {
+    const hasEphemeral = !!data.ephemeralPublicKeyJwk;
+
+    if (hasEphemeral &amp;&amp; _ephemeralKeyPairs[data.senderId]) {
+        // === YENİ ECDHE PROTOKOLÜ ===
+        const sharedBytes = await deriveEphemeralSecret(data.senderId, data.ephemeralPublicKeyJwk);
+        
+        // KDF Ratchet zincirini başlat
+        await initRatchetChain(data.senderId, sharedBytes);
+        
+        const hexSecret = bytesToHex(sharedBytes);
+        sharedBytes.fill(0);
+        
+        wipeEphemeralKey(data.senderId);
+        return hexSecret;
+    } else {
+        // === ESKİ PROTOKOL ===
+        return await deriveSharedSecret(data.publicKeyJwk);
+    }
+}
+
+// ============================================================
+// SIR YÖNETİMİ (Bellek Hijyeni)
+// ============================================================
+
+/**
+ * Türetilmiş sırları kaydeder.
+ * [GÜVENLİK FIX] sessionStorage'a artık YAZILMAZ.
+ * Sırlar yalnızca bellekte tutulur — uygulama kapandığında otomatik olarak yok olur.
+ * Geriye dönük uyumluluk: Fonksiyon çağrılarının kırılmaması için boş bırakılmıştır.
  * @function saveSecretsToVault
  * @returns {void}
  */
-function saveSecretsToVault() { if (currentUser) sessionStorage.setItem('derived_secrets_' + currentUser.userId, JSON.stringify(derivedSecrets)); }
+function saveSecretsToVault() {
+    // [GÜVENLİK] Artık sessionStorage'a sır yazılmıyor.
+    // Sırlar yalnızca bellekte (derivedSecrets nesnesi) tutulur.
+    // Eski sessionStorage kalıntılarını proaktif temizle
+    if (currentUser) {
+        try { sessionStorage.removeItem('derived_secrets_' + currentUser.userId); } catch(_) {}
+    }
+}
 
 /**
- * Oturum deposundan (sessionStorage) türetilmiş sırları yükler.
+ * Önceki oturumdan sırları yükler.
+ * [GÜVENLİK FIX] sessionStorage'dan artık okunmaz — sırlar oturum başına ECDHE ile yeniden türetilir.
+ * Geriye dönük uyumluluk: Eski sessionStorage kalıntılarını temizler.
  * @function loadSecretsFromVault
  * @returns {void}
  */
-function loadSecretsFromVault() { if (currentUser) { const data = sessionStorage.getItem('derived_secrets_' + currentUser.userId); derivedSecrets = data ? JSON.parse(data) : {}; } }
+function loadSecretsFromVault() {
+    // [GÜVENLİK] sessionStorage'dan anahtar yükleme kaldırıldı.
+    // Sırlar her oturumda ECDHE el sıkışması ile yeniden türetilir (PFS).
+    derivedSecrets = {};
+    if (currentUser) {
+        try { sessionStorage.removeItem('derived_secrets_' + currentUser.userId); } catch(_) {}
+    }
+}
+
+/**
+ * Belirtilen hedef için tüm kriptografik oturum durumunu bellekten güvenle temizler.
+ * @function wipeTargetCryptoState
+ * @param {string} targetId - Temizlenecek hedef kullanıcı ID.
+ */
+function wipeTargetCryptoState(targetId) {
+    // derivedSecrets temizle
+    if (derivedSecrets[targetId]) {
+        delete derivedSecrets[targetId];
+    }
+    // Ratchet zincir anahtarlarını sıfırla
+    if (_ratchetState[targetId]) {
+        if (_ratchetState[targetId].sendChainKey) _ratchetState[targetId].sendChainKey.fill(0);
+        if (_ratchetState[targetId].recvChainKey) _ratchetState[targetId].recvChainKey.fill(0);
+        delete _ratchetState[targetId];
+    }
+    // Atlanmış mesaj anahtarlarını temizle
+    if (_skippedMessageKeys[targetId]) {
+        Object.values(_skippedMessageKeys[targetId]).forEach(key => { if (key &amp;&amp; key.fill) key.fill(0); });
+        delete _skippedMessageKeys[targetId];
+    }
+    // Geçici anahtarları temizle
+    wipeEphemeralKey(targetId);
+    // AES önbelleğinden ilgili girişleri kaldır
+    Object.keys(_aesKeyCache).forEach(k => delete _aesKeyCache[k]);
+}
+
+/**
+ * Tüm kriptografik durumu bellekten güvenle temizler (oturum kapatma / bağlantı kopması).
+ * @function wipeAllCryptoState
+ */
+function wipeAllCryptoState() {
+    // Tüm ratchet zincirlerini sıfırla
+    Object.keys(_ratchetState).forEach(id => {
+        if (_ratchetState[id].sendChainKey) _ratchetState[id].sendChainKey.fill(0);
+        if (_ratchetState[id].recvChainKey) _ratchetState[id].recvChainKey.fill(0);
+    });
+    Object.keys(_ratchetState).forEach(id => delete _ratchetState[id]);
+
+    // Atlanmış mesaj anahtarlarını sıfırla
+    Object.keys(_skippedMessageKeys).forEach(id => {
+        Object.values(_skippedMessageKeys[id]).forEach(key => { if (key &amp;&amp; key.fill) key.fill(0); });
+        delete _skippedMessageKeys[id];
+    });
+
+    // Geçici anahtarları temizle
+    Object.keys(_ephemeralKeyPairs).forEach(id => delete _ephemeralKeyPairs[id]);
+
+    // AES önbelleğini temizle
+    Object.keys(_aesKeyCache).forEach(k => delete _aesKeyCache[k]);
+
+    // Modül değişkenlerini sıfırla
+    derivedSecrets = {};
+    myEcdhKeyPair = null;
+    myPublicKeyJwk = null;
+}
 
 // ============================================================
-// [GÜVENLİK FIX - SEC-05] Açık Anahtar Parmak İzi ve Güvenlik Numarası
-// MITM (Ortadaki Adam) saldırılarını tespit etmek için kullanıcıların
-// birbirlerinin açık anahtarlarını bant dışı doğrulamasını sağlar.
+// [GÜVENLİK FIX - SEC-05] AÇIK ANAHTAR PARMAK İZİ VE GÜVENLİK NUMARASI
 // ============================================================
 
 /**
@@ -435,24 +915,52 @@ function acceptNewFingerprint(targetId, fingerprint) {
     }
 }
 
+// ============================================================
+// MODÜL DIŞA AKTARIMI (Node.js / Test ortamı)
+// ============================================================
+
 if (typeof module !== 'undefined' &amp;&amp; module.exports) {
     module.exports = {
+        // Yardımcı fonksiyonlar
         hexToBytes,
+        bytesToHex,
         getAesGcmKey,
+        getAesGcmKeyFromBytes,
         bufferToBase64,
         base64ToBuffer,
+        // AES-GCM (alt seviye — geriye uyumluluk)
         encryptGCM,
         decryptGCM,
+        // ECDHE
+        generateEphemeralKeyPair,
+        deriveEphemeralSecret,
+        wipeEphemeralKey,
+        // KDF Ratchet
+        hkdfDerive,
+        initRatchetChain,
+        advanceChain,
+        encryptWithRatchet,
+        decryptWithRatchet,
+        hasRatchetSession,
+        // Kimlik anahtarı
         deriveSharedSecret,
-        generateKeyFingerprint,
-        generateSafetyNumber,
         initEcdhKeys,
         ensureSharedSecret,
         initiateEcdhHandshake,
+        // El sıkışma işleyicileri
+        handleEcdhOffer,
+        handleEcdhAnswer,
+        // Sır yönetimi
         saveSecretsToVault,
         loadSecretsFromVault,
+        wipeTargetCryptoState,
+        wipeAllCryptoState,
+        // Parmak izi &amp; güvenlik numarası
+        generateKeyFingerprint,
+        generateSafetyNumber,
         verifyContactFingerprint,
         acceptNewFingerprint,
+        // Durum erişim (test)
         _aesKeyCache,
         setMyEcdhKeyPair: (pair) => { myEcdhKeyPair = pair; },
         getMyEcdhKeyPair: () => myEcdhKeyPair,
@@ -478,7 +986,7 @@ if (typeof module !== 'undefined' &amp;&amp; module.exports) {
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 21:48:28 GMT+0300 (Türkiye Standart Saati)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Wed Sep 30 2026 16:13:51 GMT+0300 (Türkiye Standart Saati)
 </footer>
 
 <script> prettyPrint(); </script>

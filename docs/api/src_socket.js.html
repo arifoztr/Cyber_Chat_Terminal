@@ -725,7 +725,13 @@ module.exports = function setupSockets(io) {
                 const validPackets = db.queue[userId].filter(p => !isPacketExpired(p));
 
                 if (validPackets.length > 0) {
-                    validPackets.forEach(packet => { io.to(socket.id).emit('receive_secure_packet', packet); });
+                    validPackets.forEach(packet => {
+                        if (packet.type === 'session_reset') {
+                            io.to(socket.id).emit('session_reset', packet);
+                        } else {
+                            io.to(socket.id).emit('receive_secure_packet', packet);
+                        }
+                    });
                 }
 
                 delete db.queue[userId];
@@ -778,7 +784,8 @@ module.exports = function setupSockets(io) {
             const safeData = {
                 targetId: data.targetId,
                 senderId: socket.user.userId,
-                publicKeyJwk: data.publicKeyJwk
+                publicKeyJwk: data.publicKeyJwk,
+                ephemeralPublicKeyJwk: data.ephemeralPublicKeyJwk || null
             };
             const targetSockets = onlineNodes.get(data.targetId);
             if (targetSockets) targetSockets.forEach(sid => io.to(sid).emit('ecdh_offer', safeData));
@@ -787,7 +794,7 @@ module.exports = function setupSockets(io) {
         /**
          * ECDH anahtar anlaşması yanıtını (answer) teklif sahibine güvenle iletir.
          * @name ecdh_answer
-         * @param {Object} data - Yanıt verisi ({ targetId, publicKeyJwk }).
+         * @param {Object} data - Yanıt verisi ({ targetId, publicKeyJwk, ephemeralPublicKeyJwk? }).
          */
         socket.on('ecdh_answer', (data) => {
             if (!socket.user || !data || !data.targetId) return;
@@ -796,10 +803,55 @@ module.exports = function setupSockets(io) {
             const safeData = {
                 targetId: data.targetId,
                 senderId: socket.user.userId,
-                publicKeyJwk: data.publicKeyJwk
+                publicKeyJwk: data.publicKeyJwk,
+                ephemeralPublicKeyJwk: data.ephemeralPublicKeyJwk || null
             };
             const targetSockets = onlineNodes.get(data.targetId);
             if (targetSockets) targetSockets.forEach(sid => io.to(sid).emit('ecdh_answer', safeData));
+        });
+
+        /**
+         * İki taraflı kriptografik oturum sıfırlama olayını iletir.
+         * A kişisi sohbeti veya anahtarları sildiğinde
+         * B kişisinin de eski anahtarları imha etmesini sağlar.
+         * @name reset_chat_session
+         * @param {Object} data - Sıfırlama verisi ({ targetId }).
+         * @param {function(Object): void} [callback] - Geri çağırma ({ success: boolean }).
+         */
+        socket.on('reset_chat_session', async (data, callback) => {
+            if (!socket.user || !data || !data.targetId) {
+                if (callback) callback({ success: false });
+                return;
+            }
+            if (!checkRateLimit(ip, 'reset_session', 30, 60000)) {
+                if (callback) callback({ success: false, error: 'RATE_LIMIT' });
+                return;
+            }
+
+            const targetId = data.targetId;
+            const senderId = socket.user.userId;
+            const resetEvent = {
+                type: 'session_reset',
+                senderId: senderId,
+                targetId: targetId,
+                timestamp: Date.now()
+            };
+
+            const targetSockets = onlineNodes.get(targetId);
+            if (targetSockets &amp;&amp; targetSockets.size > 0) {
+                targetSockets.forEach(sid => io.to(sid).emit('session_reset', resetEvent));
+                if (callback) callback({ success: true, queued: false });
+            } else {
+                if (!db.queue[targetId]) db.queue[targetId] = [];
+                db.queue[targetId] = db.queue[targetId].filter(p => !isPacketExpired(p) &amp;&amp; p.senderId !== senderId);
+
+                if (db.queue[targetId].length >= MAX_QUEUE_SIZE) {
+                    db.queue[targetId].shift();
+                }
+                db.queue[targetId].push(resetEvent);
+                await dbManager.saveDatabase();
+                if (callback) callback({ success: true, queued: true });
+            }
         });
 
         /**
@@ -1017,7 +1069,11 @@ module.exports = function setupSockets(io) {
     return {
         checkRateLimit,
         rateLimits,
-        onlineNodes
+        onlineNodes,
+        checkFailedLoginLimit,
+        recordFailedLogin,
+        resetFailedLogin,
+        failedLoginAttempts
     };
 };
 
@@ -1029,7 +1085,8 @@ module.exports._internals = {
     revokedTokens,
     onlineNodes,
     DUMMY_HASH,
-    MAX_QUEUE_SIZE
+    MAX_QUEUE_SIZE,
+    get JWT_SECRET() { return JWT_SECRET; }
 };</code></pre>
         </article>
     </section>
@@ -1046,7 +1103,7 @@ module.exports._internals = {
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Sat Sep 26 2026 21:48:28 GMT+0300 (Türkiye Standart Saati)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Wed Sep 30 2026 16:13:51 GMT+0300 (Türkiye Standart Saati)
 </footer>
 
 <script> prettyPrint(); </script>
