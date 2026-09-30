@@ -1,7 +1,7 @@
 # OPTİMİZASYON VE GÜVENLİK KILAVUZU (OPTIMIZATIONS)
 
-**Sürüm:** v10 (Cyber-HUD Edition — Production Ready)  
-**Son Güncelleme:** 2026-09-26  
+**Sürüm:** v1.0 (Production Ready)  
+**Son Güncelleme:** 2026-09-30  
 
 ---
 
@@ -16,8 +16,12 @@ Backend sunucusu (`src/server.js`, `src/socket.js`) yalnızca signaling ve relay
 - Sohbet geçmişi, kişi listesi ve türetilmiş simetrik oturum anahtarları (ECDH shared secrets) **yalnızca** tarayıcının IndexedDB kasasında (`cyber_vault_db`) saklanır.
 - Kriptografik anahtarlar veya şifresi çözülmüş metinler **asla** sunucuya iletilmez.
 
-### 3. Standart Web Crypto API
-- Tüm şifreleme ve anahtar türetme işlemleri W3C standartlarında `window.crypto.subtle` API'si üzerinden AES-256-GCM, ECDH (P-256) ve PBKDF2 ile gerçekleştirilir.
+### 3. Standart Web Crypto API, ECDHE ve KDF Ratchet
+- Tüm şifreleme ve anahtar türetme işlemleri W3C standartlarında `window.crypto.subtle` API'si üzerinden gerçekleştirilir.
+- **ECDHE (P-256):** Oturum başına tek kullanımlık geçici anahtar çiftleri üretilerek Mükemmel İleriye Dönük Gizlilik (PFS) sağlanır; el sıkışma sonrası geçici özel anahtar referansı bellekten silinir.
+- **KDF Ratchet Zinciri:** HKDF-SHA256 ile her tekil ileti için tek kullanımlık `messageKey` türetilir. Eski zincir anahtarları ve mesaj anahtarları derhal `Uint8Array.fill(0)` ile sıfırlanarak RAM üzerinden temizlenir.
+- **Dışa Aktarılamaz Anahtarlar (`extractable: false`):** Kriptografik anahtarlar Web Crypto katmanında korunur; XSS durumunda bile JavaScript ile belleğe dökülemez.
+- **İşletim Sistemi Kasası (Electron safeStorage):** Masaüstü istemcisinde IndexedDB anahtarları ve oturum belirteçleri Windows DPAPI, macOS Keychain veya Linux Secret Service ile donanım/kullanıcı destekli şifrelenir.
 
 ---
 

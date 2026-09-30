@@ -3,7 +3,7 @@
 ## 📌 Proje Özeti
 Bu proje, uçtan uca şifreli (E2EE) bir P2P sohbet terminalidir. İstemciler (web tarayıcıları ve Electron masaüstü uygulaması) arasında ECDH (P-256) ile asenkron anahtar takası yapılır; tüm mesajlar ve dosyalar (resim, PDF) AES-GCM-256 ile şifrelenir. Sunucu yalnızca signaling ve relay görevi görür; şifreli içerikleri asla çözemez, inceleyemez veya saklayamaz.
 
-Arayüz; modern cyber-dark HUD estetiğinde tasarlanmış olup TTL ile kendini imha eden mesajlar, dosya/belge paylaşımı, çevrimdışı kuyruklama, parmak izi (Safety Number) doğrulaması, ses efektleri ve tamamen istemci tarafında saklanan IndexedDB şifreli kasası içerir.
+Arayüz; modern siber karanlık terminal estetiğinde tasarlanmış olup TTL ile kendini imha eden mesajlar, dosya/belge paylaşımı, çevrimdışı kuyruklama, parmak izi (Safety Number) doğrulaması, ses efektleri ve tamamen istemci tarafında saklanan IndexedDB şifreli kasası içerir.
 
 ---
 
@@ -18,7 +18,7 @@ Arayüz; modern cyber-dark HUD estetiğinde tasarlanmış olup TTL ile kendini i
 | **Kimlik Doğrulama** | Bağımsız JWT (HMAC-SHA256) + bcrypt şifreleme |
 | **Veritabanı** | Hibrit: Yerel SQLite3 (WAL modu) veya Cloud Turso (`@libsql/client`) |
 | **İstemci Depolama** | IndexedDB (Kasa / Vault) + localStorage yedekleme/taşıma |
-| **Test Altyapısı** | Vitest, V8 Coverage (145+ Test, %94+ kod kapsamı) |
+| **Test Altyapısı** | Vitest, V8 Coverage (173 Test, %95+ kod kapsamı) |
 | **Dökümantasyon** | JSDoc 3, Markdown Eklentisi (`npm run docs`) |
 | **Tipografi** | Inter, JetBrains Mono |
 
@@ -37,7 +37,7 @@ Arayüz; modern cyber-dark HUD estetiğinde tasarlanmış olup TTL ile kendini i
 │   ├── db.js                    # IndexedDB Vault ve yerel kasa depolama yönetimi
 │   ├── index.html               # Tek sayfa modern cyber terminal HTML arayüzü
 │   ├── socket-handlers.js       # İstemci Socket.IO olay dinleyicileri
-│   ├── style.css                # Siber karanlık HUD stilleri ve animasyonlar
+│   ├── style.css                # Siber karanlık terminal stilleri ve animasyonlar
 │   ├── ui.js                    # UI kontrolcüsü, formlar, mesaj renderlama, sesler
 │   └── vendor/                  # Yerel 3. parti kütüphaneler (tailwindcss, socket.io, qrcode)
 ├── src/
@@ -86,7 +86,7 @@ Arayüz; modern cyber-dark HUD estetiğinde tasarlanmış olup TTL ile kendini i
    - Zaman aşımına uğrayan TTL paketleri hem sunucuda (GC) hem de istemcide anında imha edilir.
 
 5. **Test Bütünlüğü:**
-   - Kod tabanında yapılan her değişiklik sonrası `npm.cmd test` çalıştırılarak 145 testin tamamının başarılı geçtiği doğrulanmalıdır.
+   - Kod tabanında yapılan her değişiklik sonrası `npm.cmd test` çalıştırılarak 173 testin tamamının başarılı geçtiği doğrulanmalıdır.
 
 ---
 
@@ -108,6 +108,6 @@ npm run desktop:start
 
 ---
 
-**Son Güncelleme:** 2026-09-26  
-**Sürüm:** v10 (Cyber-HUD Edition — Production Ready)  
+**Son Güncelleme:** 2026-09-30  
+**Sürüm:** v1.0 (Production Ready)  
 **Lisans:** ISC
