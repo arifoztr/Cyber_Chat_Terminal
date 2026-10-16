@@ -36,10 +36,10 @@ Backend sunucusu (`src/server.js`, `src/socket.js`) yalnızca signaling ve relay
 - `Strict-Transport-Security` (HSTS): 1 yıl zorunlu HTTPS (alt alan adları dahil).
 - `X-Content-Type-Options`: `nosniff`.
 - `X-Frame-Options`: `DENY` (Clickjacking saldırılarına karşı tam koruma).
-- `X-XSS-Protection`: `1; mode=block`.
+- `X-XSS-Protection`: `0` (Modern tarayıcı standardı: Eski hatalı XSS filtresi kapatılır, korumayı CSP devralır).
 
 ### 3. Inline Olay Dinleyicilerinin Temizlenmesi (`SEC-13`)
-- CSP kurallarına tam uyum sağlamak için HTML içerisindeki tüm `onclick`, `onsubmit` gibi inline nitelikler kaldırılmış; [public/ui.js](file:///c:/Users/Arifo/OneDrive/Masa%C3%BCst%C3%BC/cyber/public/ui.js) içerisinde `initAppEvents()` ve `initAuthEvents()` fonksiyonları aracılığıyla güvenli `addEventListener` yapısına geçirilmiştir.
+- CSP kurallarına tam uyum sağlamak için HTML içerisindeki tüm `onclick`, `onsubmit` gibi inline nitelikler kaldırılmış; `public/ui.js` içerisinde `initAppEvents()` ve `initAuthEvents()` fonksiyonları aracılığıyla güvenli `addEventListener` yapısına geçirilmiştir.
 
 ### 4. Güvenli DOM API'si ve Dosya XSS Koruması
 - Mesaj akışında gelen dosya adları ve bağlantılar asla `innerHTML` ile yazdırılmaz.
@@ -53,7 +53,7 @@ Backend sunucusu (`src/server.js`, `src/socket.js`) yalnızca signaling ve relay
 - Mesaj iptal etme / geri çekme işleminde istemciden gelen `senderId` parametresi sunucu tarafında dikkate alınmaz. Sunucu, işlemi gerçekleştiren soketin doğrulanmış oturum kimliğini (`socket.user.userId`) zorunlu kılar. Böylece kullanıcıların başkasının mesajını silmesi engellenir.
 
 ### 7. Güvenilir IP Tespiti ve Spoofing Savunması
-- `getClientIp` fonksiyonu, ters vekiller (Cloudflare, yerel proxy) haricinde sahte `x-forwarded-for` başlıklarını yok sayar ve doğrudan soket soket adresi (`socket.handshake.address`) üzerinden güvenilir IP doğrulaması yapar.
+- `getClientIp` fonksiyonu, ters vekiller (Cloudflare, yerel proxy) haricinde sahte `x-forwarded-for` başlıklarını yok sayar ve doğrudan soket adresi (`socket.handshake.address`) üzerinden güvenilir IP doğrulaması yapar.
 
 ---
 
@@ -63,12 +63,18 @@ DDoS ve brute-force saldırılarına karşı IP bazlı dinamik hız sınırları
 
 | İşlem (Action) | İzin Verilen Limit | Zaman Penceresi |
 |----------------|-------------------|-----------------|
-| `register` | 3 istek | 60 saniye |
-| `login` | 5 istek | 60 saniye |
+| HTTP Genel İstekler | 120 istek | 60 saniye |
+| `register` | 20 istek | 60 saniye |
+| `login` | 30 istek (Maks. 5 başarısız deneme) | 60 saniye |
+| `verify_session` | 30 istek | 60 saniye |
 | `send_secure_packet` | 60 paket | 60 saniye |
 | `ecdh_offer` / `ecdh_answer` | 10 istek | 60 saniye |
 | `get_public_key` | 60 istek | 60 saniye |
+| `get_profiles` | 60 istek (Maks. 50 ID/sorgu) | 60 saniye |
+| `check_node_status` / `statuses` | 60 istek | 60 saniye |
 | `search_users` | 30 istek | 60 saniye |
+| `notify_add_contact` / `respond` | 30 istek | 60 saniye |
+| `reset_chat_session` | 30 istek | 60 saniye |
 | `update_avatar` | 10 istek | 60 saniye |
 | `change_password` | 5 istek | 60 saniye |
 | `delete_account` | 3 istek | 60 saniye |

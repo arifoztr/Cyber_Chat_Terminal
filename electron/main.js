@@ -6,7 +6,7 @@
  * ve tek örnek kilidi (Single Instance Lock) mekanizmalarını yönetir.
  */
 
-const { app, BrowserWindow, shell, ipcMain, Menu, safeStorage } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, Menu, safeStorage, Notification } = require('electron');
 const path = require('path');
 
 /**
@@ -93,6 +93,19 @@ ipcMain.on('window-maximize', () => {
  */
 ipcMain.on('window-close', () => {
     if (mainWindow) mainWindow.close();
+});
+
+/**
+ * Masaüstü işletim sistemi bildirimi gösterir.
+ */
+ipcMain.on('show-notification', (_event, data) => {
+    if (data && data.title && Notification.isSupported()) {
+        new Notification({
+            title: String(data.title),
+            body: data.body ? String(data.body) : '',
+            icon: path.join(__dirname, 'assets', 'icon.png')
+        }).show();
+    }
 });
 
 // === Electron safeStorage IPC Köprüsü (Windows DPAPI / macOS Keychain) ===

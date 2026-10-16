@@ -74,5 +74,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
      * @param {string} base64Cipher - Base64 şifreli veri.
      * @returns {Promise<string|null>} Çözülmüş düz metin.
      */
-    secureDecrypt: (base64Cipher) => ipcRenderer.invoke('safe-storage-decrypt', base64Cipher)
+    secureDecrypt: (base64Cipher) => ipcRenderer.invoke('safe-storage-decrypt', base64Cipher),
+
+    /**
+     * Masaüstü işletim sistemi bildirimi gösterir.
+     * @function
+     * @param {string} title - Bildirim başlığı.
+     * @param {string} body - Bildirim metni.
+     * @returns {void}
+     */
+    showNotification: (title, body) => ipcRenderer.send('show-notification', { title, body })
 });

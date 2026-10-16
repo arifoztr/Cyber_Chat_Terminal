@@ -263,4 +263,17 @@ function bindSocketEvents() {
             }
         }
     });
+
+    socket.off('session_invalidated');
+    /**
+     * Başka bir oturumdan şifre değiştirildiğinde mevcut oturumu güvenli şekilde sonlandırır.
+     * @param {Object} data - Bildirim verisi ({ message: string }).
+     */
+    socket.on('session_invalidated', (data) => {
+        const msg = (data && data.message) ? data.message : 'Şifreniz değiştirildiği için oturumunuz sonlandırıldı.';
+        showToast(msg, 'warning');
+        if (typeof disconnectFromServer === 'function') {
+            disconnectFromServer();
+        }
+    });
 }

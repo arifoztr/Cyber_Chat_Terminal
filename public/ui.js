@@ -119,8 +119,12 @@ function safeEmit(event, data, callback) {
  * @returns {void}
  */
 function triggerDesktopNotification(title, body) {
-    if (window.siberBridge && typeof window.siberBridge.showNotification === 'function') {
+    if (window.electronAPI && typeof window.electronAPI.showNotification === 'function') {
+        window.electronAPI.showNotification(title, body);
+    } else if (window.siberBridge && typeof window.siberBridge.showNotification === 'function') {
         window.siberBridge.showNotification(title, body);
+    } else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try { new Notification(title, { body, icon: 'icon.png' }); } catch (_) {}
     }
 }
 
@@ -411,10 +415,10 @@ function handleAuthSubmit() {
     }
 
     if (currentAuthTab === 'register') {
-        if (!username) {
+        if (!username || username.length < 2 || username.length > 32) {
             playSound('error');
             if (usernameInput) usernameInput.classList.add('input-error');
-            setAuthAlert("Lütfen bir kullanıcı adı (kod adı) belirleyin.", 'error');
+            setAuthAlert("Kullanıcı adı 2-32 karakter uzunluğunda olmalıdır.", 'error');
             if (usernameInput) usernameInput.focus();
             return;
         }
@@ -427,10 +431,10 @@ function handleAuthSubmit() {
             return;
         }
 
-        if (password.length < 4) {
+        if (password.length < 8 || password.length > 72) {
             playSound('error');
             if (passwordInput) passwordInput.classList.add('input-error');
-            setAuthAlert("Şifre en az 4 karakter uzunluğunda olmalıdır.", 'error');
+            setAuthAlert("Şifre en az 8, en fazla 72 karakter uzunluğunda olmalıdır.", 'error');
             if (passwordInput) passwordInput.focus();
             return;
         }
@@ -821,6 +825,7 @@ function handleDisconnectUI() {
     Object.keys(_aesKeyCache).forEach(k => delete _aesKeyCache[k]);
     if (localTypingTimeout) { clearTimeout(localTypingTimeout); localTypingTimeout = null; }
     isCurrentlyTyping = false;
+    _lastDateLabel = null;
     window.receivedImages = []; currentUser = null; activeTarget = null; myContacts = []; unreadCounts = {}; derivedSecrets = {}; myEcdhKeyPair = null; myPublicKeyJwk = null; socket = null;
     updateMobileLayout();
 }
@@ -1214,6 +1219,7 @@ async function selectTarget(targetId) {
     safeEmit('check_node_status', activeTarget.id, (res) => { updateContactStatusUI(res.userId, res.isOnline); });
     
     const logBox = document.getElementById('chatLog'); logBox.innerHTML = ''; window.receivedImages = [];
+    _lastDateLabel = null;
     const history = await loadHistoryFromVault(activeTarget.id);
     
     if (history.length > 0) {
@@ -1222,17 +1228,23 @@ async function selectTarget(targetId) {
         topBanner.innerText = '/// GÜVENLİ YEREL BELLEK GERİ YÜKLENDİ (IDB) ///';
         logBox.appendChild(topBanner);
 
-        const INITIAL_LOAD = 20; const first = history.slice(-INITIAL_LOAD); const rest  = history.slice(0, -INITIAL_LOAD);
+        const INITIAL_LOAD = 20;
+        const first = history.slice(0, INITIAL_LOAD);
+        const rest  = history.slice(INITIAL_LOAD);
         const decryptedFirst = await Promise.all(first.map(p => decryptPacketForDisplay(p, activeTarget)));
-        for (const data of decryptedFirst) { if (data) appendMessageToUI(data.id, data.sender, data.text, data.file, data.isMine, data.isError, data.ttl, data.timestamp, data.fileName); }
+        for (const data of decryptedFirst) {
+            if (data) appendMessageToUI(data.id, data.sender, data.text, data.file, data.isMine, data.isError, data.ttl, data.timestamp, data.fileName);
+        }
         logBox.scrollTop = logBox.scrollHeight;
         
         if (rest.length > 0) {
             let i = 0;
             function processRest() { 
-                if (i >= rest.length) return; 
+                if (i >= rest.length || !activeTarget || activeTarget.id !== targetId) return; 
                 decryptPacketForDisplay(rest[i++], activeTarget).then((data) => { 
-                    if(data) appendMessageToUI(data.id, data.sender, data.text, data.file, data.isMine, data.isError, data.ttl, data.timestamp, data.fileName);
+                    if (!activeTarget || activeTarget.id !== targetId) return;
+                    if (data) appendMessageToUI(data.id, data.sender, data.text, data.file, data.isMine, data.isError, data.ttl, data.timestamp, data.fileName);
+                    logBox.scrollTop = logBox.scrollHeight;
                     idleCallback(processRest); 
                 }); 
             }
@@ -1282,6 +1294,7 @@ function clearActiveChat() {
         // Karşı tarafa da oturumu sıfırlaması için sinyal gönder
         safeEmit('reset_chat_session', { targetId: targetId });
 
+        _lastDateLabel = null;
         renderLogPlaceholder(document.getElementById('chatLog'), '📭', '// BELLEK SIFIRLANDI //', false);
         showToast("Sohbet geçmişi ve oturum anahtarları sıfırlandı.", 'success');
         playSound('destroy');
@@ -2523,6 +2536,7 @@ function saveProfileSettings() {
 function changeUserPassword() {
     const oldP = document.getElementById('setOldPwd').value; const newP = document.getElementById('setNewPwd').value;
     if(!oldP || !newP) { playSound('error'); showToast("Lütfen şifre alanlarını doldurun.", 'error'); return; }
+    if (newP.length < 8 || newP.length > 72) { playSound('error'); showToast("Yeni şifre en az 8, en fazla 72 karakter olmalıdır.", 'error'); return; }
     safeEmit('change_password', { oldPassword: oldP, newPassword: newP }, (res) => {
         if (res && res.success) {
             playSound('success'); showToast("Şifre değiştirildi.", 'success');
@@ -2588,6 +2602,7 @@ function updateMobileLayout() {
  */
 function mobileGoBack() {
     activeTarget = null;
+    _lastDateLabel = null;
     updateMobileLayout();
     renderContactsSidebar();
     
