@@ -22,8 +22,27 @@ function bindSocketEvents() {
         const exists = myContacts.find(c => c.id === data.userId);
         if (exists) {
             updateContactStatusUI(data.userId, data.status === 'online');
-            if (data.status === 'online' && !derivedSecrets[data.userId]) {
-                ensureSharedSecret(data.userId).then(success => { if(success && activeTarget && activeTarget.id === data.userId) enableChatUI(); });
+            if (data.status === 'online') {
+                if (!derivedSecrets[data.userId]) {
+                    ensureSharedSecret(data.userId).then(success => {
+                        if (success && activeTarget && activeTarget.id === data.userId) enableChatUI();
+                    });
+                }
+                // Aktif sohbetteki kişi çevrimiçi olduğunda PFS + KDF Ratchet için ECDHE el sıkışması başlat
+                if (activeTarget && activeTarget.id === data.userId && typeof hasRatchetSession === 'function' && !hasRatchetSession(data.userId) && typeof initiateEcdhHandshake === 'function') {
+                    setTimeout(() => {
+                        if (exists.isOnline && !hasRatchetSession(data.userId)) {
+                            initiateEcdhHandshake(data.userId);
+                        }
+                    }, 300);
+                }
+            } else if (data.status === 'offline') {
+                // Karşı taraf çevrimdışı olduğunda bellekteki geçici ratchet zincirini temizle
+                // (Çevrimdışı mesajlar statik ECDH anahtarı ile şifrelenmeye devam eder)
+                if (typeof clearRatchetState === 'function') {
+                    clearRatchetState(data.userId);
+                    renderContactsSidebarDebounced();
+                }
             }
         }
     });
@@ -91,15 +110,21 @@ function bindSocketEvents() {
                     if (activeTarget && activeTarget.id === data.senderId) updateChatHeaderUI();
                 }
             });
+        } else {
+            updateContactStatusUI(data.senderId, true);
         }
         try {
             const result = await handleEcdhOffer(data);
+            if (!result) return; // Glare durumunda kendi teklifimizin yanıtı beklenir
             derivedSecrets[data.senderId] = result.secret;
             contact.key = result.secret;
             contact.ecdhStatus = 'established';
             saveContactsToVault();
             renderContactsSidebarDebounced();
             safeEmit('ecdh_answer', result.answerData);
+            if (activeTarget && activeTarget.id === data.senderId) {
+                enableChatUI();
+            }
         } catch(e) {
             console.error('[!] ECDHE offer işleme hatası:', e);
         }
@@ -115,11 +140,13 @@ function bindSocketEvents() {
     socket.on('ecdh_answer', async (data) => {
         try {
             const secret = await handleEcdhAnswer(data);
+            if (!secret) return;
             derivedSecrets[data.senderId] = secret;
             let contact = myContacts.find(c => c.id === data.senderId);
             if (contact) {
                 contact.key = secret;
                 contact.ecdhStatus = 'established';
+                updateContactStatusUI(data.senderId, true);
                 saveContactsToVault();
                 renderContactsSidebarDebounced();
             }
@@ -200,12 +227,17 @@ function bindSocketEvents() {
         if (!data || !data.senderId) return;
         addContact(data.senderId, data.username);
         let contact = myContacts.find(c => c.id === data.senderId);
-        if (contact && data.avatar) {
-            contact.avatar = data.avatar;
+        if (contact) {
+            contact.isOnline = true;
+            if (data.avatar) contact.avatar = data.avatar;
             saveContactsToVault();
         }
         renderContactsSidebar();
-        ensureSharedSecret(data.senderId);
+        ensureSharedSecret(data.senderId).then(() => {
+            if (typeof hasRatchetSession === 'function' && !hasRatchetSession(data.senderId) && typeof initiateEcdhHandshake === 'function') {
+                initiateEcdhHandshake(data.senderId);
+            }
+        });
         safeEmit('respond_contact_request', { targetId: data.senderId, accepted: true });
         const name = data.username ? `${data.username} (${data.senderId})` : data.senderId;
         showToast(`${name} sizinle sohbet başlattı.`, 'info');
@@ -248,6 +280,11 @@ function bindSocketEvents() {
             renderContactsSidebarDebounced();
         }
 
+        // Statik yedek anahtarı yeniden hazırla
+        if (typeof ensureSharedSecret === 'function') {
+            ensureSharedSecret(peerId);
+        }
+
         // 3. Eğer şu an açık olan sohbet buysa başlığı ve arayüzü güncelle
         if (activeTarget && activeTarget.id === peerId) {
             activeTarget.key = null;
@@ -257,9 +294,13 @@ function bindSocketEvents() {
             showToast(`${name} sohbet oturumunu sıfırladı. Yeni mesajda anahtar yeniden anlaşılacak.`, 'info');
             playSound('destroy');
 
-            // Yeni bir el sıkışma başlatarak kanalı hazırla
+            // Karşı tarafın teklifi gelmezse yedek olarak yeni el sıkışma başlat
             if (typeof initiateEcdhHandshake === 'function' && activeTarget.isOnline) {
-                initiateEcdhHandshake(peerId);
+                setTimeout(() => {
+                    if (typeof hasRatchetSession === 'function' && !hasRatchetSession(peerId)) {
+                        initiateEcdhHandshake(peerId);
+                    }
+                }, 400);
             }
         }
     });

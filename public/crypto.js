@@ -43,7 +43,22 @@ let myPublicKeyJwk = null;
 let derivedSecrets = {};
 
 /**
- * Oturum bazlı geçici (ephemeral) anahtar çiftleri (targetUserId → { privateKey, publicKey, publicJwk }).
+ * Çevrimdışı mesajların ve geçmiş statik paketlerin ECDHE el sıkışması sonrasında da
+ * çözülebilmesi için saklanan statik kimlik ECDH sırları (targetUserId → hexSecret).
+ * @type {Object.<string, string>}
+ * @private
+ */
+let _staticSecrets = {};
+
+/**
+ * Sıra dışı (out-of-order) mesajlarda izin verilen maksimum atlama sayısı (DoS koruması).
+ * @constant {number}
+ * @private
+ */
+const MAX_SKIP = 100;
+
+/**
+ * Oturum bazlı geçici (ephemeral) anahtar çiftleri (targetUserId → { privateKey, publicKey, publicJwk, inFlight, createdAt }).
  * El sıkışma tamamlandıktan sonra privateKey bellekten silinir.
  * @type {Object.<string, Object>}
  * @private
@@ -324,6 +339,15 @@ async function decryptWithRatchet(base64Data, senderId, messageIndex) {
             messageKey = skipped[messageIndex];
             delete skipped[messageIndex];
         } else {
+            // Geçmiş/tekrarlanan indeks veya aşırı atlama (DoS) koruması:
+            // Alım zincirini bozmamak için zinciri ilerletmeden reddet
+            if (typeof messageIndex !== 'number' || messageIndex < state.recvCounter) {
+                return null;
+            }
+            if (messageIndex - state.recvCounter > MAX_SKIP) {
+                return null;
+            }
+
             // 2. Alım zincirini mesaj indeksine kadar ilerlet
             while (state.recvCounter < messageIndex) {
                 const { messageKey: skippedKey, nextChainKey } = await advanceChain(state.recvChainKey);
@@ -391,7 +415,9 @@ async function generateEphemeralKeyPair(targetId) {
     _ephemeralKeyPairs[targetId] = {
         privateKey: keyPair.privateKey,
         publicKey: keyPair.publicKey,
-        publicJwk: pubJwk
+        publicJwk: pubJwk,
+        inFlight: false,
+        createdAt: Date.now()
     };
     return pubJwk;
 }
@@ -408,7 +434,7 @@ async function generateEphemeralKeyPair(targetId) {
  */
 async function deriveEphemeralSecret(targetId, theirEphemeralPublicJwk) {
     const ephemeral = _ephemeralKeyPairs[targetId];
-    if (!ephemeral) throw new Error('Geçici anahtar bulunamadı: ' + targetId);
+    if (!ephemeral || !ephemeral.privateKey) throw new Error('Geçici anahtar bulunamadı: ' + targetId);
 
     const theirKey = await crypto.subtle.importKey('jwk', theirEphemeralPublicJwk, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
     const rawBits = await crypto.subtle.deriveBits({ name: 'ECDH', public: theirKey }, ephemeral.privateKey, 256);
@@ -416,6 +442,7 @@ async function deriveEphemeralSecret(targetId, theirEphemeralPublicJwk) {
     // [GÜVENLİK] Geçici özel anahtar artık gerekli değil — referansı kaldır
     // CryptoKey nesnesi GC tarafından toplanacak (JS'de doğrudan sıfırlanamaz)
     delete _ephemeralKeyPairs[targetId].privateKey;
+    _ephemeralKeyPairs[targetId].inFlight = false;
 
     // HKDF ile ham ECDH çıktısını güçlendir
     const sharedBytes = await hkdfDerive(new Uint8Array(rawBits), 'ECDHE-SharedSecret-v2');
@@ -551,6 +578,42 @@ async function deriveSharedSecret(theirPublicJwk) {
 }
 
 /**
+ * Belirtilen hedef için statik kimlik ECDH ortak sırrını döner (varsa).
+ * @function getStaticSecret
+ * @param {string} targetId - Hedef kullanıcı ID.
+ * @returns {string|null}
+ */
+function getStaticSecret(targetId) {
+    return _staticSecrets[targetId] || null;
+}
+
+/**
+ * Karşı tarafın kimlik açık anahtarının parmak izini kontrol eder (MITM tespiti) ve kaydeder.
+ * @async
+ * @function checkAndSaveFingerprint
+ * @param {string} targetId - Hedef kullanıcının ID'si.
+ * @param {JsonWebKey} publicKeyJwk - Karşı tarafın kimlik açık anahtarı.
+ * @returns {Promise<void>}
+ */
+async function checkAndSaveFingerprint(targetId, publicKeyJwk) {
+    if (!targetId || !publicKeyJwk || typeof currentUser === 'undefined' || !currentUser || typeof localStorage === 'undefined') return;
+    const fingerprint = await generateKeyFingerprint(publicKeyJwk);
+    if (!fingerprint) return;
+    const storageKey = 'cyber_fp_' + currentUser.userId + '_' + targetId;
+    const storedFp = localStorage.getItem(storageKey);
+
+    if (storedFp && storedFp !== fingerprint) {
+        // ⚠️ ANAHTAR DEĞİŞMİŞ — Kullanıcıyı uyar
+        console.warn(`[!] GÜVENLİK UYARISI: ${targetId} açık anahtarı değişmiş!`);
+        if (typeof showToast === 'function') {
+            showToast(`⚠️ ${targetId} açık anahtarı değişti! Olası MITM saldırısı. Güvenlik numaranızı doğrulayın.`, 'warning');
+        }
+    }
+    // Parmak izini kaydet/güncelle
+    localStorage.setItem(storageKey, fingerprint);
+}
+
+/**
  * Hedef kullanıcı ile paylaşılan bir simetrik anahtarın var olduğundan emin olur.
  * Bellekte yoksa sunucudan açık anahtar istenir, parmak izi kontrolü (MITM tespiti) yapılır
  * ve ortak anahtar türetilerek saklanır.
@@ -567,25 +630,17 @@ async function ensureSharedSecret(targetId) {
             if (res && res.success && res.publicKey) {
                 try {
                     // [GÜVENLİK FIX - SEC-05] Açık anahtar parmak izi kontrolü (MITM tespiti)
-                    const fingerprint = await generateKeyFingerprint(res.publicKey);
-                    const storedFp = localStorage.getItem('cyber_fp_' + currentUser.userId + '_' + targetId);
-                    
-                    if (storedFp && storedFp !== fingerprint) {
-                        // ⚠️ ANAHTAR DEĞİŞMİŞ — Kullanıcıyı uyar
-                        console.warn(`[!] GÜVENLİK UYARISI: ${targetId} açık anahtarı değişmiş!`);
-                        if (typeof showToast === 'function') {
-                            showToast(`⚠️ ${targetId} açık anahtarı değişti! Olası MITM saldırısı. Güvenlik numaranızı doğrulayın.`, 'warning');
-                        }
-                    }
-                    // Parmak izini kaydet/güncelle
-                    localStorage.setItem('cyber_fp_' + currentUser.userId + '_' + targetId, fingerprint);
+                    await checkAndSaveFingerprint(targetId, res.publicKey);
                     
                     const secret = await deriveSharedSecret(res.publicKey);
-                    derivedSecrets[targetId] = secret;
+                    _staticSecrets[targetId] = secret;
+                    if (!derivedSecrets[targetId]) {
+                        derivedSecrets[targetId] = secret;
+                    }
                     
                     let contact = myContacts.find(c => c.id === targetId);
                     if (contact) {
-                        contact.key = secret;
+                        contact.key = derivedSecrets[targetId];
                         contact.ecdhStatus = 'established';
                         if (res.avatar) contact.avatar = res.avatar;
                         saveContactsToVault();
@@ -611,8 +666,17 @@ async function ensureSharedSecret(targetId) {
 async function initiateEcdhHandshake(targetId) {
     if (!myPublicKeyJwk || !socket) return;
 
+    // Kısa süre içinde aynı hedefe zaten bekleyen bir teklif gönderildiyse tekrar gönderme (yarış durumunu önler)
+    const existing = _ephemeralKeyPairs[targetId];
+    if (existing && existing.inFlight && existing.createdAt && (Date.now() - existing.createdAt < 2500)) {
+        return;
+    }
+
     // Oturum bazlı geçici anahtar çifti üret
     const ephemeralPubJwk = await generateEphemeralKeyPair(targetId);
+    if (_ephemeralKeyPairs[targetId]) {
+        _ephemeralKeyPairs[targetId].inFlight = true;
+    }
 
     safeEmit('ecdh_offer', { 
         targetId: targetId, 
@@ -628,12 +692,29 @@ async function initiateEcdhHandshake(targetId) {
  * @async
  * @function handleEcdhOffer
  * @param {Object} data - Teklif verisi ({ senderId, publicKeyJwk, ephemeralPublicKeyJwk }).
- * @returns {Promise<{ answerData: Object, secret: string }>} Yanıt verisi ve türetilmiş sır.
+ * @returns {Promise<{ answerData: Object, secret: string }|null>} Yanıt verisi ve türetilmiş sır (Glare durumunda null).
  */
 async function handleEcdhOffer(data) {
+    if (data && data.publicKeyJwk) {
+        await checkAndSaveFingerprint(data.senderId, data.publicKeyJwk);
+        if (myEcdhKeyPair && !_staticSecrets[data.senderId]) {
+            try {
+                _staticSecrets[data.senderId] = await deriveSharedSecret(data.publicKeyJwk);
+            } catch (_) {}
+        }
+    }
+
     const hasEphemeral = !!data.ephemeralPublicKeyJwk;
 
     if (hasEphemeral) {
+        // [GLARE KORUMASI] İki taraf aynı anda birbirine ecdh_offer gönderdiyse deterministik öncelik:
+        // Küçük ID'li düğüm (controlling peer) kendi teklifini korur ve karşı tarafın yanıtını bekler.
+        const existingEph = _ephemeralKeyPairs[data.senderId];
+        const isGlare = existingEph && existingEph.inFlight && existingEph.createdAt && (Date.now() - existingEph.createdAt < 5000);
+        if (isGlare && typeof currentUser !== 'undefined' && currentUser && currentUser.userId && currentUser.userId < data.senderId) {
+            return null;
+        }
+
         // === YENİ ECDHE PROTOKOLÜ ===
         const myEphPubJwk = await generateEphemeralKeyPair(data.senderId);
         const sharedBytes = await deriveEphemeralSecret(data.senderId, data.ephemeralPublicKeyJwk);
@@ -659,6 +740,7 @@ async function handleEcdhOffer(data) {
     } else {
         // === ESKİ PROTOKOL (Geriye Uyumluluk) ===
         const secret = await deriveSharedSecret(data.publicKeyJwk);
+        _staticSecrets[data.senderId] = secret;
         return {
             answerData: {
                 targetId: data.senderId,
@@ -675,9 +757,18 @@ async function handleEcdhOffer(data) {
  * @async
  * @function handleEcdhAnswer
  * @param {Object} data - Yanıt verisi ({ senderId, publicKeyJwk, ephemeralPublicKeyJwk }).
- * @returns {Promise<string>} Türetilmiş ortak sır (hex).
+ * @returns {Promise<string|null>} Türetilmiş ortak sır (hex).
  */
 async function handleEcdhAnswer(data) {
+    if (data && data.publicKeyJwk) {
+        await checkAndSaveFingerprint(data.senderId, data.publicKeyJwk);
+        if (myEcdhKeyPair && !_staticSecrets[data.senderId]) {
+            try {
+                _staticSecrets[data.senderId] = await deriveSharedSecret(data.publicKeyJwk);
+            } catch (_) {}
+        }
+    }
+
     const hasEphemeral = !!data.ephemeralPublicKeyJwk;
 
     if (hasEphemeral && _ephemeralKeyPairs[data.senderId]) {
@@ -692,9 +783,14 @@ async function handleEcdhAnswer(data) {
         
         wipeEphemeralKey(data.senderId);
         return hexSecret;
+    } else if (hasEphemeral && hasRatchetSession(data.senderId)) {
+        // Geçici anahtar zaten tüketilmiş ve aktif ratchet oturumu kurulmuşsa mevcut sırrı koru
+        return derivedSecrets[data.senderId] || _staticSecrets[data.senderId] || null;
     } else {
         // === ESKİ PROTOKOL ===
-        return await deriveSharedSecret(data.publicKeyJwk);
+        const secret = await deriveSharedSecret(data.publicKeyJwk);
+        _staticSecrets[data.senderId] = secret;
+        return secret;
     }
 }
 
@@ -730,8 +826,32 @@ function loadSecretsFromVault() {
     // [GÜVENLİK] sessionStorage'dan anahtar yükleme kaldırıldı.
     // Sırlar her oturumda ECDHE el sıkışması ile yeniden türetilir (PFS).
     derivedSecrets = {};
+    _staticSecrets = {};
     if (currentUser) {
         try { sessionStorage.removeItem('derived_secrets_' + currentUser.userId); } catch(_) {}
+    }
+}
+
+/**
+ * Karşı taraf çevrimdışı olduğunda yalnızca geçici ECDHE ve KDF Ratchet durumunu temizler,
+ * statik kimlik ECDH sırrını korur (çevrimdışı mesajların statik anahtarla şifrelenebilmesi için).
+ * @function clearRatchetState
+ * @param {string} targetId - Hedef kullanıcı ID.
+ * @returns {void}
+ */
+function clearRatchetState(targetId) {
+    if (_ratchetState[targetId]) {
+        if (_ratchetState[targetId].sendChainKey) _ratchetState[targetId].sendChainKey.fill(0);
+        if (_ratchetState[targetId].recvChainKey) _ratchetState[targetId].recvChainKey.fill(0);
+        delete _ratchetState[targetId];
+    }
+    if (_skippedMessageKeys[targetId]) {
+        Object.values(_skippedMessageKeys[targetId]).forEach(key => { if (key && key.fill) key.fill(0); });
+        delete _skippedMessageKeys[targetId];
+    }
+    wipeEphemeralKey(targetId);
+    if (_staticSecrets[targetId]) {
+        derivedSecrets[targetId] = _staticSecrets[targetId];
     }
 }
 
@@ -741,9 +861,12 @@ function loadSecretsFromVault() {
  * @param {string} targetId - Temizlenecek hedef kullanıcı ID.
  */
 function wipeTargetCryptoState(targetId) {
-    // derivedSecrets temizle
+    // derivedSecrets ve _staticSecrets temizle
     if (derivedSecrets[targetId]) {
         delete derivedSecrets[targetId];
+    }
+    if (_staticSecrets[targetId]) {
+        delete _staticSecrets[targetId];
     }
     // Ratchet zincir anahtarlarını sıfırla
     if (_ratchetState[targetId]) {
@@ -788,6 +911,7 @@ function wipeAllCryptoState() {
 
     // Modül değişkenlerini sıfırla
     derivedSecrets = {};
+    _staticSecrets = {};
     myEcdhKeyPair = null;
     myPublicKeyJwk = null;
 }
@@ -914,8 +1038,10 @@ if (typeof module !== 'undefined' && module.exports) {
         encryptWithRatchet,
         decryptWithRatchet,
         hasRatchetSession,
+        clearRatchetState,
         // Kimlik anahtarı
         deriveSharedSecret,
+        getStaticSecret,
         initEcdhKeys,
         ensureSharedSecret,
         initiateEcdhHandshake,
@@ -929,6 +1055,7 @@ if (typeof module !== 'undefined' && module.exports) {
         wipeAllCryptoState,
         // Parmak izi & güvenlik numarası
         generateKeyFingerprint,
+        checkAndSaveFingerprint,
         generateSafetyNumber,
         verifyContactFingerprint,
         acceptNewFingerprint,
