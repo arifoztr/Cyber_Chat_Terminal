@@ -945,7 +945,8 @@ function renderContactsSidebar() {
     filtered.forEach(contact => {
         const isActive = activeTarget && activeTarget.id === contact.id;
         const unreadCount = unreadCounts[contact.id] || 0;
-        const hasSecret = !!derivedSecrets[contact.id];
+        const hasRatchet = typeof hasRatchetSession === 'function' && hasRatchetSession(contact.id);
+        const hasSecret = hasRatchet || !!derivedSecrets[contact.id];
 
         const item = document.createElement('div');
         item.className = `group flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all duration-200 border relative ${
@@ -997,7 +998,10 @@ function renderContactsSidebar() {
 
         const e2eeBadge = document.createElement('span');
         e2eeBadge.className = `text-[10px] font-medium shrink-0 ${hasSecret ? 'text-[--success]' : 'text-[--warning]'}`;
-        e2eeBadge.textContent = hasSecret ? '🔒 E2EE' : '⏳ Bekliyor';
+        e2eeBadge.textContent = hasRatchet ? '🛡️ PFS+E2EE' : (hasSecret ? '🔒 E2EE' : '⏳ Bekliyor');
+        e2eeBadge.title = hasRatchet
+            ? 'ECDHE + KDF Ratchet aktif (İleriye Dönük Gizlilik / PFS)'
+            : (hasSecret ? 'Statik ECDH uçtan uca şifreleme aktif' : 'Anahtar anlaşması bekleniyor');
 
         topRow.appendChild(nameSpan);
         topRow.appendChild(e2eeBadge);
@@ -1209,14 +1213,35 @@ async function selectTarget(targetId) {
         });
     }
 
-    const hasSecret = !!derivedSecrets[selected.id];
-    if (hasSecret) enableChatUI(); 
-    else {
-        disableChatUI(); const success = await ensureSharedSecret(selected.id);
-        if (success) { if (activeTarget && activeTarget.id === selected.id) { enableChatUI(); showToast(`Şifreli kanal kuruldu!`); } renderContactsSidebar(); } 
-        else setTimeout(() => initiateEcdhHandshake(selected.id), 300);
+    const hasSecret = !!derivedSecrets[selected.id] || (typeof hasRatchetSession === 'function' && hasRatchetSession(selected.id));
+    if (hasSecret) {
+        enableChatUI();
+        if (selected.isOnline && typeof hasRatchetSession === 'function' && !hasRatchetSession(selected.id) && typeof initiateEcdhHandshake === 'function') {
+            initiateEcdhHandshake(selected.id);
+        }
+    } else {
+        disableChatUI();
+        const success = await ensureSharedSecret(selected.id);
+        if (success) {
+            if (activeTarget && activeTarget.id === selected.id) {
+                enableChatUI();
+                showToast(`Şifreli kanal kuruldu!`);
+            }
+            renderContactsSidebar();
+            if (selected.isOnline && typeof hasRatchetSession === 'function' && !hasRatchetSession(selected.id) && typeof initiateEcdhHandshake === 'function') {
+                initiateEcdhHandshake(selected.id);
+            }
+        } else if (typeof initiateEcdhHandshake === 'function') {
+            setTimeout(() => initiateEcdhHandshake(selected.id), 300);
+        }
     }
-    safeEmit('check_node_status', activeTarget.id, (res) => { updateContactStatusUI(res.userId, res.isOnline); });
+    safeEmit('check_node_status', activeTarget.id, (res) => {
+        if (!res) return;
+        updateContactStatusUI(res.userId, res.isOnline);
+        if (res.isOnline && typeof hasRatchetSession === 'function' && !hasRatchetSession(res.userId) && typeof initiateEcdhHandshake === 'function') {
+            initiateEcdhHandshake(res.userId);
+        }
+    });
     
     const logBox = document.getElementById('chatLog'); logBox.innerHTML = ''; window.receivedImages = [];
     _lastDateLabel = null;
@@ -1299,7 +1324,12 @@ function clearActiveChat() {
         showToast("Sohbet geçmişi ve oturum anahtarları sıfırlandı.", 'success');
         playSound('destroy');
 
-        // Yeni el sıkışma için hazırla
+        // Statik yedek anahtarı ve çevrimiçiyse yeni ECDHE el sıkışmasını hazırla
+        if (typeof ensureSharedSecret === 'function') {
+            ensureSharedSecret(targetId).then(success => {
+                if (success && activeTarget && activeTarget.id === targetId) enableChatUI();
+            });
+        }
         if (typeof initiateEcdhHandshake === 'function' && activeTarget.isOnline) {
             initiateEcdhHandshake(targetId);
         }
@@ -1350,7 +1380,14 @@ function addContact(targetId, username = null) {
         const display = username ? `${username} (${targetId})` : targetId;
         showToast(`${display} kişi listesine eklendi.`, 'success');
         safeEmit('join_status_rooms', [targetId]); 
-        safeEmit('check_node_status', targetId, (res) => { if (res) updateContactStatusUI(res.userId, res.isOnline); });
+        safeEmit('check_node_status', targetId, (res) => {
+            if (res) {
+                updateContactStatusUI(res.userId, res.isOnline);
+                if (res.isOnline && typeof hasRatchetSession === 'function' && !hasRatchetSession(targetId) && typeof initiateEcdhHandshake === 'function') {
+                    initiateEcdhHandshake(targetId);
+                }
+            }
+        });
         safeEmit('get_profiles', [targetId], (res) => {
             if (res && res.profiles && res.profiles[targetId]) {
                 const c = myContacts.find(x => x.id === targetId);
@@ -1576,8 +1613,9 @@ function handleContactRequestResponse(accepted) {
 function showContactRequestResponse(data) {
     if (data.accepted) {
         const c = myContacts.find(x => x.id === data.senderId);
-        if (c && data.username) {
-            c.username = data.username;
+        if (c) {
+            c.isOnline = true;
+            if (data.username) c.username = data.username;
             if (data.avatar) c.avatar = data.avatar;
             saveContactsToVault();
             renderContactsSidebarDebounced();
@@ -1586,7 +1624,11 @@ function showContactRequestResponse(data) {
         const name = data.username ? `${data.username} (${data.senderId})` : data.senderId;
         showToast(`${name} bağlantı isteğinizi kabul etti!`, 'success');
         playSound('success');
-        ensureSharedSecret(data.senderId);
+        ensureSharedSecret(data.senderId).then(() => {
+            if (typeof hasRatchetSession === 'function' && !hasRatchetSession(data.senderId) && typeof initiateEcdhHandshake === 'function') {
+                initiateEcdhHandshake(data.senderId);
+            }
+        });
     } else {
         showToast(`${data.senderId} bağlantı isteğinizi reddetti.`, 'error');
         playSound('destroy');
@@ -1642,7 +1684,6 @@ async function sendSecurePacket() {
         return;
     }
     
-    
     activeTarget.key = sharedSecret; playSound('type');
     
     const msgInput = document.getElementById('messageInput');
@@ -1665,9 +1706,14 @@ async function sendSecurePacket() {
                 if (result) { encryptedFile = result.ciphertext; if (msgIndex === null) msgIndex = result.messageIndex; }
             }
         } else {
-            // Geriye uyumluluk: Eski statik anahtar ile şifreleme
-            if (rawText) encryptedText = await encryptGCM(rawText, activeTarget.key);
-            if (hasFile) encryptedFile = await encryptGCM(activeFileBase64, activeTarget.key);
+            // Çevrimdışı veya henüz ratchet kurulmamışsa statik anahtar ile şifrele
+            const fallbackKey = (typeof getStaticSecret === 'function' && getStaticSecret(activeTarget.id)) || activeTarget.key;
+            if (rawText) encryptedText = await encryptGCM(rawText, fallbackKey);
+            if (hasFile) encryptedFile = await encryptGCM(activeFileBase64, fallbackKey);
+            // Karşı taraf çevrimiçiyse arka planda ECDHE + KDF Ratchet el sıkışmasını tetikle
+            if (activeTarget.isOnline && typeof initiateEcdhHandshake === 'function') {
+                initiateEcdhHandshake(activeTarget.id);
+            }
         }
     } catch (e) { playSound('error'); showToast("Şifreleme hatası oluştu.", 'error'); return; }
 
@@ -1776,6 +1822,18 @@ async function decryptPacketForDisplay(packet, contactInfo) {
         cryptoKey = derivedSecrets[peerId] || (contactInfo ? contactInfo.key : null);
     }
 
+    // Statik veya yedek anahtarlarla AES-GCM çözme yardımcısı (ECDHE sonrası çevrimdışı/eski paket uyumluluğu)
+    const tryStaticDecrypt = async (payload) => {
+        const staticKey = (typeof getStaticSecret === 'function') ? getStaticSecret(peerId) : null;
+        const candidates = [staticKey, cryptoKey].filter((k, idx, arr) => k && typeof k === 'string' && arr.indexOf(k) === idx);
+        for (const candidateKey of candidates) {
+            try {
+                return await decryptGCM(payload, candidateKey);
+            } catch (_) {}
+        }
+        return null;
+    };
+
     if (!cryptoKey || cryptoKey.trim() === '') { 
         hasError = 'no_key'; 
     } else {
@@ -1796,10 +1854,10 @@ async function decryptPacketForDisplay(packet, contactInfo) {
                 // Ratchet başarısız olduysa veya null döndüyse statik anahtar ile fallback dene
                 if ((packet.textPayload && !decryptedText) || (packet.filePayload && !decryptedFile)) {
                     if (packet.textPayload && !decryptedText) {
-                        decryptedText = await decryptGCM(packet.textPayload, cryptoKey).catch(() => null);
+                        decryptedText = await tryStaticDecrypt(packet.textPayload);
                     }
                     if (packet.filePayload && !decryptedFile) {
-                        decryptedFile = await decryptGCM(packet.filePayload, cryptoKey).catch(() => null);
+                        decryptedFile = await tryStaticDecrypt(packet.filePayload);
                     }
                 }
             } else if (!isMine && packet.messageIndex !== null && packet.messageIndex !== undefined && !hasRatchetSession(peerId)) {
@@ -1812,21 +1870,21 @@ async function decryptPacketForDisplay(packet, contactInfo) {
                     safeEmit('reset_chat_session', { targetId: peerId });
                 }
             } else {
-                // Statik anahtar ile deşifreleme
+                // Statik anahtar ile deşifreleme (önce statik kimlik sırrı, sonra aktif anahtar denenir)
                 if (packet.textPayload) { 
-                    decryptedText = await decryptGCM(packet.textPayload, cryptoKey); 
+                    decryptedText = await tryStaticDecrypt(packet.textPayload);
                 }
                 if (packet.filePayload) { 
-                    decryptedFile = await decryptGCM(packet.filePayload, cryptoKey); 
+                    decryptedFile = await tryStaticDecrypt(packet.filePayload);
                 }
             }
 
             if (packet.textPayload && decryptedText === null) {
-                hasError = true;
+                hasError = hasError || true;
             }
             if (packet.filePayload) {
                 if (!decryptedFile || (!decryptedFile.startsWith("data:image") && !decryptedFile.startsWith("data:application/pdf"))) {
-                    hasError = true;
+                    hasError = hasError || true;
                 }
             }
 
@@ -1837,7 +1895,7 @@ async function decryptPacketForDisplay(packet, contactInfo) {
                 savePacketToVault(peerId, packet).catch(() => {});
             }
         } catch (e) { 
-            hasError = true; 
+            hasError = hasError || true; 
         }
     }
 

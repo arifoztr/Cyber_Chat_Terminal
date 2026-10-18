@@ -708,6 +708,100 @@ describe('Crypto & E2EE Unit Tests', () => {
             expect(cryptoModule.getMyPublicKeyJwk()).toBeNull();
             expect(cryptoModule.getMyEcdhKeyPair()).toBeNull();
         });
+
+        it('Ratchet security guards: blocks replayed/old messageIndex and excessive MAX_SKIP without corrupting chain', async () => {
+            const sharedSecretBytes = new Uint8Array(32).fill(21);
+
+            globalThis.currentUser = { userId: 'AGN-ALICE' };
+            await cryptoModule.initRatchetChain('AGN-BOB', new Uint8Array(sharedSecretBytes));
+            const enc0 = await cryptoModule.encryptWithRatchet('Msg 0', 'AGN-BOB');
+            const enc1 = await cryptoModule.encryptWithRatchet('Msg 1', 'AGN-BOB');
+
+            globalThis.currentUser = { userId: 'AGN-BOB' };
+            await cryptoModule.initRatchetChain('AGN-ALICE', new Uint8Array(sharedSecretBytes));
+
+            // Decrypt Msg 0 normally (advances recvCounter to 1)
+            const dec0 = await cryptoModule.decryptWithRatchet(enc0.ciphertext, 'AGN-ALICE', 0);
+            expect(dec0).toBe('Msg 0');
+
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+            // Replay Msg 0 (messageIndex 0 < recvCounter 1) -> returns null without advancing chain
+            const replayDec = await cryptoModule.decryptWithRatchet(enc0.ciphertext, 'AGN-ALICE', 0);
+            expect(replayDec).toBeNull();
+
+            // Excessive skip (messageIndex 500 - recvCounter 1 > MAX_SKIP 100) -> returns null without advancing chain
+            const skipDosDec = await cryptoModule.decryptWithRatchet(enc1.ciphertext, 'AGN-ALICE', 500);
+            expect(skipDosDec).toBeNull();
+
+            warnSpy.mockRestore();
+
+            // Verify chain is still intact and can decrypt Msg 1 (messageIndex 1)
+            const dec1 = await cryptoModule.decryptWithRatchet(enc1.ciphertext, 'AGN-ALICE', 1);
+            expect(dec1).toBe('Msg 1');
+        });
+
+        it('Handshake Glare resolution and in-flight offer deduplication', async () => {
+            cryptoModule.setMyPublicKeyJwk(aliceJwk);
+            cryptoModule.setMyEcdhKeyPair(alicePair);
+            globalThis.socket = {};
+            const emittedOffers = [];
+            globalThis.safeEmit = (event, data) => { emittedOffers.push({ event, data }); };
+
+            // 1. In-flight deduplication: calling initiateEcdhHandshake twice rapidly emits only once
+            await cryptoModule.initiateEcdhHandshake('AGN-BOB');
+            await cryptoModule.initiateEcdhHandshake('AGN-BOB');
+            expect(emittedOffers.length).toBe(1);
+
+            // 2. Simultaneous offer (Glare):
+            // Both Alice ('AGN-ALICE') and Bob ('AGN-BOB') have in-flight offers to each other.
+            // Alice has smaller ID ('AGN-ALICE' < 'AGN-BOB'), so Alice ignores Bob's offer (returns null).
+            const bobEph = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+            const bobEphJwk = await crypto.subtle.exportKey('jwk', bobEph.publicKey);
+
+            globalThis.currentUser = { userId: 'AGN-ALICE' };
+            const aliceGlareResp = await cryptoModule.handleEcdhOffer({
+                senderId: 'AGN-BOB',
+                publicKeyJwk: bobJwk,
+                ephemeralPublicKeyJwk: bobEphJwk
+            });
+            expect(aliceGlareResp).toBeNull();
+
+            // Bob ('AGN-BOB' > 'AGN-ALICE') has an in-flight offer to Alice, but yields to Alice's offer
+            globalThis.currentUser = { userId: 'AGN-BOB' };
+            cryptoModule.setMyPublicKeyJwk(bobJwk);
+            cryptoModule.setMyEcdhKeyPair(bobPair);
+            await cryptoModule.initiateEcdhHandshake('AGN-ALICE');
+
+            const bobGlareResp = await cryptoModule.handleEcdhOffer(emittedOffers[0].data);
+            expect(bobGlareResp).not.toBeNull();
+            expect(bobGlareResp.answerData.ephemeralPublicKeyJwk).toBeDefined();
+        });
+
+        it('clearRatchetState and getStaticSecret: preserves static secret for offline messages when ratchet is cleared', async () => {
+            globalThis.currentUser = { userId: 'AGN-ALICE' };
+            cryptoModule.setMyPublicKeyJwk(aliceJwk);
+            cryptoModule.setMyEcdhKeyPair(alicePair);
+
+            // Establish static secret first via legacy/static offer
+            const staticResp = await cryptoModule.handleEcdhAnswer({
+                senderId: 'AGN-BOB',
+                publicKeyJwk: bobJwk
+            });
+            expect(cryptoModule.getStaticSecret('AGN-BOB')).toBe(staticResp);
+
+            // Upgrade to ephemeral ratchet session
+            const ephSecretBytes = new Uint8Array(32).fill(77);
+            await cryptoModule.initRatchetChain('AGN-BOB', ephSecretBytes);
+            cryptoModule.getDerivedSecrets()['AGN-BOB'] = 'ephemeral_hex_secret';
+            expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(true);
+
+            // Peer goes offline -> clearRatchetState clears ratchet but restores static secret
+            cryptoModule.clearRatchetState('AGN-BOB');
+            expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(false);
+            expect(cryptoModule.getStaticSecret('AGN-BOB')).toBe(staticResp);
+            expect(cryptoModule.getDerivedSecrets()['AGN-BOB']).toBe(staticResp);
+        });
     });
 });
 
