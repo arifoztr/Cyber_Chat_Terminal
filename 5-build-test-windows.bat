@@ -1,13 +1,24 @@
 @echo off
-setlocal
+setlocal enabledelayedexpansion
 
-title Cyber Chat Terminal - Unit Test & Coverage Runner
+title Cyber Chat Terminal - [5] Unit Test ^& Coverage Runner
+cd /d "%~dp0"
+
 echo ======================================================================
-echo  CYBER CHAT TERMINAL - UNIT TESTLER & KAPSAM (COVERAGE) RAPORU
+echo  [5] CYBER CHAT TERMINAL - UNIT TESTLER ^& KAPSAM (COVERAGE) RAPORU
 echo ======================================================================
 echo.
 
-cd /d "%~dp0"
+if not exist "node_modules\" (
+    echo [*] node_modules bulunamadi, bagimliliklar yukleniyor...
+    call npm.cmd install
+)
+
+if /i "%~1"=="--watch" (
+    echo [+] Canli test izleme modu (vitest watch) baslatiliyor...
+    call npm.cmd run test:watch
+    exit /b 0
+)
 
 echo [+] Testler calistiriliyor ve v8 Kapsam Analizi yapiliyor...
 echo.
@@ -31,7 +42,10 @@ echo [+] HTML Kapsam Raporu hazirlandi: coverage\index.html
 echo ======================================================================
 echo.
 
-set /p OPEN_BROWSER="HTML Kapsam Raporunu tarayicida acmak ister misiniz? (E/H) [Varsayilan: E]: "
+if /i "%~1"=="--no-pause" exit /b 0
+
+set "OPEN_BROWSER=E"
+set /p "OPEN_BROWSER=HTML Kapsam Raporunu tarayicida acmak ister misiniz? (E/H) [Varsayilan: E]: "
 if /i "%OPEN_BROWSER%"=="H" goto son
 if /i "%OPEN_BROWSER%"=="N" goto son
 

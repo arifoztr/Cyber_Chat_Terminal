@@ -111,11 +111,24 @@ Sistem, **Mükemmel İleriye Dönük Gizlilik (Perfect Forward Secrecy - PFS)** 
 │   ├── PROGRESS.md                        # Faz durumu ve sürüm yol haritası
 │   ├── AGENTS.md                          # AI asistanı ve geliştirici standartları kılavuzu
 │   └── api/                               # JSDoc tarafından derlenen HTML API dökümantasyonu
+├── 1-install-windows-environment.bat      # [1] Windows Node.js, .env ve bağımlılık kurulum betiği
+├── 1-install-wsl-environment.sh           # [1] Linux/WSL ortam ve bağımlılık kurulum betiği
+├── 2-start-dev-windows.bat                # [2] Windows sunucu ve masaüstü geliştirici başlatıcısı
+├── 2-start-dev-linux.sh                   # [2] Linux/WSL sunucu ve masaüstü geliştirici başlatıcısı
+├── 3-format-code.bat                      # [3] Windows JS sözdizimi doğrulama ve Prettier formatlama
+├── 3-format-code.sh                       # [3] Linux/WSL JS sözdizimi doğrulama ve Prettier formatlama
+├── 4-build-doc-windows.bat                # [4] Windows JSDoc HTML API dokümantasyon derleyicisi
+├── 4-build-doc-linux.sh                   # [4] Linux/WSL JSDoc HTML API dokümantasyon derleyicisi
+├── 5-build-test-windows.bat               # [5] Windows birim testleri ve v8 kapsam (coverage) raporu
+├── 5-build-test-linux.sh                  # [5] Linux/WSL birim testleri ve v8 kapsam (coverage) raporu
+├── 6-build-app-windows.bat                # [6] Windows .exe (Setup + Portable) masaüstü derleyicisi
+├── 6-build-app-linux.sh                   # [6] Linux (.deb/.AppImage) ve macOS (.dmg) derleyicisi
+├── 7-clean-project.bat                    # [7] Windows derleme çıktıları ve geçici dosya temizleyici
+├── 7-clean-project.sh                     # [7] Linux/WSL derleme çıktıları ve geçici dosya temizleyici
 ├── jsdoc.json                             # JSDoc yapılandırma dosyası
 ├── Dockerfile                             # Konteynerize dağıtım dosyası
 ├── electron-builder.json                  # Çoklu platform masaüstü paketleme yapılandırması
 ├── vitest.config.mjs                      # Test ortamı ve v8 coverage yapılandırması
-├── run_tests.bat                          # Windows için tek tıkla test ve rapor çalıştırma betiği
 ├── wrangler.toml                          # Cloudflare Pages yapılandırması
 ├── .env.example                           # Ortam değişkenleri şablonu
 ├── package.json                           # Proje bağımlılıkları ve npm betikleri
