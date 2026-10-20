@@ -105,7 +105,9 @@ function hexToBytes(hex) {
  * @returns {string} Onaltılık dize.
  */
 function bytesToHex(bytes) {
-    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
 }
 
 /**
@@ -118,7 +120,10 @@ function bytesToHex(bytes) {
 async function getAesGcmKey(hexSecret) {
     if (_aesKeyCache[hexSecret]) return _aesKeyCache[hexSecret];
     const rawKey = hexToBytes(hexSecret);
-    const key = await crypto.subtle.importKey("raw", rawKey, "AES-GCM", false, ["encrypt", "decrypt"]);
+    const key = await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, [
+        'encrypt',
+        'decrypt',
+    ]);
     _aesKeyCache[hexSecret] = key;
     return key;
 }
@@ -131,7 +136,10 @@ async function getAesGcmKey(hexSecret) {
  * @returns {Promise<CryptoKey>} AES-GCM CryptoKey nesnesi.
  */
 async function getAesGcmKeyFromBytes(rawKeyBytes) {
-    return await crypto.subtle.importKey("raw", rawKeyBytes, "AES-GCM", false, ["encrypt", "decrypt"]);
+    return await crypto.subtle.importKey('raw', rawKeyBytes, 'AES-GCM', false, [
+        'encrypt',
+        'decrypt',
+    ]);
 }
 
 /**
@@ -147,8 +155,13 @@ function bufferToBase64(buffer) {
     for (let i = 0; i < bytes.length; i += 8192) {
         chunks.push(String.fromCharCode(...bytes.subarray(i, i + 8192)));
     }
-    const btoaFn = (typeof window !== 'undefined' && window.btoa) ? window.btoa : (typeof btoa !== 'undefined' ? btoa : (b => Buffer.from(b, 'binary').toString('base64')));
-    return btoaFn(chunks.join('')); 
+    const btoaFn =
+        typeof window !== 'undefined' && window.btoa
+            ? window.btoa
+            : typeof btoa !== 'undefined'
+              ? btoa
+              : (b) => Buffer.from(b, 'binary').toString('base64');
+    return btoaFn(chunks.join(''));
 }
 
 /**
@@ -158,9 +171,14 @@ function bufferToBase64(buffer) {
  * @returns {Uint8Array} Çözülen bayt dizisi.
  */
 function base64ToBuffer(base64) {
-    const atobFn = (typeof window !== 'undefined' && window.atob) ? window.atob : (typeof atob !== 'undefined' ? atob : (b => Buffer.from(b, 'base64').toString('binary')));
+    const atobFn =
+        typeof window !== 'undefined' && window.atob
+            ? window.atob
+            : typeof atob !== 'undefined'
+              ? atob
+              : (b) => Buffer.from(b, 'base64').toString('binary');
     const raw = atobFn(base64);
-    return Uint8Array.from(raw, c => c.charCodeAt(0));
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 }
 
 // ============================================================
@@ -180,12 +198,16 @@ async function encryptGCM(text, hexSecret) {
     const key = await getAesGcmKey(hexSecret);
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encoded = new TextEncoder().encode(text);
-    const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, encoded);
-    
+    const ciphertext = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        encoded,
+    );
+
     const combined = new Uint8Array(iv.length + ciphertext.byteLength);
     combined.set(iv, 0);
     combined.set(new Uint8Array(ciphertext), iv.length);
-    
+
     return bufferToBase64(combined);
 }
 
@@ -204,8 +226,12 @@ async function decryptGCM(base64Data, hexSecret) {
     const rawData = base64ToBuffer(base64Data);
     const iv = rawData.slice(0, 12);
     const data = rawData.slice(12);
-    
-    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, key, data);
+
+    const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        data,
+    );
     return new TextDecoder().decode(decrypted);
 }
 
@@ -223,14 +249,21 @@ async function decryptGCM(base64Data, hexSecret) {
  * @param {number} [lengthBits=256] - Türetilecek anahtar uzunluğu (bit).
  * @returns {Promise<Uint8Array>} Türetilmiş anahtar baytları.
  */
-async function hkdfDerive(ikm, info, salt = 'CyberChat-E2EE-v2', lengthBits = 256) {
-    const hkdfKey = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
+async function hkdfDerive(
+    ikm,
+    info,
+    salt = 'CyberChat-E2EE-v2',
+    lengthBits = 256,
+) {
+    const hkdfKey = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, [
+        'deriveBits',
+    ]);
     const saltBytes = new TextEncoder().encode(salt);
     const infoBytes = new TextEncoder().encode(info);
     const derivedBits = await crypto.subtle.deriveBits(
         { name: 'HKDF', hash: 'SHA-256', salt: saltBytes, info: infoBytes },
         hkdfKey,
-        lengthBits
+        lengthBits,
     );
     return new Uint8Array(derivedBits);
 }
@@ -249,16 +282,16 @@ async function initRatchetChain(targetId, sharedSecretBytes) {
     const myId = currentUser.userId;
     // Deterministik sıralama: Her iki tarafta da aynı "chainA" ve "chainB" üretilir
     const [first, second] = [myId, targetId].sort();
-    
+
     const rootKey = await hkdfDerive(sharedSecretBytes, 'ratchet-root-key');
     const chainKeyA = await hkdfDerive(rootKey, 'chain-' + first);
     const chainKeyB = await hkdfDerive(rootKey, 'chain-' + second);
 
     _ratchetState[targetId] = {
-        sendChainKey: (myId === first) ? chainKeyA : chainKeyB,
-        recvChainKey: (myId === first) ? chainKeyB : chainKeyA,
+        sendChainKey: myId === first ? chainKeyA : chainKeyB,
+        recvChainKey: myId === first ? chainKeyB : chainKeyA,
         sendCounter: 0,
-        recvCounter: 0
+        recvCounter: 0,
     };
     _skippedMessageKeys[targetId] = {};
 
@@ -303,7 +336,11 @@ async function encryptWithRatchet(text, targetId) {
         const aesKey = await getAesGcmKeyFromBytes(messageKey);
         const iv = crypto.getRandomValues(new Uint8Array(12));
         const encoded = new TextEncoder().encode(text);
-        const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, aesKey, encoded);
+        const ciphertext = await crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv: iv },
+            aesKey,
+            encoded,
+        );
 
         const combined = new Uint8Array(iv.length + ciphertext.byteLength);
         combined.set(iv, 0);
@@ -341,7 +378,10 @@ async function decryptWithRatchet(base64Data, senderId, messageIndex) {
         } else {
             // Geçmiş/tekrarlanan indeks veya aşırı atlama (DoS) koruması:
             // Alım zincirini bozmamak için zinciri ilerletmeden reddet
-            if (typeof messageIndex !== 'number' || messageIndex < state.recvCounter) {
+            if (
+                typeof messageIndex !== 'number' ||
+                messageIndex < state.recvCounter
+            ) {
                 return null;
             }
             if (messageIndex - state.recvCounter > MAX_SKIP) {
@@ -350,10 +390,12 @@ async function decryptWithRatchet(base64Data, senderId, messageIndex) {
 
             // 2. Alım zincirini mesaj indeksine kadar ilerlet
             while (state.recvCounter < messageIndex) {
-                const { messageKey: skippedKey, nextChainKey } = await advanceChain(state.recvChainKey);
+                const { messageKey: skippedKey, nextChainKey } =
+                    await advanceChain(state.recvChainKey);
                 state.recvChainKey = nextChainKey;
                 // Atlanan anahtarları sakla (sıra dışı mesajlar için)
-                if (!_skippedMessageKeys[senderId]) _skippedMessageKeys[senderId] = {};
+                if (!_skippedMessageKeys[senderId])
+                    _skippedMessageKeys[senderId] = {};
                 _skippedMessageKeys[senderId][state.recvCounter] = skippedKey;
                 state.recvCounter++;
             }
@@ -369,7 +411,11 @@ async function decryptWithRatchet(base64Data, senderId, messageIndex) {
         const rawData = base64ToBuffer(base64Data);
         const iv = rawData.slice(0, 12);
         const data = rawData.slice(12);
-        const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv }, aesKey, data);
+        const decrypted = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv: iv },
+            aesKey,
+            data,
+        );
         return new TextDecoder().decode(decrypted);
     } catch (e) {
         console.error('[!] Ratchet deşifreleme hatası:', e);
@@ -405,8 +451,8 @@ function hasRatchetSession(targetId) {
 async function generateEphemeralKeyPair(targetId) {
     const keyPair = await crypto.subtle.generateKey(
         { name: 'ECDH', namedCurve: 'P-256' },
-        false,  // [GÜVENLİK] extractable: false — özel anahtar JS'den dışa aktarılamaz
-        ['deriveBits']
+        false, // [GÜVENLİK] extractable: false — özel anahtar JS'den dışa aktarılamaz
+        ['deriveBits'],
     );
     // Açık anahtarı paylaşmak için JWK'ya dönüştürmemiz gerekiyor,
     // bu yüzden açık anahtarı ayrıca extractable: true olarak import ediyoruz
@@ -417,7 +463,7 @@ async function generateEphemeralKeyPair(targetId) {
         publicKey: keyPair.publicKey,
         publicJwk: pubJwk,
         inFlight: false,
-        createdAt: Date.now()
+        createdAt: Date.now(),
     };
     return pubJwk;
 }
@@ -434,10 +480,21 @@ async function generateEphemeralKeyPair(targetId) {
  */
 async function deriveEphemeralSecret(targetId, theirEphemeralPublicJwk) {
     const ephemeral = _ephemeralKeyPairs[targetId];
-    if (!ephemeral || !ephemeral.privateKey) throw new Error('Geçici anahtar bulunamadı: ' + targetId);
+    if (!ephemeral || !ephemeral.privateKey)
+        throw new Error('Geçici anahtar bulunamadı: ' + targetId);
 
-    const theirKey = await crypto.subtle.importKey('jwk', theirEphemeralPublicJwk, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
-    const rawBits = await crypto.subtle.deriveBits({ name: 'ECDH', public: theirKey }, ephemeral.privateKey, 256);
+    const theirKey = await crypto.subtle.importKey(
+        'jwk',
+        theirEphemeralPublicJwk,
+        { name: 'ECDH', namedCurve: 'P-256' },
+        false,
+        [],
+    );
+    const rawBits = await crypto.subtle.deriveBits(
+        { name: 'ECDH', public: theirKey },
+        ephemeral.privateKey,
+        256,
+    );
 
     // [GÜVENLİK] Geçici özel anahtar artık gerekli değil — referansı kaldır
     // CryptoKey nesnesi GC tarafından toplanacak (JS'de doğrudan sıfırlanamaz)
@@ -445,7 +502,10 @@ async function deriveEphemeralSecret(targetId, theirEphemeralPublicJwk) {
     _ephemeralKeyPairs[targetId].inFlight = false;
 
     // HKDF ile ham ECDH çıktısını güçlendir
-    const sharedBytes = await hkdfDerive(new Uint8Array(rawBits), 'ECDHE-SharedSecret-v2');
+    const sharedBytes = await hkdfDerive(
+        new Uint8Array(rawBits),
+        'ECDHE-SharedSecret-v2',
+    );
     return sharedBytes;
 }
 
@@ -480,29 +540,49 @@ async function initEcdhKeys() {
         if (vaultKey && vaultKey.privateKey && vaultKey.publicJwk) {
             let pubKey = vaultKey.publicKey;
             if (!pubKey) {
-                pubKey = await crypto.subtle.importKey('jwk', vaultKey.publicJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+                pubKey = await crypto.subtle.importKey(
+                    'jwk',
+                    vaultKey.publicJwk,
+                    { name: 'ECDH', namedCurve: 'P-256' },
+                    true,
+                    [],
+                );
             }
             myEcdhKeyPair = {
                 privateKey: vaultKey.privateKey,
-                publicKey: pubKey
+                publicKey: pubKey,
             };
             myPublicKeyJwk = vaultKey.publicJwk;
             // Güvenlik: localStorage'da eski anahtar kalmışsa temizle
             localStorage.removeItem('ecdh_keypair_' + currentUser.userId);
             return;
         }
-    } catch(e) {
+    } catch (e) {
         console.warn('[!] IndexedDB anahtar okuma hatası:', e);
     }
 
     // 2. Geriye dönük uyumluluk: localStorage'da eski anahtar varsa IndexedDB'ye taşı ve localStorage'dan sil
-    const legacyStored = localStorage.getItem('ecdh_keypair_' + currentUser.userId);
+    const legacyStored = localStorage.getItem(
+        'ecdh_keypair_' + currentUser.userId,
+    );
     if (legacyStored) {
         try {
             const parsed = JSON.parse(legacyStored);
-            const privKey = await crypto.subtle.importKey('jwk', parsed.privateJwk, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
-            const pubKey = await crypto.subtle.importKey('jwk', parsed.publicJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
-            
+            const privKey = await crypto.subtle.importKey(
+                'jwk',
+                parsed.privateJwk,
+                { name: 'ECDH', namedCurve: 'P-256' },
+                false,
+                ['deriveBits'],
+            );
+            const pubKey = await crypto.subtle.importKey(
+                'jwk',
+                parsed.publicJwk,
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true,
+                [],
+            );
+
             myEcdhKeyPair = { privateKey: privKey, publicKey: pubKey };
             myPublicKeyJwk = parsed.publicJwk;
 
@@ -510,14 +590,16 @@ async function initEcdhKeys() {
             await saveCryptoKeyToVault(currentUser.userId, {
                 privateKey: privKey,
                 publicKey: pubKey,
-                publicJwk: myPublicKeyJwk
+                publicJwk: myPublicKeyJwk,
             });
 
             // localStorage'dan derhal temizle (Artık düz metin JWK tutulmaz)
             localStorage.removeItem('ecdh_keypair_' + currentUser.userId);
-            console.log('[+] Eski ECDH anahtarı IndexedDB kasasına taşındı ve localStorage temizlendi.');
+            console.log(
+                '[+] Eski ECDH anahtarı IndexedDB kasasına taşındı ve localStorage temizlendi.',
+            );
             return;
-        } catch(e) {
+        } catch (e) {
             console.warn('[!] Eski anahtar taşıma hatası:', e);
         }
     }
@@ -528,24 +610,35 @@ async function initEcdhKeys() {
     const keyPair = await crypto.subtle.generateKey(
         { name: 'ECDH', namedCurve: 'P-256' },
         false, // extractable: false — XSS saldırısında exportKey ile sızdırılamaz
-        ['deriveBits']
+        ['deriveBits'],
     );
     // Açık anahtarı paylaşmak için exportable olarak yeniden import et
     const pubJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
-    const exportablePubKey = await crypto.subtle.importKey('jwk', pubJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
-    
-    myEcdhKeyPair = { privateKey: keyPair.privateKey, publicKey: exportablePubKey };
+    const exportablePubKey = await crypto.subtle.importKey(
+        'jwk',
+        pubJwk,
+        { name: 'ECDH', namedCurve: 'P-256' },
+        true,
+        [],
+    );
+
+    myEcdhKeyPair = {
+        privateKey: keyPair.privateKey,
+        publicKey: exportablePubKey,
+    };
     myPublicKeyJwk = pubJwk;
-    
+
     await saveCryptoKeyToVault(currentUser.userId, {
         privateKey: myEcdhKeyPair.privateKey,
         publicKey: myEcdhKeyPair.publicKey,
-        publicJwk: myPublicKeyJwk
+        publicJwk: myPublicKeyJwk,
     });
 
     // Garanti olarak localStorage'da herhangi bir kalıntı olmadığından emin ol
     localStorage.removeItem('ecdh_keypair_' + currentUser.userId);
-    console.log('[+] Yeni ECDH kimlik anahtarı IndexedDB kasasında güvenle oluşturuldu (extractable: false).');
+    console.log(
+        '[+] Yeni ECDH kimlik anahtarı IndexedDB kasasında güvenle oluşturuldu (extractable: false).',
+    );
 }
 
 // ============================================================
@@ -564,16 +657,30 @@ async function initEcdhKeys() {
  * @returns {Promise<string>} Hex formatında 256-bit türetilmiş ortak anahtar.
  */
 async function deriveSharedSecret(theirPublicJwk) {
-    const theirKey = await crypto.subtle.importKey('jwk', theirPublicJwk, { name: 'ECDH', namedCurve: 'P-256' }, false, []);
-    const rawBits = await crypto.subtle.deriveBits({ name: 'ECDH', public: theirKey }, myEcdhKeyPair.privateKey, 256);
-    
+    const theirKey = await crypto.subtle.importKey(
+        'jwk',
+        theirPublicJwk,
+        { name: 'ECDH', namedCurve: 'P-256' },
+        false,
+        [],
+    );
+    const rawBits = await crypto.subtle.deriveBits(
+        { name: 'ECDH', public: theirKey },
+        myEcdhKeyPair.privateKey,
+        256,
+    );
+
     // [GÜVENLİK FIX] NIST SP 800-56A: Ham ECDH çıktısını HKDF ile AES anahtarına dönüştür
-    const sharedBytes = await hkdfDerive(new Uint8Array(rawBits), 'AES-GCM-256-SharedKey', 'CyberChat-E2EE-v1');
+    const sharedBytes = await hkdfDerive(
+        new Uint8Array(rawBits),
+        'AES-GCM-256-SharedKey',
+        'CyberChat-E2EE-v1',
+    );
     const hexResult = bytesToHex(sharedBytes);
-    
+
     // Ham baytları bellekten temizle
     sharedBytes.fill(0);
-    
+
     return hexResult;
 }
 
@@ -596,7 +703,14 @@ function getStaticSecret(targetId) {
  * @returns {Promise<void>}
  */
 async function checkAndSaveFingerprint(targetId, publicKeyJwk) {
-    if (!targetId || !publicKeyJwk || typeof currentUser === 'undefined' || !currentUser || typeof localStorage === 'undefined') return;
+    if (
+        !targetId ||
+        !publicKeyJwk ||
+        typeof currentUser === 'undefined' ||
+        !currentUser ||
+        typeof localStorage === 'undefined'
+    )
+        return;
     const fingerprint = await generateKeyFingerprint(publicKeyJwk);
     if (!fingerprint) return;
     const storageKey = 'cyber_fp_' + currentUser.userId + '_' + targetId;
@@ -604,9 +718,14 @@ async function checkAndSaveFingerprint(targetId, publicKeyJwk) {
 
     if (storedFp && storedFp !== fingerprint) {
         // ⚠️ ANAHTAR DEĞİŞMİŞ — Kullanıcıyı uyar
-        console.warn(`[!] GÜVENLİK UYARISI: ${targetId} açık anahtarı değişmiş!`);
+        console.warn(
+            `[!] GÜVENLİK UYARISI: ${targetId} açık anahtarı değişmiş!`,
+        );
         if (typeof showToast === 'function') {
-            showToast(`⚠️ ${targetId} açık anahtarı değişti! Olası MITM saldırısı. Güvenlik numaranızı doğrulayın.`, 'warning');
+            showToast(
+                `⚠️ ${targetId} açık anahtarı değişti! Olası MITM saldırısı. Güvenlik numaranızı doğrulayın.`,
+                'warning',
+            );
         }
     }
     // Parmak izini kaydet/güncelle
@@ -624,21 +743,21 @@ async function checkAndSaveFingerprint(targetId, publicKeyJwk) {
  */
 async function ensureSharedSecret(targetId) {
     if (derivedSecrets[targetId]) return true;
-      
+
     return new Promise((resolve) => {
         safeEmit('get_public_key', targetId, async (res) => {
             if (res && res.success && res.publicKey) {
                 try {
                     // [GÜVENLİK FIX - SEC-05] Açık anahtar parmak izi kontrolü (MITM tespiti)
                     await checkAndSaveFingerprint(targetId, res.publicKey);
-                    
+
                     const secret = await deriveSharedSecret(res.publicKey);
                     _staticSecrets[targetId] = secret;
                     if (!derivedSecrets[targetId]) {
                         derivedSecrets[targetId] = secret;
                     }
-                    
-                    let contact = myContacts.find(c => c.id === targetId);
+
+                    let contact = myContacts.find((c) => c.id === targetId);
                     if (contact) {
                         contact.key = derivedSecrets[targetId];
                         contact.ecdhStatus = 'established';
@@ -647,7 +766,9 @@ async function ensureSharedSecret(targetId) {
                         renderContactsSidebarDebounced();
                     }
                     resolve(true);
-                } catch(e) { resolve(false); }
+                } catch (e) {
+                    resolve(false);
+                }
             } else {
                 resolve(false);
             }
@@ -668,7 +789,12 @@ async function initiateEcdhHandshake(targetId) {
 
     // Kısa süre içinde aynı hedefe zaten bekleyen bir teklif gönderildiyse tekrar gönderme (yarış durumunu önler)
     const existing = _ephemeralKeyPairs[targetId];
-    if (existing && existing.inFlight && existing.createdAt && (Date.now() - existing.createdAt < 2500)) {
+    if (
+        existing &&
+        existing.inFlight &&
+        existing.createdAt &&
+        Date.now() - existing.createdAt < 2500
+    ) {
         return;
     }
 
@@ -678,11 +804,11 @@ async function initiateEcdhHandshake(targetId) {
         _ephemeralKeyPairs[targetId].inFlight = true;
     }
 
-    safeEmit('ecdh_offer', { 
-        targetId: targetId, 
-        senderId: currentUser.userId, 
-        publicKeyJwk: myPublicKeyJwk,           // Kimlik açık anahtarı (parmak izi doğrulama için)
-        ephemeralPublicKeyJwk: ephemeralPubJwk   // Geçici açık anahtar (ECDHE için)
+    safeEmit('ecdh_offer', {
+        targetId: targetId,
+        senderId: currentUser.userId,
+        publicKeyJwk: myPublicKeyJwk, // Kimlik açık anahtarı (parmak izi doğrulama için)
+        ephemeralPublicKeyJwk: ephemeralPubJwk, // Geçici açık anahtar (ECDHE için)
     });
 }
 
@@ -699,7 +825,9 @@ async function handleEcdhOffer(data) {
         await checkAndSaveFingerprint(data.senderId, data.publicKeyJwk);
         if (myEcdhKeyPair && !_staticSecrets[data.senderId]) {
             try {
-                _staticSecrets[data.senderId] = await deriveSharedSecret(data.publicKeyJwk);
+                _staticSecrets[data.senderId] = await deriveSharedSecret(
+                    data.publicKeyJwk,
+                );
             } catch (_) {}
         }
     }
@@ -710,22 +838,35 @@ async function handleEcdhOffer(data) {
         // [GLARE KORUMASI] İki taraf aynı anda birbirine ecdh_offer gönderdiyse deterministik öncelik:
         // Küçük ID'li düğüm (controlling peer) kendi teklifini korur ve karşı tarafın yanıtını bekler.
         const existingEph = _ephemeralKeyPairs[data.senderId];
-        const isGlare = existingEph && existingEph.inFlight && existingEph.createdAt && (Date.now() - existingEph.createdAt < 5000);
-        if (isGlare && typeof currentUser !== 'undefined' && currentUser && currentUser.userId && currentUser.userId < data.senderId) {
+        const isGlare =
+            existingEph &&
+            existingEph.inFlight &&
+            existingEph.createdAt &&
+            Date.now() - existingEph.createdAt < 5000;
+        if (
+            isGlare &&
+            typeof currentUser !== 'undefined' &&
+            currentUser &&
+            currentUser.userId &&
+            currentUser.userId < data.senderId
+        ) {
             return null;
         }
 
         // === YENİ ECDHE PROTOKOLÜ ===
         const myEphPubJwk = await generateEphemeralKeyPair(data.senderId);
-        const sharedBytes = await deriveEphemeralSecret(data.senderId, data.ephemeralPublicKeyJwk);
-        
+        const sharedBytes = await deriveEphemeralSecret(
+            data.senderId,
+            data.ephemeralPublicKeyJwk,
+        );
+
         // KDF Ratchet zincirini başlat
         await initRatchetChain(data.senderId, sharedBytes);
-        
+
         // Geriye uyumluluk: derivedSecrets'a hex olarak da kaydet
         const hexSecret = bytesToHex(sharedBytes);
         sharedBytes.fill(0); // Ham baytları temizle
-        
+
         wipeEphemeralKey(data.senderId); // Geçici anahtar artık gereksiz
 
         return {
@@ -733,9 +874,9 @@ async function handleEcdhOffer(data) {
                 targetId: data.senderId,
                 senderId: currentUser.userId,
                 publicKeyJwk: myPublicKeyJwk,
-                ephemeralPublicKeyJwk: myEphPubJwk
+                ephemeralPublicKeyJwk: myEphPubJwk,
             },
-            secret: hexSecret
+            secret: hexSecret,
         };
     } else {
         // === ESKİ PROTOKOL (Geriye Uyumluluk) ===
@@ -745,9 +886,9 @@ async function handleEcdhOffer(data) {
             answerData: {
                 targetId: data.senderId,
                 senderId: currentUser.userId,
-                publicKeyJwk: myPublicKeyJwk
+                publicKeyJwk: myPublicKeyJwk,
             },
-            secret: secret
+            secret: secret,
         };
     }
 }
@@ -764,7 +905,9 @@ async function handleEcdhAnswer(data) {
         await checkAndSaveFingerprint(data.senderId, data.publicKeyJwk);
         if (myEcdhKeyPair && !_staticSecrets[data.senderId]) {
             try {
-                _staticSecrets[data.senderId] = await deriveSharedSecret(data.publicKeyJwk);
+                _staticSecrets[data.senderId] = await deriveSharedSecret(
+                    data.publicKeyJwk,
+                );
             } catch (_) {}
         }
     }
@@ -773,19 +916,26 @@ async function handleEcdhAnswer(data) {
 
     if (hasEphemeral && _ephemeralKeyPairs[data.senderId]) {
         // === YENİ ECDHE PROTOKOLÜ ===
-        const sharedBytes = await deriveEphemeralSecret(data.senderId, data.ephemeralPublicKeyJwk);
-        
+        const sharedBytes = await deriveEphemeralSecret(
+            data.senderId,
+            data.ephemeralPublicKeyJwk,
+        );
+
         // KDF Ratchet zincirini başlat
         await initRatchetChain(data.senderId, sharedBytes);
-        
+
         const hexSecret = bytesToHex(sharedBytes);
         sharedBytes.fill(0);
-        
+
         wipeEphemeralKey(data.senderId);
         return hexSecret;
     } else if (hasEphemeral && hasRatchetSession(data.senderId)) {
         // Geçici anahtar zaten tüketilmiş ve aktif ratchet oturumu kurulmuşsa mevcut sırrı koru
-        return derivedSecrets[data.senderId] || _staticSecrets[data.senderId] || null;
+        return (
+            derivedSecrets[data.senderId] ||
+            _staticSecrets[data.senderId] ||
+            null
+        );
     } else {
         // === ESKİ PROTOKOL ===
         const secret = await deriveSharedSecret(data.publicKeyJwk);
@@ -811,7 +961,9 @@ function saveSecretsToVault() {
     // Sırlar yalnızca bellekte (derivedSecrets nesnesi) tutulur.
     // Eski sessionStorage kalıntılarını proaktif temizle
     if (currentUser) {
-        try { sessionStorage.removeItem('derived_secrets_' + currentUser.userId); } catch(_) {}
+        try {
+            sessionStorage.removeItem('derived_secrets_' + currentUser.userId);
+        } catch (_) {}
     }
 }
 
@@ -828,7 +980,9 @@ function loadSecretsFromVault() {
     derivedSecrets = {};
     _staticSecrets = {};
     if (currentUser) {
-        try { sessionStorage.removeItem('derived_secrets_' + currentUser.userId); } catch(_) {}
+        try {
+            sessionStorage.removeItem('derived_secrets_' + currentUser.userId);
+        } catch (_) {}
     }
 }
 
@@ -841,12 +995,16 @@ function loadSecretsFromVault() {
  */
 function clearRatchetState(targetId) {
     if (_ratchetState[targetId]) {
-        if (_ratchetState[targetId].sendChainKey) _ratchetState[targetId].sendChainKey.fill(0);
-        if (_ratchetState[targetId].recvChainKey) _ratchetState[targetId].recvChainKey.fill(0);
+        if (_ratchetState[targetId].sendChainKey)
+            _ratchetState[targetId].sendChainKey.fill(0);
+        if (_ratchetState[targetId].recvChainKey)
+            _ratchetState[targetId].recvChainKey.fill(0);
         delete _ratchetState[targetId];
     }
     if (_skippedMessageKeys[targetId]) {
-        Object.values(_skippedMessageKeys[targetId]).forEach(key => { if (key && key.fill) key.fill(0); });
+        Object.values(_skippedMessageKeys[targetId]).forEach((key) => {
+            if (key && key.fill) key.fill(0);
+        });
         delete _skippedMessageKeys[targetId];
     }
     wipeEphemeralKey(targetId);
@@ -870,19 +1028,23 @@ function wipeTargetCryptoState(targetId) {
     }
     // Ratchet zincir anahtarlarını sıfırla
     if (_ratchetState[targetId]) {
-        if (_ratchetState[targetId].sendChainKey) _ratchetState[targetId].sendChainKey.fill(0);
-        if (_ratchetState[targetId].recvChainKey) _ratchetState[targetId].recvChainKey.fill(0);
+        if (_ratchetState[targetId].sendChainKey)
+            _ratchetState[targetId].sendChainKey.fill(0);
+        if (_ratchetState[targetId].recvChainKey)
+            _ratchetState[targetId].recvChainKey.fill(0);
         delete _ratchetState[targetId];
     }
     // Atlanmış mesaj anahtarlarını temizle
     if (_skippedMessageKeys[targetId]) {
-        Object.values(_skippedMessageKeys[targetId]).forEach(key => { if (key && key.fill) key.fill(0); });
+        Object.values(_skippedMessageKeys[targetId]).forEach((key) => {
+            if (key && key.fill) key.fill(0);
+        });
         delete _skippedMessageKeys[targetId];
     }
     // Geçici anahtarları temizle
     wipeEphemeralKey(targetId);
     // AES önbelleğinden ilgili girişleri kaldır
-    Object.keys(_aesKeyCache).forEach(k => delete _aesKeyCache[k]);
+    Object.keys(_aesKeyCache).forEach((k) => delete _aesKeyCache[k]);
 }
 
 /**
@@ -891,23 +1053,29 @@ function wipeTargetCryptoState(targetId) {
  */
 function wipeAllCryptoState() {
     // Tüm ratchet zincirlerini sıfırla
-    Object.keys(_ratchetState).forEach(id => {
-        if (_ratchetState[id].sendChainKey) _ratchetState[id].sendChainKey.fill(0);
-        if (_ratchetState[id].recvChainKey) _ratchetState[id].recvChainKey.fill(0);
+    Object.keys(_ratchetState).forEach((id) => {
+        if (_ratchetState[id].sendChainKey)
+            _ratchetState[id].sendChainKey.fill(0);
+        if (_ratchetState[id].recvChainKey)
+            _ratchetState[id].recvChainKey.fill(0);
     });
-    Object.keys(_ratchetState).forEach(id => delete _ratchetState[id]);
+    Object.keys(_ratchetState).forEach((id) => delete _ratchetState[id]);
 
     // Atlanmış mesaj anahtarlarını sıfırla
-    Object.keys(_skippedMessageKeys).forEach(id => {
-        Object.values(_skippedMessageKeys[id]).forEach(key => { if (key && key.fill) key.fill(0); });
+    Object.keys(_skippedMessageKeys).forEach((id) => {
+        Object.values(_skippedMessageKeys[id]).forEach((key) => {
+            if (key && key.fill) key.fill(0);
+        });
         delete _skippedMessageKeys[id];
     });
 
     // Geçici anahtarları temizle
-    Object.keys(_ephemeralKeyPairs).forEach(id => delete _ephemeralKeyPairs[id]);
+    Object.keys(_ephemeralKeyPairs).forEach(
+        (id) => delete _ephemeralKeyPairs[id],
+    );
 
     // AES önbelleğini temizle
-    Object.keys(_aesKeyCache).forEach(k => delete _aesKeyCache[k]);
+    Object.keys(_aesKeyCache).forEach((k) => delete _aesKeyCache[k]);
 
     // Modül değişkenlerini sıfırla
     derivedSecrets = {};
@@ -933,7 +1101,9 @@ async function generateKeyFingerprint(publicKeyJwk) {
     const keyBytes = new TextEncoder().encode(JSON.stringify(publicKeyJwk));
     const hashBuffer = await crypto.subtle.digest('SHA-256', keyBytes);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hexStr = hashArray.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join('');
+    const hexStr = hashArray
+        .map((b) => b.toString(16).padStart(2, '0').toUpperCase())
+        .join('');
     // 4'lü gruplar halinde formatla (okunabilirlik için)
     return hexStr.match(/.{1,4}/g).join(' ');
 }
@@ -953,10 +1123,16 @@ async function generateSafetyNumber(myPubKeyJwk, theirPubKeyJwk) {
     const myStr = JSON.stringify(myPubKeyJwk);
     const theirStr = JSON.stringify(theirPubKeyJwk);
     const combined = [myStr, theirStr].sort().join('|');
-    const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(combined));
+    const hashBuffer = await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(combined),
+    );
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     // İlk 30 baytı 5'li sayısal gruplara dönüştür (60 haneli güvenlik numarası)
-    const numStr = hashArray.slice(0, 30).map(b => b.toString(10).padStart(3, '0')).join('');
+    const numStr = hashArray
+        .slice(0, 30)
+        .map((b) => b.toString(10).padStart(3, '0'))
+        .join('');
     return numStr.match(/.{1,5}/g).join(' ');
 }
 
@@ -976,22 +1152,27 @@ async function verifyContactFingerprint(targetId) {
                 return;
             }
             const fingerprint = await generateKeyFingerprint(res.publicKey);
-            const storedFp = localStorage.getItem('cyber_fp_' + currentUser.userId + '_' + targetId);
-            
+            const storedFp = localStorage.getItem(
+                'cyber_fp_' + currentUser.userId + '_' + targetId,
+            );
+
             if (!storedFp) {
                 // İlk kez görülen anahtar — kaydet
-                localStorage.setItem('cyber_fp_' + currentUser.userId + '_' + targetId, fingerprint);
+                localStorage.setItem(
+                    'cyber_fp_' + currentUser.userId + '_' + targetId,
+                    fingerprint,
+                );
                 resolve({ verified: true, fingerprint, firstTime: true });
             } else if (storedFp === fingerprint) {
                 // Bilinen anahtar — doğrulandı
                 resolve({ verified: true, fingerprint, firstTime: false });
             } else {
                 // ⚠️ ANAHTAR DEĞİŞMİŞ — Olası MITM saldırısı!
-                resolve({ 
-                    verified: false, 
-                    fingerprint, 
+                resolve({
+                    verified: false,
+                    fingerprint,
                     previousFingerprint: storedFp,
-                    reason: 'UYARI: Bu kişinin açık anahtarı değişmiş! Olası Ortadaki Adam (MITM) saldırısı.' 
+                    reason: 'UYARI: Bu kişinin açık anahtarı değişmiş! Olası Ortadaki Adam (MITM) saldırısı.',
                 });
             }
         });
@@ -1007,7 +1188,10 @@ async function verifyContactFingerprint(targetId) {
  */
 function acceptNewFingerprint(targetId, fingerprint) {
     if (currentUser && targetId && fingerprint) {
-        localStorage.setItem('cyber_fp_' + currentUser.userId + '_' + targetId, fingerprint);
+        localStorage.setItem(
+            'cyber_fp_' + currentUser.userId + '_' + targetId,
+            fingerprint,
+        );
     }
 }
 
@@ -1061,11 +1245,17 @@ if (typeof module !== 'undefined' && module.exports) {
         acceptNewFingerprint,
         // Durum erişim (test)
         _aesKeyCache,
-        setMyEcdhKeyPair: (pair) => { myEcdhKeyPair = pair; },
+        setMyEcdhKeyPair: (pair) => {
+            myEcdhKeyPair = pair;
+        },
         getMyEcdhKeyPair: () => myEcdhKeyPair,
-        setMyPublicKeyJwk: (jwk) => { myPublicKeyJwk = jwk; },
+        setMyPublicKeyJwk: (jwk) => {
+            myPublicKeyJwk = jwk;
+        },
         getMyPublicKeyJwk: () => myPublicKeyJwk,
-        setDerivedSecrets: (secrets) => { derivedSecrets = secrets; },
-        getDerivedSecrets: () => derivedSecrets
+        setDerivedSecrets: (secrets) => {
+            derivedSecrets = secrets;
+        },
+        getDerivedSecrets: () => derivedSecrets,
     };
 }

@@ -37,11 +37,16 @@ function openVaultDB() {
         if (_idbInstance) return resolve(_idbInstance);
         const request = indexedDB.open(DB_NAME, DB_VERSION);
         request.onerror = (e) => reject(e.target.error);
-        request.onsuccess = (e) => { _idbInstance = e.target.result; resolve(_idbInstance); };
+        request.onsuccess = (e) => {
+            _idbInstance = e.target.result;
+            resolve(_idbInstance);
+        };
         request.onupgradeneeded = (e) => {
             const db = e.target.result;
             if (!db.objectStoreNames.contains('packets')) {
-                const store = db.createObjectStore('packets', { keyPath: 'id' });
+                const store = db.createObjectStore('packets', {
+                    keyPath: 'id',
+                });
                 store.createIndex('peerId', 'peerId', { unique: false });
                 store.createIndex('timestamp', 'timestamp', { unique: false });
             }
@@ -77,13 +82,14 @@ async function migrateLocalStorageToIndexedDB() {
                         await savePacketToVault(targetId, packet);
                         localStorage.removeItem(pktKey);
                         migratedCount++;
-                    } catch(e) {}
+                    } catch (e) {}
                 }
             }
             localStorage.removeItem(key);
         }
     }
-    if (migratedCount > 0) console.log(`[+] GÖÇ BAŞARILI: ${migratedCount} paket taşındı.`);
+    if (migratedCount > 0)
+        console.log(`[+] GÖÇ BAŞARILI: ${migratedCount} paket taşındı.`);
 }
 
 /**
@@ -100,16 +106,24 @@ async function savePacketToVault(peerId, packet) {
     // [GÜVENLİK FIX - SEC-18] Süresi dolmuş TTL paketlerini kasaya kaydetme
     if (packet.ttl && typeof packet.ttl === 'number') {
         const elapsed = Date.now() - (packet.timestamp || Date.now());
-        if (elapsed >= (packet.ttl * 1000)) return;
+        if (elapsed >= packet.ttl * 1000) return;
     }
     try {
         const db = await openVaultDB();
         const tx = db.transaction('packets', 'readwrite');
         const store = tx.objectStore('packets');
         const packetId = packet.id || packet.packetId;
-        const packetToSave = { ...packet, id: packetId, peerId: peerId, ownerId: currentUser.userId };
+        const packetToSave = {
+            ...packet,
+            id: packetId,
+            peerId: peerId,
+            ownerId: currentUser.userId,
+        };
         store.put(packetToSave);
-        return new Promise((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
+        return new Promise((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
     } catch (e) {}
 }
 
@@ -137,7 +151,11 @@ async function loadHistoryFromVault(peerId) {
                 for (const p of packets) {
                     if (p.ownerId !== currentUser.userId) continue;
                     // [GÜVENLİK FIX - SEC-18] Kasa yüklemesinde süresi dolmuş TTL mesajlarını temizle
-                    if (p.ttl && typeof p.ttl === 'number' && (now - (p.timestamp || 0)) >= (p.ttl * 1000)) {
+                    if (
+                        p.ttl &&
+                        typeof p.ttl === 'number' &&
+                        now - (p.timestamp || 0) >= p.ttl * 1000
+                    ) {
                         store.delete(p.id);
                         continue;
                     }
@@ -148,7 +166,9 @@ async function loadHistoryFromVault(peerId) {
             };
             request.onerror = () => reject(request.error);
         });
-    } catch (e) { return []; }
+    } catch (e) {
+        return [];
+    }
 }
 
 /**
@@ -171,7 +191,7 @@ async function purgeExpiredVaultPackets() {
             if (cursor) {
                 const pkt = cursor.value;
                 if (pkt && pkt.ttl && typeof pkt.ttl === 'number') {
-                    if ((now - (pkt.timestamp || 0)) >= (pkt.ttl * 1000)) {
+                    if (now - (pkt.timestamp || 0) >= pkt.ttl * 1000) {
                         cursor.delete();
                     }
                 }
@@ -197,7 +217,7 @@ async function removePacketFromVault(peerId, packetId) {
         const db = await openVaultDB();
         const tx = db.transaction('packets', 'readwrite');
         const store = tx.objectStore('packets');
-        
+
         return new Promise((resolve) => {
             const getReq = store.get(packetId);
             getReq.onsuccess = () => {
@@ -205,17 +225,20 @@ async function removePacketFromVault(peerId, packetId) {
                 if (!pkt) return resolve(false);
 
                 // Silme talebinde bulunan kişi gerçekten paketin göndericisi mi veya konuşmanın tarafı mı?
-                const isAuthorized = (
-                    pkt.senderId === peerId || 
-                    pkt.peerId === peerId || 
-                    (peerId === currentUser.userId && pkt.ownerId === currentUser.userId)
-                );
+                const isAuthorized =
+                    pkt.senderId === peerId ||
+                    pkt.peerId === peerId ||
+                    (peerId === currentUser.userId &&
+                        pkt.ownerId === currentUser.userId);
 
                 if (isAuthorized) {
                     store.delete(packetId);
                     resolve(true);
                 } else {
-                    console.warn('[!] BOLA Engeli: Yetkisiz paket iptal/silme teşebbüsü engellendi:', packetId);
+                    console.warn(
+                        '[!] BOLA Engeli: Yetkisiz paket iptal/silme teşebbüsü engellendi:',
+                        packetId,
+                    );
                     resolve(false);
                 }
             };
@@ -264,13 +287,16 @@ async function clearPeerPacketsFromVault(peerId) {
  * @returns {void}
  */
 function saveContactsToVault() {
-    if(currentUser) {
-        const sanitized = myContacts.map(c => {
+    if (currentUser) {
+        const sanitized = myContacts.map((c) => {
             const clone = { ...c };
             delete clone.key; // Simetrik anahtar diske YAZILMAZ — sadece bellekte tutulur
             return clone;
         });
-        localStorage.setItem('cyber_contacts_' + currentUser.userId, JSON.stringify(sanitized));
+        localStorage.setItem(
+            'cyber_contacts_' + currentUser.userId,
+            JSON.stringify(sanitized),
+        );
     }
 }
 
@@ -280,10 +306,12 @@ function saveContactsToVault() {
  * @returns {void}
  */
 function loadContactsFromVault() {
-    if(currentUser) {
-        const data = localStorage.getItem('cyber_contacts_' + currentUser.userId);
+    if (currentUser) {
+        const data = localStorage.getItem(
+            'cyber_contacts_' + currentUser.userId,
+        );
         myContacts = data ? JSON.parse(data) : [];
-        myContacts.forEach(contact => {
+        myContacts.forEach((contact) => {
             delete contact.fingerprintVerified;
             // Anahtar, derivedSecrets'tan (sessionStorage) yeniden yüklenir
             if (derivedSecrets[contact.id]) {
@@ -308,16 +336,22 @@ async function saveCryptoKeyToVault(userId, keyData) {
         const db = await openVaultDB();
         const tx = db.transaction('cryptoKeys', 'readwrite');
         const store = tx.objectStore('cryptoKeys');
-        
+
         let dataToSave = { userId, ...keyData };
-        
+
         // [GÜVENLİK] Electron ortamında publicJwk'yı safeStorage ile şifrele (DPAPI/Keychain)
-        if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.secureEncrypt) {
+        if (
+            typeof window !== 'undefined' &&
+            window.electronAPI &&
+            window.electronAPI.secureEncrypt
+        ) {
             try {
-                const isAvailable = await window.electronAPI.isSecureStorageAvailable();
+                const isAvailable =
+                    await window.electronAPI.isSecureStorageAvailable();
                 if (isAvailable && keyData.publicJwk) {
                     const jwkStr = JSON.stringify(keyData.publicJwk);
-                    const encrypted = await window.electronAPI.secureEncrypt(jwkStr);
+                    const encrypted =
+                        await window.electronAPI.secureEncrypt(jwkStr);
                     if (encrypted) {
                         dataToSave.publicJwkEncrypted = encrypted;
                         dataToSave.publicJwkProtected = true;
@@ -326,12 +360,18 @@ async function saveCryptoKeyToVault(userId, keyData) {
                     }
                 }
             } catch (e) {
-                console.warn('[!] safeStorage şifreleme hatası, düz metin kaydediliyor:', e);
+                console.warn(
+                    '[!] safeStorage şifreleme hatası, düz metin kaydediliyor:',
+                    e,
+                );
             }
         }
-        
+
         store.put(dataToSave);
-        return new Promise((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); });
+        return new Promise((resolve, reject) => {
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
     } catch (e) {
         console.error('[!] saveCryptoKeyToVault hatası:', e);
     }
@@ -356,12 +396,19 @@ async function loadCryptoKeyFromVault(userId) {
             request.onsuccess = async () => {
                 const result = request.result || null;
                 if (!result) return resolve(null);
-                
+
                 // [GÜVENLİK] safeStorage ile şifrelenmiş publicJwk'yı çöz
                 if (result.publicJwkProtected && result.publicJwkEncrypted) {
-                    if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.secureDecrypt) {
+                    if (
+                        typeof window !== 'undefined' &&
+                        window.electronAPI &&
+                        window.electronAPI.secureDecrypt
+                    ) {
                         try {
-                            const decrypted = await window.electronAPI.secureDecrypt(result.publicJwkEncrypted);
+                            const decrypted =
+                                await window.electronAPI.secureDecrypt(
+                                    result.publicJwkEncrypted,
+                                );
                             if (decrypted) {
                                 result.publicJwk = JSON.parse(decrypted);
                             }
@@ -372,7 +419,7 @@ async function loadCryptoKeyFromVault(userId) {
                     delete result.publicJwkEncrypted;
                     delete result.publicJwkProtected;
                 }
-                
+
                 resolve(result);
             };
             request.onerror = () => reject(request.error);

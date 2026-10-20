@@ -58,7 +58,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
      * @function
      * @returns {Promise<boolean>}
      */
-    isSecureStorageAvailable: () => ipcRenderer.invoke('safe-storage-available'),
+    isSecureStorageAvailable: () =>
+        ipcRenderer.invoke('safe-storage-available'),
 
     /**
      * Düz metni işletim sistemi anahtarlığı ile şifreler.
@@ -66,7 +67,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
      * @param {string} plaintext - Şifrelenecek düz metin.
      * @returns {Promise<string|null>} Base64 şifreli veri.
      */
-    secureEncrypt: (plaintext) => ipcRenderer.invoke('safe-storage-encrypt', plaintext),
+    secureEncrypt: (plaintext) =>
+        ipcRenderer.invoke('safe-storage-encrypt', plaintext),
 
     /**
      * İşletim sistemi anahtarlığı ile şifrelenmiş veriyi çözer.
@@ -74,7 +76,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
      * @param {string} base64Cipher - Base64 şifreli veri.
      * @returns {Promise<string|null>} Çözülmüş düz metin.
      */
-    secureDecrypt: (base64Cipher) => ipcRenderer.invoke('safe-storage-decrypt', base64Cipher),
+    secureDecrypt: (base64Cipher) =>
+        ipcRenderer.invoke('safe-storage-decrypt', base64Cipher),
 
     /**
      * Masaüstü işletim sistemi bildirimi gösterir.
@@ -83,5 +86,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
      * @param {string} body - Bildirim metni.
      * @returns {void}
      */
-    showNotification: (title, body) => ipcRenderer.send('show-notification', { title, body })
+    showNotification: (title, body) =>
+        ipcRenderer.send('show-notification', { title, body }),
 });

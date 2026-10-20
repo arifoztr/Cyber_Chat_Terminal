@@ -1,9 +1,26 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import {
+    describe,
+    it,
+    expect,
+    beforeAll,
+    beforeEach,
+    afterEach,
+    vi,
+} from 'vitest';
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const dbManager = require('../src/database');
 import setupSockets from '../src/socket.js';
-const { signJWT, verifyJWT, revokeToken, getClientIp, revokedTokens, onlineNodes, DUMMY_HASH, MAX_QUEUE_SIZE } = setupSockets._internals;
+const {
+    signJWT,
+    verifyJWT,
+    revokeToken,
+    getClientIp,
+    revokedTokens,
+    onlineNodes,
+    DUMMY_HASH,
+    MAX_QUEUE_SIZE,
+} = setupSockets._internals;
 
 describe('Socket.io Architecture & Security Test Suite', () => {
     let io;
@@ -21,12 +38,14 @@ describe('Socket.io Architecture & Security Test Suite', () => {
     const createMockSocket = (overrides = {}) => {
         const events = {};
         const s = {
-            id: overrides.id || 'sock-' + Math.random().toString(36).substring(7),
+            id:
+                overrides.id ||
+                'sock-' + Math.random().toString(36).substring(7),
             handshake: {
                 address: '127.0.0.1',
                 headers: {},
                 auth: {},
-                ...(overrides.handshake || {})
+                ...(overrides.handshake || {}),
             },
             conn: overrides.conn || { remoteAddress: '127.0.0.1' },
             user: overrides.user !== undefined ? overrides.user : null,
@@ -44,7 +63,7 @@ describe('Socket.io Architecture & Security Test Suite', () => {
                 if (events[event]) {
                     return await events[event](data, cb);
                 }
-            }
+            },
         };
         return s;
     };
@@ -69,11 +88,11 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             to: vi.fn((roomOrSid) => ({
                 emit: (event, data) => {
                     emittedEvents.push({ target: roomOrSid, event, data });
-                }
+                },
             })),
             sockets: {
-                sockets: new Map()
-            }
+                sockets: new Map(),
+            },
         };
 
         // Initialize setupSockets
@@ -112,7 +131,11 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
         it('revokeToken: correctly handles exp in ms (> 1e11) and exp in seconds', () => {
             // Token with exp in ms
-            const payloadMs = { userId: 'AGN-1', email: 'ms@cyber.local', exp: Date.now() + 50000 };
+            const payloadMs = {
+                userId: 'AGN-1',
+                email: 'ms@cyber.local',
+                exp: Date.now() + 50000,
+            };
             const tokenMs = signJWT(payloadMs);
             revokeToken(tokenMs);
             expect(revokedTokens.has(tokenMs)).toBe(true);
@@ -129,7 +152,10 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             expect(verifyJWT(pastToken)).toBeNull();
 
             const pastMs = Date.now() - 3600000;
-            const pastTokenMs = signJWT({ userId: 'AGN-EXPIRED-MS', exp: pastMs });
+            const pastTokenMs = signJWT({
+                userId: 'AGN-EXPIRED-MS',
+                exp: pastMs,
+            });
             expect(verifyJWT(pastTokenMs)).toBeNull();
         });
 
@@ -143,9 +169,15 @@ describe('Socket.io Architecture & Security Test Suite', () => {
         });
 
         it('verifyJWT: catches JSON parse error on valid signature with invalid JSON payload (line 160)', () => {
-            const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-            const invalidJsonPayload = Buffer.from('NOT_VALID_JSON_{{').toString('base64url');
-            const sig = crypto.createHmac('sha256', setupSockets._internals.JWT_SECRET).update(`${header}.${invalidJsonPayload}`).digest('base64url');
+            const header = Buffer.from(
+                JSON.stringify({ alg: 'HS256', typ: 'JWT' }),
+            ).toString('base64url');
+            const invalidJsonPayload =
+                Buffer.from('NOT_VALID_JSON_{{').toString('base64url');
+            const sig = crypto
+                .createHmac('sha256', setupSockets._internals.JWT_SECRET)
+                .update(`${header}.${invalidJsonPayload}`)
+                .digest('base64url');
             const token = `${header}.${invalidJsonPayload}.${sig}`;
 
             expect(verifyJWT(token)).toBeNull();
@@ -156,14 +188,15 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             process.env.JWT_SECRET = 'a'.repeat(32);
             delete require.cache[require.resolve('../src/socket.js')];
             const freshSocketModule = require('../src/socket.js');
-            expect(freshSocketModule._internals.JWT_SECRET).toBe('a'.repeat(32));
+            expect(freshSocketModule._internals.JWT_SECRET).toBe(
+                'a'.repeat(32),
+            );
             if (originalSecret) process.env.JWT_SECRET = originalSecret;
             else delete process.env.JWT_SECRET;
             delete require.cache[require.resolve('../src/socket.js')];
             require('../src/socket.js');
         });
     });
-
 
     // ────────────────────────────────────────────────────────────────────────
     // 2. IP Extraction & Proxy Security (SEC-07)
@@ -172,7 +205,7 @@ describe('Socket.io Architecture & Security Test Suite', () => {
         it('should extract directIp from conn.remoteAddress when handshake.address is missing', () => {
             const socket = {
                 handshake: { address: null, headers: {} },
-                conn: { remoteAddress: '10.0.0.5' }
+                conn: { remoteAddress: '10.0.0.5' },
             };
             expect(getClientIp(socket)).toBe('10.0.0.5');
         });
@@ -180,19 +213,27 @@ describe('Socket.io Architecture & Security Test Suite', () => {
         it('should fallback to 127.0.0.1 when both address and remoteAddress are missing', () => {
             const socket = {
                 handshake: { address: null, headers: {} },
-                conn: null
+                conn: null,
             };
             expect(getClientIp(socket)).toBe('127.0.0.1');
         });
 
         it('should trust x-forwarded-for when behind private subnet (10., 172.16., 192.168., ::1, etc.)', () => {
-            const testCases = ['10.1.2.3', '172.16.5.6', '192.168.1.1', '::1', '::ffff:127.0.0.1'];
-            testCases.forEach(privateIp => {
+            const testCases = [
+                '10.1.2.3',
+                '172.16.5.6',
+                '192.168.1.1',
+                '::1',
+                '::ffff:127.0.0.1',
+            ];
+            testCases.forEach((privateIp) => {
                 const s = {
                     handshake: {
                         address: privateIp,
-                        headers: { 'x-forwarded-for': '198.51.100.22, 10.0.0.1' }
-                    }
+                        headers: {
+                            'x-forwarded-for': '198.51.100.22, 10.0.0.1',
+                        },
+                    },
                 };
                 expect(getClientIp(s)).toBe('198.51.100.22');
             });
@@ -204,8 +245,8 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             const s1 = {
                 handshake: {
                     address: '8.8.8.8',
-                    headers: { 'cf-connecting-ip': '203.0.113.50' }
-                }
+                    headers: { 'cf-connecting-ip': '203.0.113.50' },
+                },
             };
             expect(getClientIp(s1)).toBe('203.0.113.50');
 
@@ -225,9 +266,9 @@ describe('Socket.io Architecture & Security Test Suite', () => {
                     address: '127.0.0.1',
                     headers: {
                         'cf-connecting-ip': 'a'.repeat(46),
-                        'x-forwarded-for': 'b'.repeat(46)
-                    }
-                }
+                        'x-forwarded-for': 'b'.repeat(46),
+                    },
+                },
             };
             expect(getClientIp(s)).toBe('127.0.0.1');
         });
@@ -240,8 +281,8 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             const s = {
                 handshake: {
                     address: '93.184.216.34', // Public IP
-                    headers: { 'x-forwarded-for': '1.1.1.1' }
-                }
+                    headers: { 'x-forwarded-for': '1.1.1.1' },
+                },
             };
             expect(getClientIp(s)).toBe('93.184.216.34');
             process.env = originalEnv;
@@ -254,9 +295,16 @@ describe('Socket.io Architecture & Security Test Suite', () => {
     describe('Socket Middleware Authentication', () => {
         it('should attach user if handshake contains valid token and user exists in db', () => {
             const db = dbManager.getDB();
-            db.users['mid@cyber.local'] = { email: 'mid@cyber.local', username: 'MidUser', userId: 'AGN-MID-01' };
+            db.users['mid@cyber.local'] = {
+                email: 'mid@cyber.local',
+                username: 'MidUser',
+                userId: 'AGN-MID-01',
+            };
 
-            const token = signJWT({ email: 'mid@cyber.local', userId: 'AGN-MID-01' });
+            const token = signJWT({
+                email: 'mid@cyber.local',
+                userId: 'AGN-MID-01',
+            });
             const socket = createMockSocket({ handshake: { auth: { token } } });
             const next = vi.fn();
 
@@ -276,13 +324,17 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             expect(socket1.user).toBeNull();
 
             // Invalid token
-            const socket2 = createMockSocket({ handshake: { auth: { token: 'invalid.token' } } });
+            const socket2 = createMockSocket({
+                handshake: { auth: { token: 'invalid.token' } },
+            });
             ioMiddleware(socket2, next);
             expect(socket2.user).toBeNull();
 
             // Valid token for non-existent user
             const tokenUnknown = signJWT({ email: 'unknown@cyber.local' });
-            const socket3 = createMockSocket({ handshake: { auth: { token: tokenUnknown } } });
+            const socket3 = createMockSocket({
+                handshake: { auth: { token: tokenUnknown } },
+            });
             ioMiddleware(socket3, next);
             expect(socket3.user).toBeNull();
         });
@@ -301,98 +353,285 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
         it('should reject registration if fields are missing', async () => {
             const cb = vi.fn();
-            await socket._trigger('register', { email: '', password: 'pwd', username: 'user' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'Tüm alanlar zorunludur.' }));
+            await socket._trigger(
+                'register',
+                { email: '', password: 'pwd', username: 'user' },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'Tüm alanlar zorunludur.',
+                }),
+            );
 
-            await socket._trigger('register', { email: 'test@cyber.local', password: '', username: 'user' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'Tüm alanlar zorunludur.' }));
+            await socket._trigger(
+                'register',
+                { email: 'test@cyber.local', password: '', username: 'user' },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'Tüm alanlar zorunludur.',
+                }),
+            );
 
-            await socket._trigger('register', { email: 'test@cyber.local', password: 'pwd', username: '' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'Tüm alanlar zorunludur.' }));
+            await socket._trigger(
+                'register',
+                { email: 'test@cyber.local', password: 'pwd', username: '' },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'Tüm alanlar zorunludur.',
+                }),
+            );
         });
 
         it('should reject prototype pollution attempts in email', async () => {
             const cb = vi.fn();
-            await socket._trigger('register', { email: '__proto__', password: 'password123', username: 'Hacker' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'Geçersiz e-posta adresi formatı.' }));
+            await socket._trigger(
+                'register',
+                {
+                    email: '__proto__',
+                    password: 'password123',
+                    username: 'Hacker',
+                },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'Geçersiz e-posta adresi formatı.',
+                }),
+            );
 
-            await socket._trigger('register', { email: 'constructor', password: 'password123', username: 'Hacker' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'Geçersiz e-posta adresi formatı.' }));
+            await socket._trigger(
+                'register',
+                {
+                    email: 'constructor',
+                    password: 'password123',
+                    username: 'Hacker',
+                },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'Geçersiz e-posta adresi formatı.',
+                }),
+            );
         });
 
         it('should reject invalid email formats', async () => {
             const cb = vi.fn();
-            await socket._trigger('register', { email: 'notanemail', password: 'password123', username: 'User' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'Geçersiz e-posta adresi formatı.' }));
+            await socket._trigger(
+                'register',
+                {
+                    email: 'notanemail',
+                    password: 'password123',
+                    username: 'User',
+                },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'Geçersiz e-posta adresi formatı.',
+                }),
+            );
         });
 
         it('should enforce password length limits (8 to 72)', async () => {
             const cb = vi.fn();
             // Short
-            await socket._trigger('register', { email: 'test@cyber.local', password: 'short', username: 'User' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: expect.stringContaining('en az 8') }));
+            await socket._trigger(
+                'register',
+                {
+                    email: 'test@cyber.local',
+                    password: 'short',
+                    username: 'User',
+                },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: expect.stringContaining('en az 8'),
+                }),
+            );
 
             // Long
-            await socket._trigger('register', { email: 'test@cyber.local', password: 'a'.repeat(73), username: 'User' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: expect.stringContaining('en az 8') }));
+            await socket._trigger(
+                'register',
+                {
+                    email: 'test@cyber.local',
+                    password: 'a'.repeat(73),
+                    username: 'User',
+                },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: expect.stringContaining('en az 8'),
+                }),
+            );
 
             // Non-string
-            await socket._trigger('register', { email: 'test@cyber.local', password: 12345678, username: 'User' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+            await socket._trigger(
+                'register',
+                {
+                    email: 'test@cyber.local',
+                    password: 12345678,
+                    username: 'User',
+                },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({ success: false }),
+            );
         });
 
         it('should enforce username length limits (2 to 32)', async () => {
             const cb = vi.fn();
             // Short
-            await socket._trigger('register', { email: 'test@cyber.local', password: 'password123', username: 'A' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: expect.stringContaining('2-32') }));
+            await socket._trigger(
+                'register',
+                {
+                    email: 'test@cyber.local',
+                    password: 'password123',
+                    username: 'A',
+                },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: expect.stringContaining('2-32'),
+                }),
+            );
 
             // Long
-            await socket._trigger('register', { email: 'test@cyber.local', password: 'password123', username: 'B'.repeat(33) }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: expect.stringContaining('2-32') }));
+            await socket._trigger(
+                'register',
+                {
+                    email: 'test@cyber.local',
+                    password: 'password123',
+                    username: 'B'.repeat(33),
+                },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: expect.stringContaining('2-32'),
+                }),
+            );
         });
 
         it('should reject already registered emails', async () => {
             const db = dbManager.getDB();
-            db.users['existing@cyber.local'] = { email: 'existing@cyber.local' };
+            db.users['existing@cyber.local'] = {
+                email: 'existing@cyber.local',
+            };
 
             const cb = vi.fn();
-            await socket._trigger('register', { email: 'existing@cyber.local', password: 'password123', username: 'User' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'Bu e-posta adresi zaten kullanımda.' }));
+            await socket._trigger(
+                'register',
+                {
+                    email: 'existing@cyber.local',
+                    password: 'password123',
+                    username: 'User',
+                },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'Bu e-posta adresi zaten kullanımda.',
+                }),
+            );
         });
 
         it('should register successfully, generate secure ID, and return token', async () => {
             const cb = vi.fn();
-            await socket._trigger('register', { email: 'new@cyber.local', password: 'password123', username: 'NewUser' }, cb);
+            await socket._trigger(
+                'register',
+                {
+                    email: 'new@cyber.local',
+                    password: 'password123',
+                    username: 'NewUser',
+                },
+                cb,
+            );
 
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({
-                success: true,
-                message: 'Kayıt başarılı.',
-                token: expect.any(String),
-                user: expect.objectContaining({ email: 'new@cyber.local', username: 'NewUser' })
-            }));
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: true,
+                    message: 'Kayıt başarılı.',
+                    token: expect.any(String),
+                    user: expect.objectContaining({
+                        email: 'new@cyber.local',
+                        username: 'NewUser',
+                    }),
+                }),
+            );
 
             const db = dbManager.getDB();
             expect(db.users['new@cyber.local']).toBeDefined();
             expect(db.users['new@cyber.local'].userId).toMatch(/^AGN-\d+-\d+$/);
-            expect(onlineNodes.has(db.users['new@cyber.local'].userId)).toBe(true);
+            expect(onlineNodes.has(db.users['new@cyber.local'].userId)).toBe(
+                true,
+            );
         });
 
         it('should catch server errors during registration', async () => {
-            vi.spyOn(bcrypt, 'hash').mockRejectedValueOnce(new Error('Bcrypt failed'));
+            vi.spyOn(bcrypt, 'hash').mockRejectedValueOnce(
+                new Error('Bcrypt failed'),
+            );
             const cb = vi.fn();
 
-            await socket._trigger('register', { email: 'err@cyber.local', password: 'password123', username: 'ErrUser' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'Sunucu hatası oluştu. Lütfen tekrar deneyin.' }));
+            await socket._trigger(
+                'register',
+                {
+                    email: 'err@cyber.local',
+                    password: 'password123',
+                    username: 'ErrUser',
+                },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'Sunucu hatası oluştu. Lütfen tekrar deneyin.',
+                }),
+            );
         });
 
         it('should reject registration if email is already in use (lines 361-363)', async () => {
             const db = dbManager.getDB();
-            db.users['taken@cyber.local'] = { email: 'taken@cyber.local', username: 'Existing' };
+            db.users['taken@cyber.local'] = {
+                email: 'taken@cyber.local',
+                username: 'Existing',
+            };
             const cb = vi.fn();
 
-            await socket._trigger('register', { email: 'taken@cyber.local', password: 'password123', username: 'Newbie' }, cb);
-            expect(cb).toHaveBeenCalledWith({ success: false, message: 'Bu e-posta adresi zaten kullanımda.' });
+            await socket._trigger(
+                'register',
+                {
+                    email: 'taken@cyber.local',
+                    password: 'password123',
+                    username: 'Newbie',
+                },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith({
+                success: false,
+                message: 'Bu e-posta adresi zaten kullanımda.',
+            });
         });
     });
 
@@ -413,7 +652,7 @@ describe('Socket.io Architecture & Security Test Suite', () => {
                 email: 'user@cyber.local',
                 username: 'CyberUser',
                 password: hashedPassword,
-                userId: 'AGN-USER-01'
+                userId: 'AGN-USER-01',
             };
             dbManager.getUserIdIndex()['AGN-USER-01'] = 'user@cyber.local';
         });
@@ -421,35 +660,85 @@ describe('Socket.io Architecture & Security Test Suite', () => {
         it('login: rejects if email or password missing', async () => {
             const cb = vi.fn();
             await socket._trigger('login', { email: '', password: 'pwd' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'E-posta ve şifre zorunludur.' }));
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'E-posta ve şifre zorunludur.',
+                }),
+            );
 
-            await socket._trigger('login', { email: 'user@cyber.local', password: '' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'E-posta ve şifre zorunludur.' }));
+            await socket._trigger(
+                'login',
+                { email: 'user@cyber.local', password: '' },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'E-posta ve şifre zorunludur.',
+                }),
+            );
         });
 
         it('login: executes dummy hash comparison if user not found (anti-timing attack)', async () => {
             const compareSpy = vi.spyOn(bcrypt, 'compare');
             const cb = vi.fn();
 
-            await socket._trigger('login', { email: 'nonexistent@cyber.local', password: 'randompassword' }, cb);
+            await socket._trigger(
+                'login',
+                {
+                    email: 'nonexistent@cyber.local',
+                    password: 'randompassword',
+                },
+                cb,
+            );
 
-            expect(compareSpy).toHaveBeenCalledWith('randompassword', DUMMY_HASH);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'E-posta veya şifre hatalı.' }));
+            expect(compareSpy).toHaveBeenCalledWith(
+                'randompassword',
+                DUMMY_HASH,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'E-posta veya şifre hatalı.',
+                }),
+            );
         });
 
         it('login: handles user with missing password field gracefully', async () => {
             const db = dbManager.getDB();
-            db.users['nopass@cyber.local'] = { email: 'nopass@cyber.local', password: null };
+            db.users['nopass@cyber.local'] = {
+                email: 'nopass@cyber.local',
+                password: null,
+            };
             const cb = vi.fn();
 
-            await socket._trigger('login', { email: 'nopass@cyber.local', password: 'pwd' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'E-posta veya şifre hatalı.' }));
+            await socket._trigger(
+                'login',
+                { email: 'nopass@cyber.local', password: 'pwd' },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'E-posta veya şifre hatalı.',
+                }),
+            );
         });
 
         it('login: rejects incorrect password', async () => {
             const cb = vi.fn();
-            await socket._trigger('login', { email: 'user@cyber.local', password: 'wrongpassword' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'E-posta veya şifre hatalı.' }));
+            await socket._trigger(
+                'login',
+                { email: 'user@cyber.local', password: 'wrongpassword' },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'E-posta veya şifre hatalı.',
+                }),
+            );
         });
 
         it('login: auto-generates userId if missing upon login', async () => {
@@ -459,46 +748,81 @@ describe('Socket.io Architecture & Security Test Suite', () => {
                 email: 'nouid@cyber.local',
                 username: 'NoUid',
                 password: hashedPassword,
-                userId: null
+                userId: null,
             };
 
             const cb = vi.fn();
-            await socket._trigger('login', { email: 'nouid@cyber.local', password: 'secret123' }, cb);
+            await socket._trigger(
+                'login',
+                { email: 'nouid@cyber.local', password: 'secret123' },
+                cb,
+            );
 
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-            expect(db.users['nouid@cyber.local'].userId).toMatch(/^AGN-\d+-\d+$/);
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({ success: true }),
+            );
+            expect(db.users['nouid@cyber.local'].userId).toMatch(
+                /^AGN-\d+-\d+$/,
+            );
         });
 
         it('login: logs in successfully with correct credentials', async () => {
             const cb = vi.fn();
-            await socket._trigger('login', { email: 'user@cyber.local', password: 'secret123' }, cb);
+            await socket._trigger(
+                'login',
+                { email: 'user@cyber.local', password: 'secret123' },
+                cb,
+            );
 
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({
-                success: true,
-                token: expect.any(String),
-                user: expect.objectContaining({ email: 'user@cyber.local', userId: 'AGN-USER-01' })
-            }));
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: true,
+                    token: expect.any(String),
+                    user: expect.objectContaining({
+                        email: 'user@cyber.local',
+                        userId: 'AGN-USER-01',
+                    }),
+                }),
+            );
             expect(socket.user).toBeDefined();
             expect(onlineNodes.has('AGN-USER-01')).toBe(true);
         });
 
         it('login: catches unexpected errors', async () => {
-            vi.spyOn(bcrypt, 'compare').mockRejectedValueOnce(new Error('Crash in compare'));
+            vi.spyOn(bcrypt, 'compare').mockRejectedValueOnce(
+                new Error('Crash in compare'),
+            );
             const cb = vi.fn();
 
-            await socket._trigger('login', { email: 'user@cyber.local', password: 'secret123' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: 'Sunucu hatası oluştu. Lütfen tekrar deneyin.' }));
+            await socket._trigger(
+                'login',
+                { email: 'user@cyber.local', password: 'secret123' },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'Sunucu hatası oluştu. Lütfen tekrar deneyin.',
+                }),
+            );
         });
 
         it('verify_session: succeeds for valid token and existing user', async () => {
-            const token = signJWT({ email: 'user@cyber.local', userId: 'AGN-USER-01' });
+            const token = signJWT({
+                email: 'user@cyber.local',
+                userId: 'AGN-USER-01',
+            });
             const cb = vi.fn();
 
             await socket._trigger('verify_session', token, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({
-                success: true,
-                user: expect.objectContaining({ email: 'user@cyber.local' })
-            }));
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: true,
+                    user: expect.objectContaining({
+                        email: 'user@cyber.local',
+                    }),
+                }),
+            );
             expect(socket.user).toBeDefined();
             expect(onlineNodes.has('AGN-USER-01')).toBe(true);
         });
@@ -530,7 +854,10 @@ describe('Socket.io Architecture & Security Test Suite', () => {
         });
 
         it('logout: revokes token, cleans onlineNodes, and marks offline', async () => {
-            const token = signJWT({ email: 'u1@cyber.local', userId: 'AGN-101' });
+            const token = signJWT({
+                email: 'u1@cyber.local',
+                userId: 'AGN-101',
+            });
             const cb = vi.fn();
 
             await socket._trigger('logout', { token }, cb);
@@ -555,9 +882,14 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             await socket._trigger('disconnect');
 
             expect(onlineNodes.has('AGN-101')).toBe(false);
-            const statusChange = emittedEvents.find(e => e.event === 'node_status_change');
+            const statusChange = emittedEvents.find(
+                (e) => e.event === 'node_status_change',
+            );
             expect(statusChange).toBeDefined();
-            expect(statusChange.data).toEqual({ userId: 'AGN-101', status: 'offline' });
+            expect(statusChange.data).toEqual({
+                userId: 'AGN-101',
+                status: 'offline',
+            });
         });
 
         it('disconnect: returns early if socket has no user', async () => {
@@ -584,7 +916,7 @@ describe('Socket.io Architecture & Security Test Suite', () => {
                 username: 'ProfUser',
                 password: hashedPassword,
                 userId: 'AGN-PROF-01',
-                avatar: 'https://avatar.png'
+                avatar: 'https://avatar.png',
             };
 
             const db = dbManager.getDB();
@@ -596,16 +928,26 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
         it('get_profiles: returns profiles for given userIds and caps at 50 (SEC-22)', async () => {
             const cb = vi.fn();
-            await socket._trigger('get_profiles', ['AGN-PROF-01', 'AGN-NONEXISTENT', null, 123], cb);
+            await socket._trigger(
+                'get_profiles',
+                ['AGN-PROF-01', 'AGN-NONEXISTENT', null, 123],
+                cb,
+            );
 
             expect(cb).toHaveBeenCalledWith({
                 profiles: {
-                    'AGN-PROF-01': { username: 'ProfUser', avatar: 'https://avatar.png' }
-                }
+                    'AGN-PROF-01': {
+                        username: 'ProfUser',
+                        avatar: 'https://avatar.png',
+                    },
+                },
             });
 
             // Enforces maximum 50 userIds limit
-            const largeIdList = Array.from({ length: 100 }, (_, i) => `AGN-TEST-${i}`);
+            const largeIdList = Array.from(
+                { length: 100 },
+                (_, i) => `AGN-TEST-${i}`,
+            );
             const cbLarge = vi.fn();
             await socket._trigger('get_profiles', largeIdList, cbLarge);
             expect(cbLarge).toHaveBeenCalled();
@@ -621,16 +963,29 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
             // Oversized
             await socket._trigger('update_avatar', 'A'.repeat(200001), cb);
-            expect(cb).toHaveBeenCalledWith({ success: false, message: 'Görsel çok büyük.' });
+            expect(cb).toHaveBeenCalledWith({
+                success: false,
+                message: 'Görsel çok büyük.',
+            });
 
             // Valid
-            await socket._trigger('update_avatar', 'data:image/png;base64,valid', cb);
+            await socket._trigger(
+                'update_avatar',
+                'data:image/png;base64,valid',
+                cb,
+            );
             expect(cb).toHaveBeenCalledWith({ success: true });
-            expect(dbManager.getDB().users[testUser.email].avatar).toBe('data:image/png;base64,valid');
+            expect(dbManager.getDB().users[testUser.email].avatar).toBe(
+                'data:image/png;base64,valid',
+            );
 
             // Unauthenticated
             socket.user = null;
-            await socket._trigger('update_avatar', 'data:image/png;base64,valid', cb);
+            await socket._trigger(
+                'update_avatar',
+                'data:image/png;base64,valid',
+                cb,
+            );
             expect(cb).toHaveBeenCalledWith({ success: false });
         });
 
@@ -638,29 +993,80 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             const cb = vi.fn();
 
             // Invalid new password
-            await socket._trigger('change_password', { oldPassword: 'oldPassword123', newPassword: 'short' }, cb);
-            expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: expect.stringContaining('en az 8') }));
+            await socket._trigger(
+                'change_password',
+                { oldPassword: 'oldPassword123', newPassword: 'short' },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: expect.stringContaining('en az 8'),
+                }),
+            );
 
             // Wrong old password
-            await socket._trigger('change_password', { oldPassword: 'wrongOldPassword', newPassword: 'newValidPassword123' }, cb);
-            expect(cb).toHaveBeenCalledWith({ success: false, message: 'Mevcut şifre hatalı.' });
+            await socket._trigger(
+                'change_password',
+                {
+                    oldPassword: 'wrongOldPassword',
+                    newPassword: 'newValidPassword123',
+                },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith({
+                success: false,
+                message: 'Mevcut şifre hatalı.',
+            });
 
             // Success & Multi-socket invalidation (line 596)
-            onlineNodes.set(testUser.userId, new Set([socket.id, 'sock-other-tab']));
-            await socket._trigger('change_password', { oldPassword: 'oldPassword123', newPassword: 'newValidPassword123' }, cb);
+            onlineNodes.set(
+                testUser.userId,
+                new Set([socket.id, 'sock-other-tab']),
+            );
+            await socket._trigger(
+                'change_password',
+                {
+                    oldPassword: 'oldPassword123',
+                    newPassword: 'newValidPassword123',
+                },
+                cb,
+            );
             expect(cb).toHaveBeenCalledWith({ success: true });
-            const invalidatedEvent = emittedEvents.find(e => e.target === 'sock-other-tab' && e.event === 'session_invalidated');
+            const invalidatedEvent = emittedEvents.find(
+                (e) =>
+                    e.target === 'sock-other-tab' &&
+                    e.event === 'session_invalidated',
+            );
             expect(invalidatedEvent).toBeDefined();
-            expect(invalidatedEvent.data.message).toContain('Şifreniz değiştirildiği için');
+            expect(invalidatedEvent.data.message).toContain(
+                'Şifreniz değiştirildiği için',
+            );
 
             // Error handling
-            vi.spyOn(bcrypt, 'compare').mockRejectedValueOnce(new Error('Bcrypt crash'));
-            await socket._trigger('change_password', { oldPassword: 'oldPassword123', newPassword: 'newValidPassword123' }, cb);
-            expect(cb).toHaveBeenCalledWith({ success: false, message: 'Sunucu hatası.' });
+            vi.spyOn(bcrypt, 'compare').mockRejectedValueOnce(
+                new Error('Bcrypt crash'),
+            );
+            await socket._trigger(
+                'change_password',
+                {
+                    oldPassword: 'oldPassword123',
+                    newPassword: 'newValidPassword123',
+                },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith({
+                success: false,
+                message: 'Sunucu hatası.',
+            });
 
             // Unauthenticated
             socket.user = null;
-            await socket._trigger('change_password', { oldPassword: 'pwd', newPassword: 'newpwd1234' }, cb);
+            await socket._trigger(
+                'change_password',
+                { oldPassword: 'pwd', newPassword: 'newpwd1234' },
+                cb,
+            );
             expect(cb).toHaveBeenCalledWith({ success: false });
         });
 
@@ -670,12 +1076,23 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             const cb = vi.fn();
 
             // Wrong password
-            await socket._trigger('delete_account', { password: 'wrongPassword' }, cb);
-            expect(cb).toHaveBeenCalledWith({ success: false, message: 'Güvenlik şifresi hatalı.' });
+            await socket._trigger(
+                'delete_account',
+                { password: 'wrongPassword' },
+                cb,
+            );
+            expect(cb).toHaveBeenCalledWith({
+                success: false,
+                message: 'Güvenlik şifresi hatalı.',
+            });
 
             // Success
             cb.mockClear();
-            await socket._trigger('delete_account', { password: 'oldPassword123' }, cb);
+            await socket._trigger(
+                'delete_account',
+                { password: 'oldPassword123' },
+                cb,
+            );
             expect(cb).toHaveBeenCalledWith({ success: true });
 
             expect(db.users[testUser.email]).toBeUndefined();
@@ -690,15 +1107,26 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             dbManager.getDB().users[testUser.email] = testUser;
 
             // Error handling
-            vi.spyOn(bcrypt, 'compare').mockRejectedValueOnce(new Error('Crash in compare'));
+            vi.spyOn(bcrypt, 'compare').mockRejectedValueOnce(
+                new Error('Crash in compare'),
+            );
             await socket._trigger('delete_account', { password: 'pwd' }, cb);
-            expect(cb).toHaveBeenCalledWith({ success: false, message: 'Sunucu hatası.' });
+            expect(cb).toHaveBeenCalledWith({
+                success: false,
+                message: 'Sunucu hatası.',
+            });
 
             // Unauthenticated (using fresh socket with distinct IP to avoid rate limit)
-            const freshSocket = createMockSocket({ handshake: { address: '127.0.0.99' } });
+            const freshSocket = createMockSocket({
+                handshake: { address: '127.0.0.99' },
+            });
             connectionHandler(freshSocket);
             const cb2 = vi.fn();
-            await freshSocket._trigger('delete_account', { password: 'pwd' }, cb2);
+            await freshSocket._trigger(
+                'delete_account',
+                { password: 'pwd' },
+                cb2,
+            );
             expect(cb2).toHaveBeenCalledWith({ success: false });
         });
     });
@@ -718,8 +1146,18 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             connectionHandler(aliceSocket);
             connectionHandler(bobSocket);
 
-            aliceUser = { email: 'alice@cyber.local', username: 'Alice', password: 'hashedpassword123', userId: 'AGN-ALICE' };
-            bobUser = { email: 'bob@cyber.local', username: 'Bob', password: 'hashedpassword123', userId: 'AGN-BOB' };
+            aliceUser = {
+                email: 'alice@cyber.local',
+                username: 'Alice',
+                password: 'hashedpassword123',
+                userId: 'AGN-ALICE',
+            };
+            bobUser = {
+                email: 'bob@cyber.local',
+                username: 'Bob',
+                password: 'hashedpassword123',
+                userId: 'AGN-BOB',
+            };
 
             const db = dbManager.getDB();
             db.users[aliceUser.email] = aliceUser;
@@ -737,61 +1175,100 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             const keyJwk = { kty: 'EC', crv: 'P-256', x: 'pubX', y: 'pubY' };
             await aliceSocket._trigger('publish_public_key', keyJwk);
 
-            expect(dbManager.getDB().users['alice@cyber.local'].publicKey).toEqual(keyJwk);
+            expect(
+                dbManager.getDB().users['alice@cyber.local'].publicKey,
+            ).toEqual(keyJwk);
 
             const cb = vi.fn();
             await bobSocket._trigger('get_public_key', 'AGN-ALICE', cb);
-            expect(cb).toHaveBeenCalledWith({ success: true, publicKey: keyJwk, avatar: undefined });
+            expect(cb).toHaveBeenCalledWith({
+                success: true,
+                publicKey: keyJwk,
+                avatar: undefined,
+            });
 
             // Key not found
             await bobSocket._trigger('get_public_key', 'AGN-NONEXISTENT', cb);
-            expect(cb).toHaveBeenCalledWith({ success: false, message: 'Anahtar bulunamadı.' });
+            expect(cb).toHaveBeenCalledWith({
+                success: false,
+                message: 'Anahtar bulunamadı.',
+            });
 
             // Unauthenticated
             bobSocket.user = null;
             await bobSocket._trigger('get_public_key', 'AGN-ALICE', cb);
-            expect(cb).toHaveBeenCalledWith({ success: false, message: 'AUTH_REQUIRED' });
+            expect(cb).toHaveBeenCalledWith({
+                success: false,
+                message: 'AUTH_REQUIRED',
+            });
         });
 
         it('check_node_status & check_node_statuses', async () => {
             const cb = vi.fn();
             await aliceSocket._trigger('check_node_status', 'AGN-BOB', cb);
-            expect(cb).toHaveBeenCalledWith({ userId: 'AGN-BOB', isOnline: true });
+            expect(cb).toHaveBeenCalledWith({
+                userId: 'AGN-BOB',
+                isOnline: true,
+            });
 
             await aliceSocket._trigger('check_node_status', 'AGN-OFFLINE', cb);
-            expect(cb).toHaveBeenCalledWith({ userId: 'AGN-OFFLINE', isOnline: false });
+            expect(cb).toHaveBeenCalledWith({
+                userId: 'AGN-OFFLINE',
+                isOnline: false,
+            });
 
             // Batch statuses
             const cbBatch = vi.fn();
-            await aliceSocket._trigger('check_node_statuses', ['AGN-BOB', 'AGN-OFFLINE'], cbBatch);
+            await aliceSocket._trigger(
+                'check_node_statuses',
+                ['AGN-BOB', 'AGN-OFFLINE'],
+                cbBatch,
+            );
             expect(cbBatch).toHaveBeenCalledWith({
                 statuses: {
                     'AGN-BOB': true,
-                    'AGN-OFFLINE': false
-                }
+                    'AGN-OFFLINE': false,
+                },
             });
 
             // Unauthenticated
             aliceSocket.user = null;
             await aliceSocket._trigger('check_node_status', 'AGN-BOB', cb);
-            expect(cb).toHaveBeenCalledWith({ userId: 'AGN-BOB', isOnline: false });
+            expect(cb).toHaveBeenCalledWith({
+                userId: 'AGN-BOB',
+                isOnline: false,
+            });
 
-            await aliceSocket._trigger('check_node_statuses', ['AGN-BOB'], cbBatch);
+            await aliceSocket._trigger(
+                'check_node_statuses',
+                ['AGN-BOB'],
+                cbBatch,
+            );
             expect(cbBatch).toHaveBeenCalledWith({ statuses: {} });
         });
 
         it('ecdh_offer & ecdh_answer: safely routes handshake between online nodes', async () => {
-            const offerData = { targetId: 'AGN-BOB', publicKeyJwk: { crv: 'P-256' } };
+            const offerData = {
+                targetId: 'AGN-BOB',
+                publicKeyJwk: { crv: 'P-256' },
+            };
             await aliceSocket._trigger('ecdh_offer', offerData);
 
-            const sentOffer = emittedEvents.find(e => e.event === 'ecdh_offer' && e.target === 'sock-bob');
+            const sentOffer = emittedEvents.find(
+                (e) => e.event === 'ecdh_offer' && e.target === 'sock-bob',
+            );
             expect(sentOffer).toBeDefined();
             expect(sentOffer.data.senderId).toBe('AGN-ALICE'); // Enforces senderId
 
-            const answerData = { targetId: 'AGN-ALICE', publicKeyJwk: { crv: 'P-256' } };
+            const answerData = {
+                targetId: 'AGN-ALICE',
+                publicKeyJwk: { crv: 'P-256' },
+            };
             await bobSocket._trigger('ecdh_answer', answerData);
 
-            const sentAnswer = emittedEvents.find(e => e.event === 'ecdh_answer' && e.target === 'sock-alice');
+            const sentAnswer = emittedEvents.find(
+                (e) => e.event === 'ecdh_answer' && e.target === 'sock-alice',
+            );
             expect(sentAnswer).toBeDefined();
             expect(sentAnswer.data.senderId).toBe('AGN-BOB');
         });
@@ -799,10 +1276,16 @@ describe('Socket.io Architecture & Security Test Suite', () => {
         it('reset_chat_session: transmits session_reset to online peer and queues when offline', async () => {
             const cb = vi.fn();
             // 1. Online peer: Alice sends reset to Bob
-            await aliceSocket._trigger('reset_chat_session', { targetId: 'AGN-BOB' }, cb);
+            await aliceSocket._trigger(
+                'reset_chat_session',
+                { targetId: 'AGN-BOB' },
+                cb,
+            );
             expect(cb).toHaveBeenCalledWith({ success: true, queued: false });
 
-            const sentReset = emittedEvents.find(e => e.event === 'session_reset' && e.target === 'sock-bob');
+            const sentReset = emittedEvents.find(
+                (e) => e.event === 'session_reset' && e.target === 'sock-bob',
+            );
             expect(sentReset).toBeDefined();
             expect(sentReset.data.senderId).toBe('AGN-ALICE');
             expect(sentReset.data.targetId).toBe('AGN-BOB');
@@ -811,12 +1294,21 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             // 2. Offline peer: Bob goes offline, Alice sends reset to Bob
             onlineNodes.delete('AGN-BOB');
             const cbOffline = vi.fn();
-            await aliceSocket._trigger('reset_chat_session', { targetId: 'AGN-BOB' }, cbOffline);
-            expect(cbOffline).toHaveBeenCalledWith({ success: true, queued: true });
+            await aliceSocket._trigger(
+                'reset_chat_session',
+                { targetId: 'AGN-BOB' },
+                cbOffline,
+            );
+            expect(cbOffline).toHaveBeenCalledWith({
+                success: true,
+                queued: true,
+            });
 
             const db = dbManager.getDB();
             expect(db.queue['AGN-BOB']).toBeDefined();
-            const queuedReset = db.queue['AGN-BOB'].find(p => p.type === 'session_reset');
+            const queuedReset = db.queue['AGN-BOB'].find(
+                (p) => p.type === 'session_reset',
+            );
             expect(queuedReset).toBeDefined();
             expect(queuedReset.senderId).toBe('AGN-ALICE');
 
@@ -825,7 +1317,9 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             onlineNodes.set('AGN-BOB', new Set(['sock-bob']));
             await bobSocket._trigger('client_ready');
 
-            const deliveredReset = emittedEvents.find(e => e.event === 'session_reset' && e.target === 'sock-bob');
+            const deliveredReset = emittedEvents.find(
+                (e) => e.event === 'session_reset' && e.target === 'sock-bob',
+            );
             expect(deliveredReset).toBeDefined();
             expect(deliveredReset.data.senderId).toBe('AGN-ALICE');
         });
@@ -834,16 +1328,31 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             const cb = vi.fn();
 
             // Spoofing attempt (senderId does not match socket.user.userId)
-            const spoofedPacket = { targetId: 'AGN-BOB', senderId: 'AGN-ATTACKER', ciphertext: 'data' };
+            const spoofedPacket = {
+                targetId: 'AGN-BOB',
+                senderId: 'AGN-ATTACKER',
+                ciphertext: 'data',
+            };
             await aliceSocket._trigger('send_secure_packet', spoofedPacket, cb);
-            expect(cb).toHaveBeenCalledWith({ queued: false, error: 'SENDER_MISMATCH' });
+            expect(cb).toHaveBeenCalledWith({
+                queued: false,
+                error: 'SENDER_MISMATCH',
+            });
 
             // Legitimate transmission to online Bob
-            const validPacket = { targetId: 'AGN-BOB', senderId: 'AGN-ALICE', ciphertext: 'secretPacket' };
+            const validPacket = {
+                targetId: 'AGN-BOB',
+                senderId: 'AGN-ALICE',
+                ciphertext: 'secretPacket',
+            };
             await aliceSocket._trigger('send_secure_packet', validPacket, cb);
 
             expect(cb).toHaveBeenCalledWith({ queued: false });
-            const delivered = emittedEvents.find(e => e.event === 'receive_secure_packet' && e.target === 'sock-bob');
+            const delivered = emittedEvents.find(
+                (e) =>
+                    e.event === 'receive_secure_packet' &&
+                    e.target === 'sock-bob',
+            );
             expect(delivered).toBeDefined();
             expect(delivered.data).toBe(validPacket);
         });
@@ -856,21 +1365,45 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             // Pre-fill queue with MAX_QUEUE_SIZE items to test shift
             db.queue['AGN-BOB'] = [];
             for (let i = 0; i < MAX_QUEUE_SIZE; i++) {
-                db.queue['AGN-BOB'].push({ id: `pkt-${i}`, timestamp: Date.now() });
+                db.queue['AGN-BOB'].push({
+                    id: `pkt-${i}`,
+                    timestamp: Date.now(),
+                });
             }
 
-            const newPacket = { id: 'pkt-overflow', targetId: 'AGN-BOB', senderId: 'AGN-ALICE', ciphertext: 'overflow' };
+            const newPacket = {
+                id: 'pkt-overflow',
+                targetId: 'AGN-BOB',
+                senderId: 'AGN-ALICE',
+                ciphertext: 'overflow',
+            };
             await aliceSocket._trigger('send_secure_packet', newPacket, cb);
 
             expect(cb).toHaveBeenCalledWith({ queued: true });
             expect(db.queue['AGN-BOB']).toHaveLength(MAX_QUEUE_SIZE);
-            expect(db.queue['AGN-BOB'][db.queue['AGN-BOB'].length - 1].id).toBe('pkt-overflow');
+            expect(db.queue['AGN-BOB'][db.queue['AGN-BOB'].length - 1].id).toBe(
+                'pkt-overflow',
+            );
 
             // Expired TTL packet should be rejected immediately (SEC-18)
             const cbExpired = vi.fn();
-            const expiredPacket = { id: 'pkt-expired', targetId: 'AGN-BOB', senderId: 'AGN-ALICE', ciphertext: 'expired', ttl: 5, timestamp: Date.now() - 10000 };
-            await aliceSocket._trigger('send_secure_packet', expiredPacket, cbExpired);
-            expect(cbExpired).toHaveBeenCalledWith({ queued: false, error: 'EXPIRED' });
+            const expiredPacket = {
+                id: 'pkt-expired',
+                targetId: 'AGN-BOB',
+                senderId: 'AGN-ALICE',
+                ciphertext: 'expired',
+                ttl: 5,
+                timestamp: Date.now() - 10000,
+            };
+            await aliceSocket._trigger(
+                'send_secure_packet',
+                expiredPacket,
+                cbExpired,
+            );
+            expect(cbExpired).toHaveBeenCalledWith({
+                queued: false,
+                error: 'EXPIRED',
+            });
         });
 
         it('client_ready: flushes pending queue upon reconnect and filters expired packets (SEC-18)', async () => {
@@ -878,13 +1411,26 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             const now = Date.now();
             db.queue['AGN-ALICE'] = [
                 { id: 'fresh-1', timestamp: now, ciphertext: 'c1' },
-                { id: 'expired-1', timestamp: now - (dbManager.MAX_PACKET_AGE_MS + 5000), ciphertext: 'c2' },
-                { id: 'ttl-expired-1', timestamp: now - 15000, ttl: 10, ciphertext: 'c3' }
+                {
+                    id: 'expired-1',
+                    timestamp: now - (dbManager.MAX_PACKET_AGE_MS + 5000),
+                    ciphertext: 'c2',
+                },
+                {
+                    id: 'ttl-expired-1',
+                    timestamp: now - 15000,
+                    ttl: 10,
+                    ciphertext: 'c3',
+                },
             ];
 
             await aliceSocket._trigger('client_ready');
 
-            const delivered = emittedEvents.filter(e => e.event === 'receive_secure_packet' && e.target === 'sock-alice');
+            const delivered = emittedEvents.filter(
+                (e) =>
+                    e.event === 'receive_secure_packet' &&
+                    e.target === 'sock-alice',
+            );
             expect(delivered).toHaveLength(1);
             expect(delivered[0].data.id).toBe('fresh-1');
             expect(db.queue['AGN-ALICE']).toBeUndefined();
@@ -892,10 +1438,15 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
         it('revoke_packet: revokes in real-time or removes from offline queue with BOLA protection', async () => {
             // Online Bob
-            const onlineData = { targetId: 'AGN-BOB', packetId: 'pkt-to-revoke' };
+            const onlineData = {
+                targetId: 'AGN-BOB',
+                packetId: 'pkt-to-revoke',
+            };
             await aliceSocket._trigger('revoke_packet', onlineData);
 
-            const revokedBroadcast = emittedEvents.find(e => e.event === 'packet_revoked' && e.target === 'sock-bob');
+            const revokedBroadcast = emittedEvents.find(
+                (e) => e.event === 'packet_revoked' && e.target === 'sock-bob',
+            );
             expect(revokedBroadcast).toBeDefined();
 
             // Offline Bob with queued messages
@@ -903,15 +1454,21 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             const db = dbManager.getDB();
             db.queue['AGN-BOB'] = [
                 { id: 'msg-alice', senderId: 'AGN-ALICE', ciphertext: 'c1' },
-                { id: 'msg-hacker', senderId: 'AGN-OTHER', ciphertext: 'c2' }
+                { id: 'msg-hacker', senderId: 'AGN-OTHER', ciphertext: 'c2' },
             ];
 
             // BOLA test: Alice attempts to revoke Hacker's packet
-            await aliceSocket._trigger('revoke_packet', { targetId: 'AGN-BOB', packetId: 'msg-hacker' });
+            await aliceSocket._trigger('revoke_packet', {
+                targetId: 'AGN-BOB',
+                packetId: 'msg-hacker',
+            });
             expect(db.queue['AGN-BOB']).toHaveLength(2); // Should NOT delete
 
             // Alice revokes her own packet
-            await aliceSocket._trigger('revoke_packet', { targetId: 'AGN-BOB', packetId: 'msg-alice' });
+            await aliceSocket._trigger('revoke_packet', {
+                targetId: 'AGN-BOB',
+                packetId: 'msg-alice',
+            });
             expect(db.queue['AGN-BOB']).toHaveLength(1);
             expect(db.queue['AGN-BOB'][0].id).toBe('msg-hacker');
         });
@@ -930,8 +1487,20 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             connectionHandler(aliceSocket);
             connectionHandler(bobSocket);
 
-            aliceSocket.user = { email: 'a@c.l', username: 'Alice', password: 'hashedpassword123', userId: 'AGN-ALICE', avatar: 'a.png' };
-            bobSocket.user = { email: 'b@c.l', username: 'Bob', password: 'hashedpassword123', userId: 'AGN-BOB', avatar: 'b.png' };
+            aliceSocket.user = {
+                email: 'a@c.l',
+                username: 'Alice',
+                password: 'hashedpassword123',
+                userId: 'AGN-ALICE',
+                avatar: 'a.png',
+            };
+            bobSocket.user = {
+                email: 'b@c.l',
+                username: 'Bob',
+                password: 'hashedpassword123',
+                userId: 'AGN-BOB',
+                avatar: 'b.png',
+            };
 
             const db = dbManager.getDB();
             db.users['a@c.l'] = aliceSocket.user;
@@ -948,7 +1517,7 @@ describe('Socket.io Architecture & Security Test Suite', () => {
                     username: `Agent${i}`,
                     password: 'hashedpassword123',
                     userId: `AGN-SEARCH-${i}`,
-                    avatar: null
+                    avatar: null,
                 };
             }
 
@@ -958,7 +1527,9 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             expect(cb).toHaveBeenCalled();
             const results = cb.mock.calls[0][0].results;
             expect(results.length).toBeLessThanOrEqual(20);
-            expect(results.find(r => r.userId === 'AGN-ALICE')).toBeUndefined(); // Excludes self
+            expect(
+                results.find((r) => r.userId === 'AGN-ALICE'),
+            ).toBeUndefined(); // Excludes self
 
             // Empty search
             await aliceSocket._trigger('search_users', '', cb);
@@ -976,39 +1547,63 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
         it('notify_add_contact & respond_contact_request', async () => {
             const cb = vi.fn();
-            await aliceSocket._trigger('notify_add_contact', { targetId: 'AGN-BOB' }, cb);
+            await aliceSocket._trigger(
+                'notify_add_contact',
+                { targetId: 'AGN-BOB' },
+                cb,
+            );
 
             expect(cb).toHaveBeenCalledWith({ success: true });
-            const reqEvent = emittedEvents.find(e => e.event === 'contact_request' && e.target === 'sock-bob');
+            const reqEvent = emittedEvents.find(
+                (e) => e.event === 'contact_request' && e.target === 'sock-bob',
+            );
             expect(reqEvent).toBeDefined();
             expect(reqEvent.data.senderId).toBe('AGN-ALICE');
 
             // Respond contact request
             const cbResp = vi.fn();
-            await bobSocket._trigger('respond_contact_request', { targetId: 'AGN-ALICE', accepted: true }, cbResp);
+            await bobSocket._trigger(
+                'respond_contact_request',
+                { targetId: 'AGN-ALICE', accepted: true },
+                cbResp,
+            );
 
             expect(cbResp).toHaveBeenCalledWith({ success: true });
-            const respEvent = emittedEvents.find(e => e.event === 'contact_request_response' && e.target === 'sock-alice');
+            const respEvent = emittedEvents.find(
+                (e) =>
+                    e.event === 'contact_request_response' &&
+                    e.target === 'sock-alice',
+            );
             expect(respEvent).toBeDefined();
             expect(respEvent.data.accepted).toBe(true);
         });
 
         it('typing and stop_typing events', async () => {
             await aliceSocket._trigger('typing', { targetId: 'AGN-BOB' });
-            const typingEvent = emittedEvents.find(e => e.event === 'user_typing' && e.target === 'sock-bob');
+            const typingEvent = emittedEvents.find(
+                (e) => e.event === 'user_typing' && e.target === 'sock-bob',
+            );
             expect(typingEvent).toBeDefined();
             expect(typingEvent.data.senderId).toBe('AGN-ALICE');
 
             await aliceSocket._trigger('stop_typing', { targetId: 'AGN-BOB' });
-            const stopTypingEvent = emittedEvents.find(e => e.event === 'user_typing_stop' && e.target === 'sock-bob');
+            const stopTypingEvent = emittedEvents.find(
+                (e) =>
+                    e.event === 'user_typing_stop' && e.target === 'sock-bob',
+            );
             expect(stopTypingEvent).toBeDefined();
         });
 
         it('join_status_rooms: joins room for valid uid length (< 20)', async () => {
-            await aliceSocket._trigger('join_status_rooms', ['AGN-BOB', 'INVALID_UID_TOO_LONG_123456789']);
+            await aliceSocket._trigger('join_status_rooms', [
+                'AGN-BOB',
+                'INVALID_UID_TOO_LONG_123456789',
+            ]);
 
             expect(roomsJoined).toContain('status_AGN-BOB');
-            expect(roomsJoined).not.toContain('status_INVALID_UID_TOO_LONG_123456789');
+            expect(roomsJoined).not.toContain(
+                'status_INVALID_UID_TOO_LONG_123456789',
+            );
 
             // Non-array
             await aliceSocket._trigger('join_status_rooms', 'not-an-array');
@@ -1020,21 +1615,38 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
             // Target offline
             const cb1 = vi.fn();
-            await aliceSocket._trigger('notify_add_contact', { targetId: 'AGN-BOB' }, cb1);
+            await aliceSocket._trigger(
+                'notify_add_contact',
+                { targetId: 'AGN-BOB' },
+                cb1,
+            );
             expect(cb1).toHaveBeenCalledWith({ success: true });
 
             const cb2 = vi.fn();
-            await aliceSocket._trigger('respond_contact_request', { targetId: 'AGN-BOB', accepted: false }, cb2);
+            await aliceSocket._trigger(
+                'respond_contact_request',
+                { targetId: 'AGN-BOB', accepted: false },
+                cb2,
+            );
             expect(cb2).toHaveBeenCalledWith({ success: true });
 
             // Without callback
-            await aliceSocket._trigger('notify_add_contact', { targetId: 'AGN-BOB' });
-            await aliceSocket._trigger('respond_contact_request', { targetId: 'AGN-BOB', accepted: true });
+            await aliceSocket._trigger('notify_add_contact', {
+                targetId: 'AGN-BOB',
+            });
+            await aliceSocket._trigger('respond_contact_request', {
+                targetId: 'AGN-BOB',
+                accepted: true,
+            });
 
             // Unauthenticated
             aliceSocket.user = null;
-            await aliceSocket._trigger('notify_add_contact', { targetId: 'AGN-BOB' });
-            await aliceSocket._trigger('respond_contact_request', { targetId: 'AGN-BOB' });
+            await aliceSocket._trigger('notify_add_contact', {
+                targetId: 'AGN-BOB',
+            });
+            await aliceSocket._trigger('respond_contact_request', {
+                targetId: 'AGN-BOB',
+            });
         });
 
         it('typing and stop_typing: offline targets and unauthenticated', async () => {
@@ -1057,22 +1669,35 @@ describe('Socket.io Architecture & Security Test Suite', () => {
         it('revoke_packet edge cases: missing fields, unauthenticated, non-matching packet', async () => {
             // Unauthenticated
             aliceSocket.user = null;
-            await aliceSocket._trigger('revoke_packet', { targetId: 'AGN-BOB', packetId: 'pkt-1' });
+            await aliceSocket._trigger('revoke_packet', {
+                targetId: 'AGN-BOB',
+                packetId: 'pkt-1',
+            });
 
             aliceSocket.user = { email: 'a@c.l', userId: 'AGN-ALICE' };
             // Missing data / fields
             await aliceSocket._trigger('revoke_packet', null);
-            await aliceSocket._trigger('revoke_packet', { targetId: 'AGN-BOB' });
+            await aliceSocket._trigger('revoke_packet', {
+                targetId: 'AGN-BOB',
+            });
             await aliceSocket._trigger('revoke_packet', { packetId: 'pkt-1' });
 
             // Offline target without queue
             onlineNodes.delete('AGN-BOB');
             delete dbManager.getDB().queue['AGN-BOB'];
-            await aliceSocket._trigger('revoke_packet', { targetId: 'AGN-BOB', packetId: 'pkt-1' });
+            await aliceSocket._trigger('revoke_packet', {
+                targetId: 'AGN-BOB',
+                packetId: 'pkt-1',
+            });
 
             // Offline target with queue, but packetId does not match (initialLength === length)
-            dbManager.getDB().queue['AGN-BOB'] = [{ id: 'other-pkt', senderId: 'AGN-ALICE' }];
-            await aliceSocket._trigger('revoke_packet', { targetId: 'AGN-BOB', packetId: 'non-existent' });
+            dbManager.getDB().queue['AGN-BOB'] = [
+                { id: 'other-pkt', senderId: 'AGN-ALICE' },
+            ];
+            await aliceSocket._trigger('revoke_packet', {
+                targetId: 'AGN-BOB',
+                packetId: 'non-existent',
+            });
             expect(dbManager.getDB().queue['AGN-BOB']).toHaveLength(1);
         });
 
@@ -1098,7 +1723,10 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
             const cbSend = vi.fn();
             await aliceSocket._trigger('send_secure_packet', {}, cbSend);
-            expect(cbSend).toHaveBeenCalledWith({ queued: false, error: 'AUTH_REQUIRED' });
+            expect(cbSend).toHaveBeenCalledWith({
+                queued: false,
+                error: 'AUTH_REQUIRED',
+            });
 
             // send_secure_packet without callback when unauthenticated
             await aliceSocket._trigger('send_secure_packet', {});
@@ -1113,8 +1741,14 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
             // Target offline
             onlineNodes.delete('AGN-BOB');
-            await aliceSocket._trigger('ecdh_offer', { targetId: 'AGN-BOB', publicKeyJwk: {} });
-            await aliceSocket._trigger('ecdh_answer', { targetId: 'AGN-BOB', publicKeyJwk: {} });
+            await aliceSocket._trigger('ecdh_offer', {
+                targetId: 'AGN-BOB',
+                publicKeyJwk: {},
+            });
+            await aliceSocket._trigger('ecdh_answer', {
+                targetId: 'AGN-BOB',
+                publicKeyJwk: {},
+            });
 
             // Unauthenticated
             aliceSocket.user = null;
@@ -1123,14 +1757,22 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
             // reset_chat_session edge cases
             const cbReset = vi.fn();
-            aliceSocket.user = { email: 'alice@cyber.local', username: 'Alice', userId: 'AGN-ALICE' };
+            aliceSocket.user = {
+                email: 'alice@cyber.local',
+                username: 'Alice',
+                userId: 'AGN-ALICE',
+            };
             await aliceSocket._trigger('reset_chat_session', null, cbReset);
             expect(cbReset).toHaveBeenCalledWith({ success: false });
             await aliceSocket._trigger('reset_chat_session', {}, cbReset);
             expect(cbReset).toHaveBeenCalledWith({ success: false });
 
             aliceSocket.user = null;
-            await aliceSocket._trigger('reset_chat_session', { targetId: 'AGN-BOB' }, cbReset);
+            await aliceSocket._trigger(
+                'reset_chat_session',
+                { targetId: 'AGN-BOB' },
+                cbReset,
+            );
             expect(cbReset).toHaveBeenCalledWith({ success: false });
         });
     });
@@ -1140,33 +1782,62 @@ describe('Socket.io Architecture & Security Test Suite', () => {
     // ────────────────────────────────────────────────────────────────────────
     describe('Rate Limiter Exhaustion', () => {
         it('should throttle actions when limit is exceeded and reset after window', async () => {
-            const socket = createMockSocket({ handshake: { address: '203.0.113.88' } });
+            const socket = createMockSocket({
+                handshake: { address: '203.0.113.88' },
+            });
             connectionHandler(socket);
 
             const cb = vi.fn();
-            socket.user = { email: 'throttle@cyber.local', username: 'ThrottleUser', password: 'pwd', userId: 'AGN-THROTTLE' };
+            socket.user = {
+                email: 'throttle@cyber.local',
+                username: 'ThrottleUser',
+                password: 'pwd',
+                userId: 'AGN-THROTTLE',
+            };
             const db = dbManager.getDB();
             db.users[socket.user.email] = socket.user;
 
             for (let i = 0; i < 3; i++) {
-                await socket._trigger('delete_account', { password: 'wrong' }, cb);
+                await socket._trigger(
+                    'delete_account',
+                    { password: 'wrong' },
+                    cb,
+                );
             }
 
             // 4th attempt should hit rate limit
             await socket._trigger('delete_account', { password: 'wrong' }, cb);
-            expect(cb).toHaveBeenLastCalledWith(expect.objectContaining({ success: false, message: 'Çok fazla istek.' }));
+            expect(cb).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    success: false,
+                    message: 'Çok fazla istek.',
+                }),
+            );
         });
 
         it('should hit rate limits for search, notify, respond, revoke, ecdh, and pubkey', async () => {
-            const socket = createMockSocket({ handshake: { address: '203.0.113.99' } });
+            const socket = createMockSocket({
+                handshake: { address: '203.0.113.99' },
+            });
             connectionHandler(socket);
-            socket.user = { email: 'rl@cyber.local', username: 'RlUser', password: 'pwd', userId: 'AGN-RL' };
+            socket.user = {
+                email: 'rl@cyber.local',
+                username: 'RlUser',
+                password: 'pwd',
+                userId: 'AGN-RL',
+            };
             dbManager.getDB().users[socket.user.email] = socket.user;
 
             // Exhaust ecdh limit (limit 10)
             for (let i = 0; i < 11; i++) {
-                await socket._trigger('ecdh_offer', { targetId: 'AGN-BOB', publicKeyJwk: {} });
-                await socket._trigger('ecdh_answer', { targetId: 'AGN-BOB', publicKeyJwk: {} });
+                await socket._trigger('ecdh_offer', {
+                    targetId: 'AGN-BOB',
+                    publicKeyJwk: {},
+                });
+                await socket._trigger('ecdh_answer', {
+                    targetId: 'AGN-BOB',
+                    publicKeyJwk: {},
+                });
             }
 
             // Exhaust search (limit 30)
@@ -1178,13 +1849,21 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
             // Exhaust notify and respond (limit 30)
             for (let i = 0; i < 31; i++) {
-                await socket._trigger('notify_add_contact', { targetId: 'AGN-BOB' });
-                await socket._trigger('respond_contact_request', { targetId: 'AGN-BOB', accepted: true });
+                await socket._trigger('notify_add_contact', {
+                    targetId: 'AGN-BOB',
+                });
+                await socket._trigger('respond_contact_request', {
+                    targetId: 'AGN-BOB',
+                    accepted: true,
+                });
             }
 
             // Exhaust revoke (limit 30)
             for (let i = 0; i < 31; i++) {
-                await socket._trigger('revoke_packet', { targetId: 'AGN-BOB', packetId: `p-${i}` });
+                await socket._trigger('revoke_packet', {
+                    targetId: 'AGN-BOB',
+                    packetId: `p-${i}`,
+                });
             }
 
             // Exhaust get_public_key (limit 60)
@@ -1192,76 +1871,147 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             for (let i = 0; i < 61; i++) {
                 await socket._trigger('get_public_key', 'AGN-BOB', cbPub);
             }
-            expect(cbPub).toHaveBeenLastCalledWith({ success: false, message: expect.stringContaining('Çok fazla') });
+            expect(cbPub).toHaveBeenLastCalledWith({
+                success: false,
+                message: expect.stringContaining('Çok fazla'),
+            });
 
             // Exhaust verify_session (limit 30)
             const cbSess = vi.fn();
             for (let i = 0; i < 31; i++) {
                 await socket._trigger('verify_session', 'token', cbSess);
             }
-            expect(cbSess).toHaveBeenLastCalledWith({ success: false, message: 'RATE_LIMIT' });
+            expect(cbSess).toHaveBeenLastCalledWith({
+                success: false,
+                message: 'RATE_LIMIT',
+            });
 
             // Exhaust send_secure_packet (limit 60)
             const cbSend = vi.fn();
             for (let i = 0; i < 61; i++) {
-                await socket._trigger('send_secure_packet', { senderId: 'AGN-RL', targetId: 'AGN-BOB', ciphertext: 'data' }, cbSend);
+                await socket._trigger(
+                    'send_secure_packet',
+                    {
+                        senderId: 'AGN-RL',
+                        targetId: 'AGN-BOB',
+                        ciphertext: 'data',
+                    },
+                    cbSend,
+                );
             }
-            expect(cbSend).toHaveBeenLastCalledWith({ queued: false, error: 'RATE_LIMIT' });
-
+            expect(cbSend).toHaveBeenLastCalledWith({
+                queued: false,
+                error: 'RATE_LIMIT',
+            });
         });
 
         it('should hit rate limits for register, login, and reset_chat_session', async () => {
-            const socket = createMockSocket({ handshake: { address: '203.0.113.111' } });
+            const socket = createMockSocket({
+                handshake: { address: '203.0.113.111' },
+            });
             connectionHandler(socket);
-            socket.user = { email: 'fastrl@cyber.local', username: 'FastRl', password: 'pwd', userId: 'AGN-FASTRL' };
+            socket.user = {
+                email: 'fastrl@cyber.local',
+                username: 'FastRl',
+                password: 'pwd',
+                userId: 'AGN-FASTRL',
+            };
             dbManager.getDB().users[socket.user.email] = socket.user;
 
-            const hashSpy = vi.spyOn(bcrypt, 'hash').mockResolvedValue('fastHash');
-            const compareSpy = vi.spyOn(bcrypt, 'compare').mockResolvedValue(false);
+            const hashSpy = vi
+                .spyOn(bcrypt, 'hash')
+                .mockResolvedValue('fastHash');
+            const compareSpy = vi
+                .spyOn(bcrypt, 'compare')
+                .mockResolvedValue(false);
 
             // Exhaust register (limit 20) -> lines 333-334
             const cbReg = vi.fn();
             for (let i = 0; i < 21; i++) {
-                await socket._trigger('register', { email: `reg_${i}@cyber.local`, password: 'password123', username: `RegUser${i}` }, cbReg);
+                await socket._trigger(
+                    'register',
+                    {
+                        email: `reg_${i}@cyber.local`,
+                        password: 'password123',
+                        username: `RegUser${i}`,
+                    },
+                    cbReg,
+                );
             }
-            expect(cbReg).toHaveBeenLastCalledWith({ success: false, message: expect.stringContaining('SİBER SAVUNMA: Çok fazla kayıt denemesi') });
+            expect(cbReg).toHaveBeenLastCalledWith({
+                success: false,
+                message: expect.stringContaining(
+                    'SİBER SAVUNMA: Çok fazla kayıt denemesi',
+                ),
+            });
 
             // Exhaust login (limit 30) -> lines 408-409
             const cbLogin = vi.fn();
             for (let i = 0; i < 31; i++) {
-                await socket._trigger('login', { email: 'user@cyber.local', password: 'wrongpassword' }, cbLogin);
+                await socket._trigger(
+                    'login',
+                    { email: 'user@cyber.local', password: 'wrongpassword' },
+                    cbLogin,
+                );
             }
-            expect(cbLogin).toHaveBeenLastCalledWith({ success: false, message: expect.stringContaining('SİBER SAVUNMA: Çok fazla giriş denemesi') });
+            expect(cbLogin).toHaveBeenLastCalledWith({
+                success: false,
+                message: expect.stringContaining(
+                    'SİBER SAVUNMA: Çok fazla giriş denemesi',
+                ),
+            });
 
             // Exhaust reset_chat_session (limit 30) -> lines 799-800
             const cbResetRL = vi.fn();
             for (let i = 0; i < 31; i++) {
-                await socket._trigger('reset_chat_session', { targetId: 'AGN-BOB' }, cbResetRL);
+                await socket._trigger(
+                    'reset_chat_session',
+                    { targetId: 'AGN-BOB' },
+                    cbResetRL,
+                );
             }
-            expect(cbResetRL).toHaveBeenLastCalledWith({ success: false, error: 'RATE_LIMIT' });
+            expect(cbResetRL).toHaveBeenLastCalledWith({
+                success: false,
+                error: 'RATE_LIMIT',
+            });
 
             hashSpy.mockRestore();
             compareSpy.mockRestore();
         });
 
-
         it('reset_chat_session: drops oldest packet when offline target queue reaches MAX_QUEUE_SIZE (line 821)', async () => {
             const socket = createMockSocket();
             connectionHandler(socket);
-            socket.user = { email: 'resetq@cyber.local', username: 'ResetQ', userId: 'AGN-RESETQ' };
+            socket.user = {
+                email: 'resetq@cyber.local',
+                username: 'ResetQ',
+                userId: 'AGN-RESETQ',
+            };
             const db = dbManager.getDB();
             db.queue['AGN-TARGET-OFFLINE'] = [];
             for (let i = 0; i < MAX_QUEUE_SIZE; i++) {
-                db.queue['AGN-TARGET-OFFLINE'].push({ id: `p-${i}`, senderId: 'AGN-OTHER', timestamp: Date.now() });
+                db.queue['AGN-TARGET-OFFLINE'].push({
+                    id: `p-${i}`,
+                    senderId: 'AGN-OTHER',
+                    timestamp: Date.now(),
+                });
             }
             expect(db.queue['AGN-TARGET-OFFLINE'].length).toBe(MAX_QUEUE_SIZE);
 
             const cb = vi.fn();
-            await socket._trigger('reset_chat_session', { targetId: 'AGN-TARGET-OFFLINE' }, cb);
+            await socket._trigger(
+                'reset_chat_session',
+                { targetId: 'AGN-TARGET-OFFLINE' },
+                cb,
+            );
 
             expect(cb).toHaveBeenCalledWith({ success: true, queued: true });
             expect(db.queue['AGN-TARGET-OFFLINE'].length).toBe(MAX_QUEUE_SIZE);
-            expect(db.queue['AGN-TARGET-OFFLINE'][db.queue['AGN-TARGET-OFFLINE'].length - 1].type).toBe('session_reset');
+            expect(
+                db.queue['AGN-TARGET-OFFLINE'][
+                    db.queue['AGN-TARGET-OFFLINE'].length - 1
+                ].type,
+            ).toBe('session_reset');
         });
 
         it('checkRateLimit: resets count to 1 when current time exceeds resetAt window (lines 234-236)', () => {
@@ -1282,7 +2032,11 @@ describe('Socket.io Architecture & Security Test Suite', () => {
 
         it('recordFailedLogin & checkFailedLoginLimit: tracks multiple attempts and enforces limit (lines 255 & 269)', () => {
             const socketInst = setupSockets(io);
-            const { checkFailedLoginLimit, recordFailedLogin, failedLoginAttempts } = socketInst;
+            const {
+                checkFailedLoginLimit,
+                recordFailedLogin,
+                failedLoginAttempts,
+            } = socketInst;
             const ip = '198.51.100.222';
 
             expect(checkFailedLoginLimit(ip)).toBe(true);
@@ -1308,8 +2062,14 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             vi.useFakeTimers();
             const socketInst = setupSockets(io);
             const { rateLimits, failedLoginAttempts } = socketInst;
-            rateLimits.set('exp:test', { count: 5, resetAt: Date.now() - 1000 });
-            failedLoginAttempts.set('198.51.100.999', { count: 3, resetAt: Date.now() - 1000 });
+            rateLimits.set('exp:test', {
+                count: 5,
+                resetAt: Date.now() - 1000,
+            });
+            failedLoginAttempts.set('198.51.100.999', {
+                count: 3,
+                resetAt: Date.now() - 1000,
+            });
             revokedTokens.set('exp-token', Date.now() - 1000);
 
             // Advance by 65 seconds (for 60000ms rate limit & failedLoginAttempts interval)
@@ -1321,4 +2081,3 @@ describe('Socket.io Architecture & Security Test Suite', () => {
         });
     });
 });
-

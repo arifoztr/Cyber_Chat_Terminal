@@ -1,15 +1,17 @@
 import { describe, it, expect } from 'vitest';
 
 // Test ortamı için geçerli uzunlukta bir JWT_SECRET tanımlayarak uyarıyı temizliyoruz
-process.env.JWT_SECRET = 'cyber-chat-terminal-super-secure-jwt-test-key-32chars';
+process.env.JWT_SECRET =
+    'cyber-chat-terminal-super-secure-jwt-test-key-32chars';
 const setupSockets = require('../src/socket.js');
-const { signJWT, verifyJWT, revokeToken, getClientIp, revokedTokens } = setupSockets._internals;
+const { signJWT, verifyJWT, revokeToken, getClientIp, revokedTokens } =
+    setupSockets._internals;
 
 describe('Authentication & JWT Security Unit Tests', () => {
     const samplePayload = {
         email: 'operator@cyber.local',
         userId: 'AGN-1337-4242',
-        username: 'Operator1337'
+        username: 'Operator1337',
     };
 
     it('should sign and successfully verify a valid JWT', () => {
@@ -30,9 +32,13 @@ describe('Authentication & JWT Security Unit Tests', () => {
         const [header, body, signature] = token.split('.');
 
         // Tamper payload (e.g. change userId to admin)
-        const parsedBody = JSON.parse(Buffer.from(body, 'base64url').toString());
+        const parsedBody = JSON.parse(
+            Buffer.from(body, 'base64url').toString(),
+        );
         parsedBody.userId = 'AGN-ADMIN-9999';
-        const tamperedBody = Buffer.from(JSON.stringify(parsedBody)).toString('base64url');
+        const tamperedBody = Buffer.from(JSON.stringify(parsedBody)).toString(
+            'base64url',
+        );
         const tamperedToken = `${header}.${tamperedBody}.${signature}`;
 
         expect(verifyJWT(tamperedToken)).toBeNull();
@@ -68,8 +74,8 @@ describe('Authentication & JWT Security Unit Tests', () => {
             const mockSocket = {
                 handshake: {
                     address: '192.168.1.50',
-                    headers: {}
-                }
+                    headers: {},
+                },
             };
             const ip = getClientIp(mockSocket);
             expect(ip).toBe('192.168.1.50');
@@ -80,9 +86,9 @@ describe('Authentication & JWT Security Unit Tests', () => {
                 handshake: {
                     address: '127.0.0.1',
                     headers: {
-                        'cf-connecting-ip': '203.0.113.195'
-                    }
-                }
+                        'cf-connecting-ip': '203.0.113.195',
+                    },
+                },
             };
             const ip = getClientIp(mockSocket);
             expect(ip).toBe('203.0.113.195');

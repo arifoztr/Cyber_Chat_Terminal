@@ -6,7 +6,15 @@
  * ve tek örnek kilidi (Single Instance Lock) mekanizmalarını yönetir.
  */
 
-const { app, BrowserWindow, shell, ipcMain, Menu, safeStorage, Notification } = require('electron');
+const {
+    app,
+    BrowserWindow,
+    shell,
+    ipcMain,
+    Menu,
+    safeStorage,
+    Notification,
+} = require('electron');
 const path = require('path');
 
 /**
@@ -28,8 +36,8 @@ function createWindow() {
         height: 850,
         minWidth: 900,
         minHeight: 650,
-        title: "Secure Chat — E2EE Messenger",
-        backgroundColor: "#0d1117",
+        title: 'Secure Chat — E2EE Messenger',
+        backgroundColor: '#0d1117',
         show: false, // Sayfa hazır olana kadar pencereyi gösterme (beyaz parlama önleme)
         icon: path.join(__dirname, 'assets', 'icon.png'),
         webPreferences: {
@@ -37,8 +45,8 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             sandbox: true,
-            webSecurity: true // [GÜVENLİK FIX] SOP zorunlu kılınır — XSS ile yerel dosya/iç ağ erişimi engellenir
-        }
+            webSecurity: true, // [GÜVENLİK FIX] SOP zorunlu kılınır — XSS ile yerel dosya/iç ağ erişimi engellenir
+        },
     });
 
     // Menü çubuğunu gizle / sadeleştir
@@ -103,7 +111,7 @@ ipcMain.on('show-notification', (_event, data) => {
         new Notification({
             title: String(data.title),
             body: data.body ? String(data.body) : '',
-            icon: path.join(__dirname, 'assets', 'icon.png')
+            icon: path.join(__dirname, 'assets', 'icon.png'),
         }).show();
     }
 });

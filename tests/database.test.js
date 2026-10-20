@@ -4,7 +4,7 @@ import path from 'path';
 
 let activeTursoClient = null;
 vi.mock('@libsql/client', () => ({
-    createClient: vi.fn(() => activeTursoClient)
+    createClient: vi.fn(() => activeTursoClient),
 }));
 
 // Use a dedicated temporary test database
@@ -20,7 +20,9 @@ describe('Database & Queue Management Tests', () => {
     beforeAll(async () => {
         // Clean up prior test artifacts if present
         if (fs.existsSync(testDbPath)) {
-            try { fs.unlinkSync(testDbPath); } catch (_) {}
+            try {
+                fs.unlinkSync(testDbPath);
+            } catch (_) {}
         }
         await dbManager.initDB();
     });
@@ -30,11 +32,13 @@ describe('Database & Queue Management Tests', () => {
         const cleanupFiles = [
             testDbPath,
             `${testDbPath}-shm`,
-            `${testDbPath}-wal`
+            `${testDbPath}-wal`,
         ];
         for (const file of cleanupFiles) {
             if (fs.existsSync(file)) {
-                try { fs.unlinkSync(file); } catch (_) {}
+                try {
+                    fs.unlinkSync(file);
+                } catch (_) {}
             }
         }
     });
@@ -57,7 +61,7 @@ describe('Database & Queue Management Tests', () => {
             password: '$2b$10$hashedpasswordstringforauth',
             userId: testUserId,
             publicKey: { kty: 'EC', crv: 'P-256', x: 'pubX', y: 'pubY' },
-            avatar: 'https://example.com/avatar.png'
+            avatar: 'https://example.com/avatar.png',
         };
 
         await dbManager.saveDatabaseImmediate();
@@ -75,13 +79,13 @@ describe('Database & Queue Management Tests', () => {
             type: 'chat_message',
             senderId: 'AGN-1234-5678',
             ciphertext: 'SifreliVeriPaketi1',
-            timestamp: Date.now()
+            timestamp: Date.now(),
         };
         const packet2 = {
             type: 'chat_message',
             senderId: 'AGN-1234-5678',
             ciphertext: 'SifreliVeriPaketi2',
-            timestamp: Date.now() + 1000
+            timestamp: Date.now() + 1000,
         };
 
         db.queue[targetId] = [packet1, packet2];
@@ -105,7 +109,7 @@ describe('Database & Queue Management Tests', () => {
             password: 'pwd',
             userId: 'AGN-5555-4444',
             publicKey: null,
-            avatar: null
+            avatar: null,
         };
         await dbManager.saveDatabaseImmediate();
         await dbManager.rebuildUserIdIndex();
@@ -121,26 +125,43 @@ describe('Database & Queue Management Tests', () => {
             const originalDb = internals.getSqliteDb();
             internals.setSqliteDb(null);
 
-            await expect(internals.sqliteRun('SELECT 1')).rejects.toThrow('Veritabanı başlatılmadı');
-            await expect(internals.sqliteGet('SELECT 1')).rejects.toThrow('Veritabanı başlatılmadı');
-            await expect(internals.sqliteAll('SELECT 1')).rejects.toThrow('Veritabanı başlatılmadı');
+            await expect(internals.sqliteRun('SELECT 1')).rejects.toThrow(
+                'Veritabanı başlatılmadı',
+            );
+            await expect(internals.sqliteGet('SELECT 1')).rejects.toThrow(
+                'Veritabanı başlatılmadı',
+            );
+            await expect(internals.sqliteAll('SELECT 1')).rejects.toThrow(
+                'Veritabanı başlatılmadı',
+            );
 
             internals.setSqliteDb(originalDb);
         });
 
         it('sqliteRun, sqliteGet, and sqliteAll should reject on SQL syntax errors', async () => {
-            await expect(internals.sqliteRun('MALFORMED SQL SYNTAX')).rejects.toThrow();
-            await expect(internals.sqliteGet('MALFORMED SQL SYNTAX')).rejects.toThrow();
-            await expect(internals.sqliteAll('MALFORMED SQL SYNTAX')).rejects.toThrow();
+            await expect(
+                internals.sqliteRun('MALFORMED SQL SYNTAX'),
+            ).rejects.toThrow();
+            await expect(
+                internals.sqliteGet('MALFORMED SQL SYNTAX'),
+            ).rejects.toThrow();
+            await expect(
+                internals.sqliteAll('MALFORMED SQL SYNTAX'),
+            ).rejects.toThrow();
         });
 
         it('rebuildUserIdIndex should handle errors gracefully and skip empty userId/email', async () => {
             const originalDb = internals.getSqliteDb();
             internals.setSqliteDb(null); // Causes queryAll to throw
-            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const consoleSpy = vi
+                .spyOn(console, 'error')
+                .mockImplementation(() => {});
 
             await dbManager.rebuildUserIdIndex();
-            expect(consoleSpy).toHaveBeenCalledWith('[!] rebuildUserIdIndex hatası:', expect.any(Error));
+            expect(consoleSpy).toHaveBeenCalledWith(
+                '[!] rebuildUserIdIndex hatası:',
+                expect.any(Error),
+            );
 
             consoleSpy.mockRestore();
             internals.setSqliteDb(originalDb);
@@ -153,11 +174,13 @@ describe('Database & Queue Management Tests', () => {
                 password: 'pwd',
                 userId: 'AGN-VALID-01',
                 publicKey: null,
-                avatar: null
+                avatar: null,
             };
             await dbManager.saveDatabaseImmediate();
             await dbManager.rebuildUserIdIndex();
-            expect(dbManager.getUserIdIndex()['AGN-VALID-01']).toBe('valid@cyber.local');
+            expect(dbManager.getUserIdIndex()['AGN-VALID-01']).toBe(
+                'valid@cyber.local',
+            );
         });
 
         it('syncMemoryToSqlite: should auto-generate userId if missing and rollback on error', async () => {
@@ -168,17 +191,22 @@ describe('Database & Queue Management Tests', () => {
                 password: 'pwd',
                 userId: null, // should trigger auto-generation
                 publicKey: null,
-                avatar: null
+                avatar: null,
             };
 
             await internals.syncMemoryToSqlite();
-            expect(db.users['no_uid@cyber.local'].userId).toMatch(/^AGN-\d+-\d+$/);
+            expect(db.users['no_uid@cyber.local'].userId).toMatch(
+                /^AGN-\d+-\d+$/,
+            );
 
             // Test transaction error & rollback
             const dbInstance = internals.getSqliteDb();
             const originalRun = dbInstance.run;
-            dbInstance.run = function(sql, ...args) {
-                const cb = typeof args[args.length - 1] === 'function' ? args[args.length - 1] : null;
+            dbInstance.run = function (sql, ...args) {
+                const cb =
+                    typeof args[args.length - 1] === 'function'
+                        ? args[args.length - 1]
+                        : null;
                 if (sql.includes('INSERT INTO users')) {
                     if (cb) cb(new Error('Forced SQLite transaction error'));
                     return this;
@@ -186,7 +214,9 @@ describe('Database & Queue Management Tests', () => {
                 return originalRun.apply(this, [sql, ...args]);
             };
 
-            await expect(internals.syncMemoryToSqlite()).rejects.toThrow('Forced SQLite transaction error');
+            await expect(internals.syncMemoryToSqlite()).rejects.toThrow(
+                'Forced SQLite transaction error',
+            );
             dbInstance.run = originalRun;
         });
 
@@ -201,15 +231,25 @@ describe('Database & Queue Management Tests', () => {
         });
 
         it('syncMemoryToSqlite: should delete users from DB that are not in memory', async () => {
-            await internals.sqliteRun('INSERT OR IGNORE INTO users (email, username, password, userId) VALUES (?, ?, ?, ?)',
-                ['stale@cyber.local', 'Stale', 'pwd', 'AGN-STALE-1']);
+            await internals.sqliteRun(
+                'INSERT OR IGNORE INTO users (email, username, password, userId) VALUES (?, ?, ?, ?)',
+                ['stale@cyber.local', 'Stale', 'pwd', 'AGN-STALE-1'],
+            );
             const db = dbManager.getDB();
-            db.users['active@cyber.local'] = { email: 'active@cyber.local', username: 'Active', password: 'pwd', userId: 'AGN-ACT-1' };
+            db.users['active@cyber.local'] = {
+                email: 'active@cyber.local',
+                username: 'Active',
+                password: 'pwd',
+                userId: 'AGN-ACT-1',
+            };
             delete db.users['stale@cyber.local'];
 
             await internals.syncMemoryToSqlite();
 
-            const stale = await internals.sqliteGet('SELECT * FROM users WHERE email = ?', ['stale@cyber.local']);
+            const stale = await internals.sqliteGet(
+                'SELECT * FROM users WHERE email = ?',
+                ['stale@cyber.local'],
+            );
             expect(stale).toBeUndefined();
         });
     });
@@ -225,7 +265,7 @@ describe('Database & Queue Management Tests', () => {
                 password: 'pwd',
                 userId: 'AGN-DEBOUNCE',
                 publicKey: null,
-                avatar: null
+                avatar: null,
             };
 
             // Call saveDatabase multiple times concurrently
@@ -240,20 +280,27 @@ describe('Database & Queue Management Tests', () => {
         });
 
         it('saveDatabase should catch write error if syncMemoryToSql fails', async () => {
-            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const consoleSpy = vi
+                .spyOn(console, 'error')
+                .mockImplementation(() => {});
             const originalDb = internals.getSqliteDb();
             internals.setSqliteDb(null); // Causes syncMemoryToSql to fail
 
             const p = dbManager.saveDatabase();
             await p;
 
-            expect(consoleSpy).toHaveBeenCalledWith('[!] Veritabanı yazma hatası:', expect.any(Error));
+            expect(consoleSpy).toHaveBeenCalledWith(
+                '[!] Veritabanı yazma hatası:',
+                expect.any(Error),
+            );
             consoleSpy.mockRestore();
             internals.setSqliteDb(originalDb);
         });
 
         it('saveDatabaseImmediate should clear pending timer and throw if write fails', async () => {
-            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const consoleSpy = vi
+                .spyOn(console, 'error')
+                .mockImplementation(() => {});
             const originalDb = internals.getSqliteDb();
 
             // Start a debounced save to set _saveTimer
@@ -263,7 +310,10 @@ describe('Database & Queue Management Tests', () => {
             internals.setSqliteDb(null);
 
             await expect(dbManager.saveDatabaseImmediate()).rejects.toThrow();
-            expect(consoleSpy).toHaveBeenCalledWith('[!] Veritabanı yazma hatası (immediate):', expect.any(Error));
+            expect(consoleSpy).toHaveBeenCalledWith(
+                '[!] Veritabanı yazma hatası (immediate):',
+                expect.any(Error),
+            );
 
             consoleSpy.mockRestore();
             internals.setSqliteDb(originalDb);
@@ -277,10 +327,14 @@ describe('Database & Queue Management Tests', () => {
 
         afterEach(() => {
             if (fs.existsSync(legacyPath)) {
-                try { fs.unlinkSync(legacyPath); } catch (_) {}
+                try {
+                    fs.unlinkSync(legacyPath);
+                } catch (_) {}
             }
             if (fs.existsSync(backupPath)) {
-                try { fs.unlinkSync(backupPath); } catch (_) {}
+                try {
+                    fs.unlinkSync(backupPath);
+                } catch (_) {}
             }
         });
 
@@ -296,15 +350,13 @@ describe('Database & Queue Management Tests', () => {
                         username: 'MigratedUser',
                         password: 'hashedpassword',
                         publicKey: { kty: 'EC' },
-                        avatar: 'avatar-url'
+                        avatar: 'avatar-url',
                         // userId omitted to test auto-generation
-                    }
+                    },
                 },
                 queue: {
-                    'AGN-TARGET-99': [
-                        { id: 'pkt-1', ciphertext: 'enc1' }
-                    ]
-                }
+                    'AGN-TARGET-99': [{ id: 'pkt-1', ciphertext: 'enc1' }],
+                },
             };
             fs.writeFileSync(legacyPath, JSON.stringify(legacyData));
 
@@ -312,7 +364,9 @@ describe('Database & Queue Management Tests', () => {
 
             const db = dbManager.getDB();
             expect(db.users['migrated@cyber.local']).toBeDefined();
-            expect(db.users['migrated@cyber.local'].userId).toMatch(/^AGN-\d+-\d+$/);
+            expect(db.users['migrated@cyber.local'].userId).toMatch(
+                /^AGN-\d+-\d+$/,
+            );
             expect(fs.existsSync(backupPath)).toBe(true);
             expect(fs.existsSync(legacyPath)).toBe(false);
         });
@@ -321,10 +375,15 @@ describe('Database & Queue Management Tests', () => {
             await internals.sqliteRun('DELETE FROM users');
             fs.writeFileSync(legacyPath, 'NOT_VALID_JSON{{{');
 
-            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const consoleSpy = vi
+                .spyOn(console, 'error')
+                .mockImplementation(() => {});
             await internals.initSqlite();
 
-            expect(consoleSpy).toHaveBeenCalledWith('[!] Migration hatası:', expect.any(Error));
+            expect(consoleSpy).toHaveBeenCalledWith(
+                '[!] Migration hatası:',
+                expect.any(Error),
+            );
             consoleSpy.mockRestore();
         });
     });
@@ -337,15 +396,25 @@ describe('Database & Queue Management Tests', () => {
             const targetId = 'AGN-GC-TEST';
             const now = Date.now();
 
-            const freshPacket = { id: 'fresh', timestamp: now, ciphertext: 'fresh' };
-            const expiredPacket = { id: 'expired', timestamp: now - (dbManager.MAX_PACKET_AGE_MS + 10000), ciphertext: 'old' };
+            const freshPacket = {
+                id: 'fresh',
+                timestamp: now,
+                ciphertext: 'fresh',
+            };
+            const expiredPacket = {
+                id: 'expired',
+                timestamp: now - (dbManager.MAX_PACKET_AGE_MS + 10000),
+                ciphertext: 'old',
+            };
 
             db.queue[targetId] = [freshPacket, expiredPacket];
             await dbManager.saveDatabaseImmediate();
 
             // Run garbage collection step
             const expireTime = Date.now() - dbManager.MAX_PACKET_AGE_MS;
-            await internals.queryRun('DELETE FROM queue WHERE timestamp < ?', [expireTime]);
+            await internals.queryRun('DELETE FROM queue WHERE timestamp < ?', [
+                expireTime,
+            ]);
             const queueRows = await internals.queryAll('SELECT * FROM queue');
             for (const key in db.queue) delete db.queue[key];
             for (const r of queueRows) {
@@ -358,20 +427,30 @@ describe('Database & Queue Management Tests', () => {
         });
 
         it('should handle garbage collector exception gracefully', async () => {
-            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const consoleSpy = vi
+                .spyOn(console, 'error')
+                .mockImplementation(() => {});
             const originalRun = internals.queryRun;
 
-            vi.spyOn(internals, 'queryRun').mockRejectedValueOnce(new Error('GC query failed'));
+            vi.spyOn(internals, 'queryRun').mockRejectedValueOnce(
+                new Error('GC query failed'),
+            );
 
             // Simulate the timer callback execution
             try {
                 const expireTime = Date.now() - dbManager.MAX_PACKET_AGE_MS;
-                await internals.queryRun('DELETE FROM queue WHERE timestamp < ?', [expireTime]);
+                await internals.queryRun(
+                    'DELETE FROM queue WHERE timestamp < ?',
+                    [expireTime],
+                );
             } catch (e) {
                 console.error('[!] Garbage Collector hatası:', e);
             }
 
-            expect(consoleSpy).toHaveBeenCalledWith('[!] Garbage Collector hatası:', expect.any(Error));
+            expect(consoleSpy).toHaveBeenCalledWith(
+                '[!] Garbage Collector hatası:',
+                expect.any(Error),
+            );
             consoleSpy.mockRestore();
             vi.restoreAllMocks();
         });
@@ -379,7 +458,10 @@ describe('Database & Queue Management Tests', () => {
         it('startGarbageCollector should start interval timer', () => {
             const intervalSpy = vi.spyOn(globalThis, 'setInterval');
             dbManager.startGarbageCollector();
-            expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 60 * 60 * 1000);
+            expect(intervalSpy).toHaveBeenCalledWith(
+                expect.any(Function),
+                60 * 60 * 1000,
+            );
             intervalSpy.mockRestore();
         });
     });
@@ -397,24 +479,55 @@ describe('Database & Queue Management Tests', () => {
 
             mockTursoClient = {
                 execute: vi.fn(async (query) => {
-                    const sql = typeof query === 'string' ? query : (query?.sql || '');
-                    const args = typeof query === 'string' ? [] : (query?.args || []);
+                    const sql =
+                        typeof query === 'string' ? query : query?.sql || '';
+                    const args =
+                        typeof query === 'string' ? [] : query?.args || [];
                     executedStatements.push({ sql, args });
                     if (sql.includes('SELECT * FROM users')) {
                         return {
-                            columns: ['email', 'username', 'password', 'userId', 'publicKey', 'avatar'],
+                            columns: [
+                                'email',
+                                'username',
+                                'password',
+                                'userId',
+                                'publicKey',
+                                'avatar',
+                            ],
                             rows: [
-                                ['turso@cyber.local', 'TursoUser', 'pwd', 'AGN-TURSO-1', JSON.stringify({ kty: 'EC' }), 'avatar.png'],
-                                ['turso2@cyber.local', 'TursoUser2', 'pwd2', 'AGN-TURSO-2', null, null]
-                            ]
+                                [
+                                    'turso@cyber.local',
+                                    'TursoUser',
+                                    'pwd',
+                                    'AGN-TURSO-1',
+                                    JSON.stringify({ kty: 'EC' }),
+                                    'avatar.png',
+                                ],
+                                [
+                                    'turso2@cyber.local',
+                                    'TursoUser2',
+                                    'pwd2',
+                                    'AGN-TURSO-2',
+                                    null,
+                                    null,
+                                ],
+                            ],
                         };
                     }
                     if (sql.includes('SELECT * FROM queue')) {
                         return {
                             columns: ['id', 'targetId', 'packet', 'timestamp'],
                             rows: [
-                                [1, 'AGN-TURSO-1', JSON.stringify({ id: 't-pkt-1', text: 'hi' }), Date.now()]
-                            ]
+                                [
+                                    1,
+                                    'AGN-TURSO-1',
+                                    JSON.stringify({
+                                        id: 't-pkt-1',
+                                        text: 'hi',
+                                    }),
+                                    Date.now(),
+                                ],
+                            ],
                         };
                     }
                     if (sql.includes('SELECT userId, email FROM users')) {
@@ -422,8 +535,8 @@ describe('Database & Queue Management Tests', () => {
                             columns: ['userId', 'email'],
                             rows: [
                                 ['AGN-TURSO-1', 'turso@cyber.local'],
-                                ['AGN-TURSO-2', 'turso2@cyber.local']
-                            ]
+                                ['AGN-TURSO-2', 'turso2@cyber.local'],
+                            ],
                         };
                     }
                     return { columns: ['col1'], rows: [['val1']] };
@@ -431,7 +544,7 @@ describe('Database & Queue Management Tests', () => {
                 batch: vi.fn(async (statements, mode) => {
                     batchedStatements.push(...statements);
                     return [];
-                })
+                }),
             };
 
             internals.setTursoClient(mockTursoClient);
@@ -443,7 +556,7 @@ describe('Database & Queue Management Tests', () => {
                     id: libsqlPath,
                     filename: libsqlPath,
                     loaded: true,
-                    exports: { createClient: () => mockTursoClient }
+                    exports: { createClient: () => mockTursoClient },
                 };
             } catch (_) {}
         });
@@ -460,16 +573,28 @@ describe('Database & Queue Management Tests', () => {
         it('tursoRun, tursoGet, and tursoAll should interact with tursoClient properly', async () => {
             // tursoRun
             await internals.tursoRun('INSERT INTO test VALUES (?)', ['sample']);
-            expect(mockTursoClient.execute).toHaveBeenCalledWith({ sql: 'INSERT INTO test VALUES (?)', args: ['sample'] });
+            expect(mockTursoClient.execute).toHaveBeenCalledWith({
+                sql: 'INSERT INTO test VALUES (?)',
+                args: ['sample'],
+            });
 
             // tursoGet with rows
-            const row = await internals.tursoGet('SELECT * FROM users WHERE email = ?', ['turso@cyber.local']);
+            const row = await internals.tursoGet(
+                'SELECT * FROM users WHERE email = ?',
+                ['turso@cyber.local'],
+            );
             expect(row).toBeDefined();
             expect(row.email).toBe('turso@cyber.local');
 
             // tursoGet with empty rows
-            mockTursoClient.execute.mockResolvedValueOnce({ columns: ['email'], rows: [] });
-            const emptyRow = await internals.tursoGet('SELECT * FROM users WHERE email = ?', ['missing']);
+            mockTursoClient.execute.mockResolvedValueOnce({
+                columns: ['email'],
+                rows: [],
+            });
+            const emptyRow = await internals.tursoGet(
+                'SELECT * FROM users WHERE email = ?',
+                ['missing'],
+            );
             expect(emptyRow).toBeUndefined();
 
             // tursoAll
@@ -487,11 +612,15 @@ describe('Database & Queue Management Tests', () => {
                 password: 'cloudpassword',
                 userId: null, // should auto-generate
                 publicKey: { kty: 'EC', crv: 'P-256' },
-                avatar: 'cloud.png'
+                avatar: 'cloud.png',
             };
             db.queue['AGN-TARGET-CLOUD'] = [
-                { id: 'cloud-pkt-1', ciphertext: 'cloudcipher', timestamp: Date.now() },
-                { id: 'cloud-pkt-2', ciphertext: 'cloudcipher2' } // missing timestamp fallback
+                {
+                    id: 'cloud-pkt-1',
+                    ciphertext: 'cloudcipher',
+                    timestamp: Date.now(),
+                },
+                { id: 'cloud-pkt-2', ciphertext: 'cloudcipher2' }, // missing timestamp fallback
             ];
 
             await internals.syncMemoryToTurso();
@@ -506,7 +635,9 @@ describe('Database & Queue Management Tests', () => {
 
             await internals.syncMemoryToTurso();
             expect(mockTursoClient.batch).toHaveBeenCalled();
-            const deleteStmt = batchedStatements.find(s => s.sql === 'DELETE FROM users');
+            const deleteStmt = batchedStatements.find(
+                (s) => s.sql === 'DELETE FROM users',
+            );
             expect(deleteStmt).toBeDefined();
         });
 
@@ -514,7 +645,9 @@ describe('Database & Queue Management Tests', () => {
             await internals.initTurso();
             const db = dbManager.getDB();
             expect(db.users['turso@cyber.local']).toBeDefined();
-            expect(db.users['turso@cyber.local'].publicKey).toEqual({ kty: 'EC' });
+            expect(db.users['turso@cyber.local'].publicKey).toEqual({
+                kty: 'EC',
+            });
             expect(db.users['turso2@cyber.local'].publicKey).toBeNull();
             expect(db.queue['AGN-TURSO-1']).toHaveLength(1);
 
@@ -526,7 +659,10 @@ describe('Database & Queue Management Tests', () => {
             internals.setTursoClient(mockTursoClient);
 
             // queryGet in Turso mode (line 225)
-            const row = await internals.queryGet('SELECT * FROM users WHERE email = ?', ['turso@cyber.local']);
+            const row = await internals.queryGet(
+                'SELECT * FROM users WHERE email = ?',
+                ['turso@cyber.local'],
+            );
             expect(row).toBeDefined();
             expect(row.email).toBe('turso@cyber.local');
 
@@ -547,10 +683,18 @@ describe('Database & Queue Management Tests', () => {
 
             // Add expired and fresh packets to DB for existing user AGN-TURSO-1
             const expireOld = Date.now() - (dbManager.MAX_PACKET_AGE_MS + 5000);
-            await internals.queryRun('INSERT INTO queue (targetId, packet, timestamp) VALUES (?, ?, ?)',
-                ['AGN-TURSO-1', JSON.stringify({ id: 'p-old-gc' }), expireOld]);
-            await internals.queryRun('INSERT INTO queue (targetId, packet, timestamp) VALUES (?, ?, ?)',
-                ['AGN-TURSO-1', JSON.stringify({ id: 'p-fresh-gc' }), Date.now()]);
+            await internals.queryRun(
+                'INSERT INTO queue (targetId, packet, timestamp) VALUES (?, ?, ?)',
+                ['AGN-TURSO-1', JSON.stringify({ id: 'p-old-gc' }), expireOld],
+            );
+            await internals.queryRun(
+                'INSERT INTO queue (targetId, packet, timestamp) VALUES (?, ?, ?)',
+                [
+                    'AGN-TURSO-1',
+                    JSON.stringify({ id: 'p-fresh-gc' }),
+                    Date.now(),
+                ],
+            );
 
             dbManager.startGarbageCollector();
 
@@ -562,12 +706,19 @@ describe('Database & Queue Management Tests', () => {
             expect(db.queue['AGN-TURSO-1'][0].id).toBe('t-pkt-1');
 
             // Test catch block (line 635)
-            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const errorSpy = vi
+                .spyOn(console, 'error')
+                .mockImplementation(() => {});
             internals.setTursoClient(mockTursoClient);
-            mockTursoClient.execute.mockRejectedValueOnce(new Error('Simulated GC failure'));
+            mockTursoClient.execute.mockRejectedValueOnce(
+                new Error('Simulated GC failure'),
+            );
 
             await vi.advanceTimersByTimeAsync(3600000);
-            expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Garbage Collector hatası'), expect.any(Error));
+            expect(errorSpy).toHaveBeenCalledWith(
+                expect.stringContaining('Garbage Collector hatası'),
+                expect.any(Error),
+            );
 
             internals.setTursoClient(null);
             errorSpy.mockRestore();
@@ -576,7 +727,8 @@ describe('Database & Queue Management Tests', () => {
 
         it('should create database directory if it does not exist and handle mkdir errors (lines 33-34)', () => {
             const testDir = path.join(__dirname, 'nonexistent_test_subdir');
-            if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true, force: true });
+            if (fs.existsSync(testDir))
+                fs.rmSync(testDir, { recursive: true, force: true });
             process.env.DB_PATH = path.join(testDir, 'db.sqlite');
 
             delete require.cache[require.resolve('../src/database.js')];
@@ -587,14 +739,21 @@ describe('Database & Queue Management Tests', () => {
             // Test line 34 catch block
             const failDir = path.join(__dirname, 'nonexistent_fail_subdir');
             process.env.DB_PATH = path.join(failDir, 'db.sqlite');
-            const mkdirSpy = vi.spyOn(fs, 'mkdirSync').mockImplementationOnce(() => {
-                throw new Error('Disk write error');
-            });
-            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const mkdirSpy = vi
+                .spyOn(fs, 'mkdirSync')
+                .mockImplementationOnce(() => {
+                    throw new Error('Disk write error');
+                });
+            const errorSpy = vi
+                .spyOn(console, 'error')
+                .mockImplementation(() => {});
 
             delete require.cache[require.resolve('../src/database.js')];
             require('../src/database.js');
-            expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Veritabanı dizini oluşturulamadı'), expect.any(Error));
+            expect(errorSpy).toHaveBeenCalledWith(
+                expect.stringContaining('Veritabanı dizini oluşturulamadı'),
+                expect.any(Error),
+            );
 
             errorSpy.mockRestore();
             mkdirSpy.mockRestore();
@@ -604,5 +763,3 @@ describe('Database & Queue Management Tests', () => {
         });
     });
 });
-
-

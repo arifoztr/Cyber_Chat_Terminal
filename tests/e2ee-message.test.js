@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  * E2EE Mesajlaşma ve Soket Güvenlik Birim Testleri (Jest Test Suite)
- * 
+ *
  * Bu test dosyası; Jest test runner ile doğrudan çalıştırılmak üzere,
  * Web Crypto (AES-256-GCM), asenkron soket olayları ve çevrimdışı mesaj
  * saklama akışını ağdan ve arayüzden tamamen izole ederek test eder.
@@ -22,13 +22,15 @@ const {
     base64ToBuffer,
     encryptGCM,
     decryptGCM,
-    _aesKeyCache
+    _aesKeyCache,
 } = cryptoModule;
 
 describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
     // 256-bit (64 hex karakter) test anahtarları
-    const ALICE_SECRET = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
-    const BOB_WRONG_SECRET = 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
+    const ALICE_SECRET =
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+    const BOB_WRONG_SECRET =
+        'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
 
     // ────────────────────────────────────────────────────────────────────────
     // MOCK TANIMLARI: Soket ve IndexedDB İzolasyonu
@@ -55,7 +57,9 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
                 } else if (!callback) {
                     delete socketListeners[event];
                 } else if (socketListeners[event]) {
-                    socketListeners[event] = socketListeners[event].filter(cb => cb !== callback);
+                    socketListeners[event] = socketListeners[event].filter(
+                        (cb) => cb !== callback,
+                    );
                 }
             }),
             emit: jest.fn((event, data, ackCallback) => {
@@ -66,7 +70,7 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
             disconnect: jest.fn(() => {
                 mockSocket.connected = false;
                 socketListeners = {};
-            })
+            }),
         };
     });
 
@@ -117,7 +121,9 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
             const ciphertext = await encryptGCM(secretMessage, ALICE_SECRET);
 
             // Yanlış anahtarla çözme girişimi kesinlikle yakalanıp toThrow ile sonuçlanmalıdır
-            await expect(decryptGCM(ciphertext, BOB_WRONG_SECRET)).rejects.toThrow();
+            await expect(
+                decryptGCM(ciphertext, BOB_WRONG_SECRET),
+            ).rejects.toThrow();
         });
 
         test('[EDGE CASE] Manipüle edilmiş (tampered) ciphertext ve bozuk auth tag reddedilmelidir', async () => {
@@ -130,7 +136,9 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
             const tamperedCiphertext = bufferToBase64(buffer);
 
             // GCM etiket doğrulaması başarısız olmalı ve hata fırlatmalıdır
-            await expect(decryptGCM(tamperedCiphertext, ALICE_SECRET)).rejects.toThrow();
+            await expect(
+                decryptGCM(tamperedCiphertext, ALICE_SECRET),
+            ).rejects.toThrow();
         });
 
         test('[EDGE CASE] Eksik IV (12 bayttan kısa veri) verildiğinde hata yakalanmalıdır', async () => {
@@ -138,7 +146,9 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
             const shortBuffer = new Uint8Array([0x01, 0x02, 0x03, 0x04]);
             const truncatedCiphertext = bufferToBase64(shortBuffer);
 
-            await expect(decryptGCM(truncatedCiphertext, ALICE_SECRET)).rejects.toThrow();
+            await expect(
+                decryptGCM(truncatedCiphertext, ALICE_SECRET),
+            ).rejects.toThrow();
         });
 
         test('[EDGE CASE] Boş string, null veya undefined şifreli veri verildiğinde çökmeyi önlemelidir', async () => {
@@ -156,7 +166,11 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
          * Simüle edilen Güvenli Paket İşleme Handler'ı:
          * Gerçek uygulamadaki socket.on('receive_secure_packet') mantığını yansıtır.
          */
-        const setupPacketReceiver = (socketInstance, targetVault, secretKey) => {
+        const setupPacketReceiver = (
+            socketInstance,
+            targetVault,
+            secretKey,
+        ) => {
             socketInstance.on('receive_secure_packet', async (packet) => {
                 // Güvenlik doğrulaması: Null/Undefined veya eksik gövde koruması
                 if (!packet || typeof packet !== 'object') {
@@ -168,22 +182,30 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
 
                 try {
                     // Deşifreleme adımı
-                    const plaintext = await decryptGCM(packet.ciphertext, secretKey);
-                    
+                    const plaintext = await decryptGCM(
+                        packet.ciphertext,
+                        secretKey,
+                    );
+
                     // Kasaya (Vault) güvenli kayıt
-                    const storedMessages = targetVault.get(packet.senderId) || [];
+                    const storedMessages =
+                        targetVault.get(packet.senderId) || [];
                     storedMessages.push({
                         id: packet.id || 'msg-' + Date.now(),
                         senderId: packet.senderId,
                         text: plaintext,
-                        timestamp: packet.timestamp || Date.now()
+                        timestamp: packet.timestamp || Date.now(),
                     });
                     targetVault.set(packet.senderId, storedMessages);
 
                     return { success: true, text: plaintext };
                 } catch (err) {
                     // Şifre çözme hatası durumunda uygulamanın çökmesi engellenir
-                    return { success: false, error: 'DECRYPTION_FAILED', details: err.message };
+                    return {
+                        success: false,
+                        error: 'DECRYPTION_FAILED',
+                        details: err.message,
+                    };
                 }
             });
         };
@@ -199,7 +221,7 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
                 id: 'packet-101',
                 senderId: senderId,
                 ciphertext: encryptedText,
-                timestamp: Date.now()
+                timestamp: Date.now(),
             };
 
             // Soket olayını tetikle
@@ -239,7 +261,7 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
 
             const brokenPacket = {
                 id: 'packet-999',
-                senderId: 'AGN-1234-5678'
+                senderId: 'AGN-1234-5678',
                 // ciphertext alanı yok
             };
 
@@ -257,7 +279,7 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
                 id: 'packet-hack-01',
                 senderId: 'AGN-ATTACKER',
                 ciphertext: 'GecersizBozukBase64Verisi==',
-                timestamp: Date.now()
+                timestamp: Date.now(),
             };
 
             const result = await handler(corruptedPacket);
@@ -276,7 +298,7 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
             const bobVault = [];
 
             // 1. Alice -> Bob: "Selam Bob!"
-            const alicePlaintext = "Selam Bob!";
+            const alicePlaintext = 'Selam Bob!';
             const cipherAlice = await encryptGCM(alicePlaintext, SHARED_KEY);
             const packetAliceToBob = {
                 id: 'pkt-01',
@@ -284,29 +306,32 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
                 targetId: BOB_ID,
                 textPayload: cipherAlice,
                 filePayload: null,
-                timestamp: Date.now()
+                timestamp: Date.now(),
             };
 
             // Alice kendi kasasına kaydeder (gönderici önbelleği ile)
             aliceVault.push({
                 ...packetAliceToBob,
                 cachedText: alicePlaintext,
-                cachedFile: null
+                cachedFile: null,
             });
 
             // Bob paketi alır ve deşifre eder
-            const bobDecryptedText = await decryptGCM(packetAliceToBob.textPayload, SHARED_KEY);
+            const bobDecryptedText = await decryptGCM(
+                packetAliceToBob.textPayload,
+                SHARED_KEY,
+            );
             expect(bobDecryptedText).toBe(alicePlaintext);
 
             // Bob kendi kasasına kaydeder (alıcı önbelleği ile)
             bobVault.push({
                 ...packetAliceToBob,
                 cachedText: bobDecryptedText,
-                cachedFile: null
+                cachedFile: null,
             });
 
             // 2. Bob -> Alice: "Aleyküm selam Alice!"
-            const bobReplyText = "Aleyküm selam Alice!";
+            const bobReplyText = 'Aleyküm selam Alice!';
             const cipherBob = await encryptGCM(bobReplyText, SHARED_KEY);
             const packetBobToAlice = {
                 id: 'pkt-02',
@@ -314,25 +339,28 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
                 targetId: ALICE_ID,
                 textPayload: cipherBob,
                 filePayload: null,
-                timestamp: Date.now() + 100
+                timestamp: Date.now() + 100,
             };
 
             // Bob kendi kasasına kaydeder
             bobVault.push({
                 ...packetBobToAlice,
                 cachedText: bobReplyText,
-                cachedFile: null
+                cachedFile: null,
             });
 
             // Alice paketi alır ve deşifre eder
-            const aliceDecryptedReply = await decryptGCM(packetBobToAlice.textPayload, SHARED_KEY);
+            const aliceDecryptedReply = await decryptGCM(
+                packetBobToAlice.textPayload,
+                SHARED_KEY,
+            );
             expect(aliceDecryptedReply).toBe(bobReplyText);
 
             // Alice kendi kasasına kaydeder
             aliceVault.push({
                 ...packetBobToAlice,
                 cachedText: aliceDecryptedReply,
-                cachedFile: null
+                cachedFile: null,
             });
 
             // 3. Geçmişi yükleme simülasyonu: Her iki taraf da tüm mesajları hatasız okumalıdır
@@ -348,10 +376,10 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
                 expect(pkt.cachedText.length).toBeGreaterThan(0);
             }
 
-            expect(aliceVault[0].cachedText).toBe("Selam Bob!");
-            expect(aliceVault[1].cachedText).toBe("Aleyküm selam Alice!");
-            expect(bobVault[0].cachedText).toBe("Selam Bob!");
-            expect(bobVault[1].cachedText).toBe("Aleyküm selam Alice!");
+            expect(aliceVault[0].cachedText).toBe('Selam Bob!');
+            expect(aliceVault[1].cachedText).toBe('Aleyküm selam Alice!');
+            expect(bobVault[0].cachedText).toBe('Selam Bob!');
+            expect(bobVault[1].cachedText).toBe('Aleyküm selam Alice!');
         });
 
         test('Yeni sohbet başladığında onay modalı olmadan otomatik ekleme ve yanıt iletimi yapılmalıdır', async () => {
@@ -362,17 +390,27 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
             const handleContactRequest = (data) => {
                 if (!data || !data.senderId) return;
                 // Otomatik ekleme
-                addedContacts.push({ id: data.senderId, username: data.username });
-                // Otomatik kabul yanıtı
-                mockSocket.emit('respond_contact_request', { targetId: data.senderId, accepted: true }, (res) => {
-                    responseSent = { targetId: data.senderId, accepted: true };
+                addedContacts.push({
+                    id: data.senderId,
+                    username: data.username,
                 });
+                // Otomatik kabul yanıtı
+                mockSocket.emit(
+                    'respond_contact_request',
+                    { targetId: data.senderId, accepted: true },
+                    (res) => {
+                        responseSent = {
+                            targetId: data.senderId,
+                            accepted: true,
+                        };
+                    },
+                );
             };
 
             const incomingRequest = {
                 senderId: 'AGN-5555-6666',
                 username: 'Charlie',
-                avatar: null
+                avatar: null,
             };
 
             handleContactRequest(incomingRequest);
@@ -386,7 +424,7 @@ describe('E2EE Kriptografi ve Soket Mesaj İletim Testleri', () => {
             expect(mockSocket.emit).toHaveBeenCalledWith(
                 'respond_contact_request',
                 { targetId: 'AGN-5555-6666', accepted: true },
-                expect.any(Function)
+                expect.any(Function),
             );
         });
     });

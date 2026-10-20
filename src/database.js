@@ -30,8 +30,11 @@ if (!USE_TURSO) {
     sqlite3 = require('sqlite3').verbose();
     const dbDir = path.dirname(dbPath);
     if (!fs.existsSync(dbDir)) {
-        try { fs.mkdirSync(dbDir, { recursive: true }); }
-        catch (e) { console.error('[!] Veritabanı dizini oluşturulamadı:', e); }
+        try {
+            fs.mkdirSync(dbDir, { recursive: true });
+        } catch (e) {
+            console.error('[!] Veritabanı dizini oluşturulamadı:', e);
+        }
     }
 }
 
@@ -90,14 +93,18 @@ let _writeLock = Promise.resolve();
  * @function getDB
  * @returns {DatabaseState} Bellekteki kullanıcı ve mesaj kuyruğu nesnesi.
  */
-function getDB() { return db; }
+function getDB() {
+    return db;
+}
 
 /**
  * userId -> email eşleme indeksini döner.
  * @function getUserIdIndex
  * @returns {Object.<string, string>} userId'leri email'e eşleyen sözlük nesnesi.
  */
-function getUserIdIndex() { return userIdIndex; }
+function getUserIdIndex() {
+    return userIdIndex;
+}
 
 // ── TURSO WRAPPER FONKSİYONLARI ─────────────────────────────────────
 
@@ -125,7 +132,9 @@ async function tursoGet(sql, params = []) {
     const result = await tursoClient.execute({ sql, args: params });
     if (!result.rows.length) return undefined;
     const obj = {};
-    result.columns.forEach((col, i) => { obj[col] = result.rows[0][i]; });
+    result.columns.forEach((col, i) => {
+        obj[col] = result.rows[0][i];
+    });
     return obj;
 }
 
@@ -139,9 +148,11 @@ async function tursoGet(sql, params = []) {
  */
 async function tursoAll(sql, params = []) {
     const result = await tursoClient.execute({ sql, args: params });
-    return result.rows.map(row => {
+    return result.rows.map((row) => {
         const obj = {};
-        result.columns.forEach((col, i) => { obj[col] = row[i]; });
+        result.columns.forEach((col, i) => {
+            obj[col] = row[i];
+        });
         return obj;
     });
 }
@@ -157,8 +168,8 @@ async function tursoAll(sql, params = []) {
  */
 function sqliteRun(sql, params = []) {
     return new Promise((resolve, reject) => {
-        if (!sqliteDb) return reject(new Error("Veritabanı başlatılmadı"));
-        sqliteDb.run(sql, params, function(err) {
+        if (!sqliteDb) return reject(new Error('Veritabanı başlatılmadı'));
+        sqliteDb.run(sql, params, function (err) {
             if (err) reject(err);
             else resolve(this);
         });
@@ -174,7 +185,7 @@ function sqliteRun(sql, params = []) {
  */
 function sqliteGet(sql, params = []) {
     return new Promise((resolve, reject) => {
-        if (!sqliteDb) return reject(new Error("Veritabanı başlatılmadı"));
+        if (!sqliteDb) return reject(new Error('Veritabanı başlatılmadı'));
         sqliteDb.get(sql, params, (err, row) => {
             if (err) reject(err);
             else resolve(row);
@@ -191,7 +202,7 @@ function sqliteGet(sql, params = []) {
  */
 function sqliteAll(sql, params = []) {
     return new Promise((resolve, reject) => {
-        if (!sqliteDb) return reject(new Error("Veritabanı başlatılmadı"));
+        if (!sqliteDb) return reject(new Error('Veritabanı başlatılmadı'));
         sqliteDb.all(sql, params, (err, rows) => {
             if (err) reject(err);
             else resolve(rows);
@@ -210,7 +221,9 @@ function sqliteAll(sql, params = []) {
  * @returns {Promise<Object>} Sorgu sonucu.
  */
 async function queryRun(sql, params = []) {
-    return (USE_TURSO || tursoClient) ? tursoRun(sql, params) : sqliteRun(sql, params);
+    return USE_TURSO || tursoClient
+        ? tursoRun(sql, params)
+        : sqliteRun(sql, params);
 }
 
 /**
@@ -222,7 +235,9 @@ async function queryRun(sql, params = []) {
  * @returns {Promise<Object|undefined>} Eşleşen kayıt nesnesi.
  */
 async function queryGet(sql, params = []) {
-    return (USE_TURSO || tursoClient) ? tursoGet(sql, params) : sqliteGet(sql, params);
+    return USE_TURSO || tursoClient
+        ? tursoGet(sql, params)
+        : sqliteGet(sql, params);
 }
 
 /**
@@ -234,7 +249,9 @@ async function queryGet(sql, params = []) {
  * @returns {Promise<Array<Object>>} Eşleşen kayıtlar listesi.
  */
 async function queryAll(sql, params = []) {
-    return (USE_TURSO || tursoClient) ? tursoAll(sql, params) : sqliteAll(sql, params);
+    return USE_TURSO || tursoClient
+        ? tursoAll(sql, params)
+        : sqliteAll(sql, params);
 }
 
 // ── INDEX YENİDEN İNŞA ──────────────────────────────────────────────
@@ -248,7 +265,7 @@ async function queryAll(sql, params = []) {
 async function rebuildUserIdIndex() {
     try {
         const rows = await queryAll(`SELECT userId, email FROM users`);
-        Object.keys(userIdIndex).forEach(k => delete userIdIndex[k]);
+        Object.keys(userIdIndex).forEach((k) => delete userIdIndex[k]);
         for (const row of rows) {
             if (row.userId && row.email) userIdIndex[row.userId] = row.email;
         }
@@ -271,7 +288,11 @@ async function syncMemoryToTurso() {
     for (const email in db.users) {
         const u = db.users[email];
         if (!u.userId) {
-            u.userId = 'AGN-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000);
+            u.userId =
+                'AGN-' +
+                Math.floor(1000 + Math.random() * 9000) +
+                '-' +
+                Math.floor(1000 + Math.random() * 9000);
         }
         statements.push({
             sql: `INSERT INTO users (email, username, password, userId, publicKey, avatar)
@@ -279,8 +300,14 @@ async function syncMemoryToTurso() {
                   ON CONFLICT(email) DO UPDATE SET
                   username=excluded.username, password=excluded.password,
                   userId=excluded.userId, publicKey=excluded.publicKey, avatar=excluded.avatar`,
-            args: [u.email, u.username, u.password, u.userId,
-                   u.publicKey ? JSON.stringify(u.publicKey) : null, u.avatar || null]
+            args: [
+                u.email,
+                u.username,
+                u.password,
+                u.userId,
+                u.publicKey ? JSON.stringify(u.publicKey) : null,
+                u.avatar || null,
+            ],
         });
     }
 
@@ -294,7 +321,10 @@ async function syncMemoryToTurso() {
         const currentEmails = new Set(emails);
         for (const r of existingRows) {
             if (!currentEmails.has(r.email)) {
-                statements.push({ sql: 'DELETE FROM users WHERE email = ?', args: [r.email] });
+                statements.push({
+                    sql: 'DELETE FROM users WHERE email = ?',
+                    args: [r.email],
+                });
             }
         }
     }
@@ -305,7 +335,7 @@ async function syncMemoryToTurso() {
         for (const p of packets) {
             statements.push({
                 sql: 'INSERT INTO queue (targetId, packet, timestamp) VALUES (?, ?, ?)',
-                args: [targetId, JSON.stringify(p), p.timestamp || Date.now()]
+                args: [targetId, JSON.stringify(p), p.timestamp || Date.now()],
             });
         }
     }
@@ -330,7 +360,11 @@ async function syncMemoryToSqlite() {
         for (const email in db.users) {
             const u = db.users[email];
             if (!u.userId) {
-                u.userId = 'AGN-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000);
+                u.userId =
+                    'AGN-' +
+                    Math.floor(1000 + Math.random() * 9000) +
+                    '-' +
+                    Math.floor(1000 + Math.random() * 9000);
             }
             await sqliteRun(
                 `INSERT INTO users (email, username, password, userId, publicKey, avatar)
@@ -338,8 +372,14 @@ async function syncMemoryToSqlite() {
                  ON CONFLICT(email) DO UPDATE SET
                     username=excluded.username, password=excluded.password,
                     userId=excluded.userId, publicKey=excluded.publicKey, avatar=excluded.avatar`,
-                [u.email, u.username, u.password, u.userId,
-                 u.publicKey ? JSON.stringify(u.publicKey) : null, u.avatar || null]
+                [
+                    u.email,
+                    u.username,
+                    u.password,
+                    u.userId,
+                    u.publicKey ? JSON.stringify(u.publicKey) : null,
+                    u.avatar || null,
+                ],
             );
         }
         const emails = Object.keys(db.users);
@@ -353,7 +393,9 @@ async function syncMemoryToSqlite() {
             const currentEmails = new Set(emails);
             for (const row of existingRows) {
                 if (!currentEmails.has(row.email)) {
-                    await sqliteRun('DELETE FROM users WHERE email = ?', [row.email]);
+                    await sqliteRun('DELETE FROM users WHERE email = ?', [
+                        row.email,
+                    ]);
                 }
             }
         }
@@ -363,13 +405,15 @@ async function syncMemoryToSqlite() {
             for (const p of packets) {
                 await sqliteRun(
                     `INSERT INTO queue (targetId, packet, timestamp) VALUES (?, ?, ?)`,
-                    [targetId, JSON.stringify(p), p.timestamp || Date.now()]
+                    [targetId, JSON.stringify(p), p.timestamp || Date.now()],
                 );
             }
         }
         await sqliteRun('COMMIT');
     } catch (e) {
-        try { await sqliteRun('ROLLBACK'); } catch (_) {}
+        try {
+            await sqliteRun('ROLLBACK');
+        } catch (_) {}
         throw e;
     }
 }
@@ -416,7 +460,7 @@ function saveDatabase() {
                 }
             });
             await _writeLock;
-            resolvers.forEach(r => r(writeError));
+            resolvers.forEach((r) => r(writeError));
         }, 50);
     });
 }
@@ -430,7 +474,10 @@ function saveDatabase() {
  * @returns {Promise<void>}
  */
 async function saveDatabaseImmediate() {
-    if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
+    if (_saveTimer) {
+        clearTimeout(_saveTimer);
+        _saveTimer = null;
+    }
     const resolvers = _pendingResolvers.splice(0);
     let writeError = null;
     _writeLock = _writeLock.then(async () => {
@@ -443,7 +490,7 @@ async function saveDatabaseImmediate() {
         }
     });
     await _writeLock;
-    resolvers.forEach(r => r(writeError));
+    resolvers.forEach((r) => r(writeError));
     if (writeError) throw writeError;
 }
 
@@ -481,23 +528,31 @@ async function initTurso() {
             FOREIGN KEY (targetId) REFERENCES users(userId) ON DELETE CASCADE
         )
     `);
-    await tursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_queue_targetId ON queue(targetId)`);
-    await tursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_queue_timestamp ON queue(timestamp)`);
-    await tursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_users_userId ON users(userId)`);
+    await tursoClient.execute(
+        `CREATE INDEX IF NOT EXISTS idx_queue_targetId ON queue(targetId)`,
+    );
+    await tursoClient.execute(
+        `CREATE INDEX IF NOT EXISTS idx_queue_timestamp ON queue(timestamp)`,
+    );
+    await tursoClient.execute(
+        `CREATE INDEX IF NOT EXISTS idx_users_userId ON users(userId)`,
+    );
 
     // Verileri belleğe yükle
     const userResult = await tursoClient.execute('SELECT * FROM users');
     for (const key in db.users) delete db.users[key];
     for (const row of userResult.rows) {
         const obj = {};
-        userResult.columns.forEach((col, i) => { obj[col] = row[i]; });
+        userResult.columns.forEach((col, i) => {
+            obj[col] = row[i];
+        });
         db.users[obj.email] = {
             email: obj.email,
             username: obj.username,
             password: obj.password,
             userId: obj.userId,
             publicKey: obj.publicKey ? JSON.parse(obj.publicKey) : null,
-            avatar: obj.avatar
+            avatar: obj.avatar,
         };
     }
 
@@ -505,13 +560,17 @@ async function initTurso() {
     for (const key in db.queue) delete db.queue[key];
     for (const row of queueResult.rows) {
         const obj = {};
-        queueResult.columns.forEach((col, i) => { obj[col] = row[i]; });
+        queueResult.columns.forEach((col, i) => {
+            obj[col] = row[i];
+        });
         if (!db.queue[obj.targetId]) db.queue[obj.targetId] = [];
         db.queue[obj.targetId].push(JSON.parse(obj.packet));
     }
 
     await rebuildUserIdIndex();
-    console.log(`[+] TURSO BAĞLANTISI BAŞARILI! ${Object.keys(db.users).length} kullanıcı yüklendi.`);
+    console.log(
+        `[+] TURSO BAĞLANTISI BAŞARILI! ${Object.keys(db.users).length} kullanıcı yüklendi.`,
+    );
 }
 
 // ── YEREL SQLite BAŞLATMA ─────────────────────────────────────────────
@@ -542,9 +601,15 @@ async function initSqlite() {
         packet TEXT NOT NULL, timestamp INTEGER NOT NULL,
         FOREIGN KEY (targetId) REFERENCES users(userId) ON DELETE CASCADE
     )`);
-    await sqliteRun(`CREATE INDEX IF NOT EXISTS idx_queue_targetId ON queue(targetId)`);
-    await sqliteRun(`CREATE INDEX IF NOT EXISTS idx_queue_timestamp ON queue(timestamp)`);
-    await sqliteRun(`CREATE INDEX IF NOT EXISTS idx_users_userId ON users(userId)`);
+    await sqliteRun(
+        `CREATE INDEX IF NOT EXISTS idx_queue_targetId ON queue(targetId)`,
+    );
+    await sqliteRun(
+        `CREATE INDEX IF NOT EXISTS idx_queue_timestamp ON queue(timestamp)`,
+    );
+    await sqliteRun(
+        `CREATE INDEX IF NOT EXISTS idx_users_userId ON users(userId)`,
+    );
 
     // Eski JSON'dan Migration (tek seferlik)
     const row = await sqliteGet(`SELECT COUNT(*) AS count FROM users`);
@@ -555,26 +620,49 @@ async function initSqlite() {
             if (fileContent && fileContent.trim() !== '') {
                 const parsed = JSON.parse(fileContent);
                 await sqliteRun('BEGIN TRANSACTION');
-                for (const email in (parsed.users || {})) {
+                for (const email in parsed.users || {}) {
                     const u = parsed.users[email];
-                    if (!u.userId) u.userId = 'AGN-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000);
-                    await sqliteRun(`INSERT INTO users (email, username, password, userId, publicKey, avatar) VALUES (?, ?, ?, ?, ?, ?)`,
-                        [u.email || email, u.username || 'User', u.password || '', u.userId,
-                         u.publicKey ? JSON.stringify(u.publicKey) : null, u.avatar || null]);
+                    if (!u.userId)
+                        u.userId =
+                            'AGN-' +
+                            Math.floor(1000 + Math.random() * 9000) +
+                            '-' +
+                            Math.floor(1000 + Math.random() * 9000);
+                    await sqliteRun(
+                        `INSERT INTO users (email, username, password, userId, publicKey, avatar) VALUES (?, ?, ?, ?, ?, ?)`,
+                        [
+                            u.email || email,
+                            u.username || 'User',
+                            u.password || '',
+                            u.userId,
+                            u.publicKey ? JSON.stringify(u.publicKey) : null,
+                            u.avatar || null,
+                        ],
+                    );
                 }
-                for (const targetId in (parsed.queue || {})) {
-                    for (const p of (parsed.queue[targetId] || [])) {
-                        await sqliteRun(`INSERT INTO queue (targetId, packet, timestamp) VALUES (?, ?, ?)`,
-                            [targetId, JSON.stringify(p), p.timestamp || Date.now()]);
+                for (const targetId in parsed.queue || {}) {
+                    for (const p of parsed.queue[targetId] || []) {
+                        await sqliteRun(
+                            `INSERT INTO queue (targetId, packet, timestamp) VALUES (?, ?, ?)`,
+                            [
+                                targetId,
+                                JSON.stringify(p),
+                                p.timestamp || Date.now(),
+                            ],
+                        );
                     }
                 }
                 await sqliteRun('COMMIT');
-                console.log("[+] Eski database.json verileri SQLite'ye aktarıldı.");
+                console.log(
+                    "[+] Eski database.json verileri SQLite'ye aktarıldı.",
+                );
             }
             fs.renameSync(legacyJsonPath, backupJsonPath);
         } catch (e) {
-            console.error("[!] Migration hatası:", e);
-            try { await sqliteRun('ROLLBACK'); } catch (_) {}
+            console.error('[!] Migration hatası:', e);
+            try {
+                await sqliteRun('ROLLBACK');
+            } catch (_) {}
         }
     }
 
@@ -582,8 +670,12 @@ async function initSqlite() {
     for (const key in db.users) delete db.users[key];
     for (const r of userRows) {
         db.users[r.email] = {
-            email: r.email, username: r.username, password: r.password,
-            userId: r.userId, publicKey: r.publicKey ? JSON.parse(r.publicKey) : null, avatar: r.avatar
+            email: r.email,
+            username: r.username,
+            password: r.password,
+            userId: r.userId,
+            publicKey: r.publicKey ? JSON.parse(r.publicKey) : null,
+            avatar: r.avatar,
         };
     }
     const queueRows = await sqliteAll(`SELECT * FROM queue`);
@@ -620,21 +712,26 @@ async function initDB() {
  * @returns {void}
  */
 function startGarbageCollector() {
-    setInterval(async () => {
-        try {
-            const expireTime = Date.now() - MAX_PACKET_AGE_MS;
-            await queryRun(`DELETE FROM queue WHERE timestamp < ?`, [expireTime]);
-            console.log(`[PERİYODİK TEMİZLİK] Eski paketler temizlendi.`);
-            const queueRows = await queryAll(`SELECT * FROM queue`);
-            for (const key in db.queue) delete db.queue[key];
-            for (const r of queueRows) {
-                if (!db.queue[r.targetId]) db.queue[r.targetId] = [];
-                db.queue[r.targetId].push(JSON.parse(r.packet));
+    setInterval(
+        async () => {
+            try {
+                const expireTime = Date.now() - MAX_PACKET_AGE_MS;
+                await queryRun(`DELETE FROM queue WHERE timestamp < ?`, [
+                    expireTime,
+                ]);
+                console.log(`[PERİYODİK TEMİZLİK] Eski paketler temizlendi.`);
+                const queueRows = await queryAll(`SELECT * FROM queue`);
+                for (const key in db.queue) delete db.queue[key];
+                for (const r of queueRows) {
+                    if (!db.queue[r.targetId]) db.queue[r.targetId] = [];
+                    db.queue[r.targetId].push(JSON.parse(r.packet));
+                }
+            } catch (e) {
+                console.error('[!] Garbage Collector hatası:', e);
             }
-        } catch (e) {
-            console.error('[!] Garbage Collector hatası:', e);
-        }
-    }, 60 * 60 * 1000); // 1 Saat
+        },
+        60 * 60 * 1000,
+    ); // 1 Saat
 }
 
 module.exports = {
@@ -661,11 +758,15 @@ module.exports = {
         syncMemoryToSql,
         initTurso,
         initSqlite,
-        setSqliteDb: (instance) => { sqliteDb = instance; },
+        setSqliteDb: (instance) => {
+            sqliteDb = instance;
+        },
         getSqliteDb: () => sqliteDb,
-        setTursoClient: (client) => { tursoClient = client; },
+        setTursoClient: (client) => {
+            tursoClient = client;
+        },
         getTursoClient: () => tursoClient,
         legacyJsonPath,
-        backupJsonPath
-    }
+        backupJsonPath,
+    },
 };

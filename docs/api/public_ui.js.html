@@ -41,7 +41,11 @@
  */
 const idleCallback = window.requestIdleCallback
     ? window.requestIdleCallback.bind(window)
-    : (cb) => setTimeout(() => cb({ timeRemaining: () => 1, didTimeout: false }), 1);
+    : (cb) =>
+          setTimeout(
+              () => cb({ timeRemaining: () => 1, didTimeout: false }),
+              1,
+          );
 
 // === GLOBAL STATE ===
 
@@ -73,7 +77,7 @@ let keyRevealed = false;
  * Kimlik doğrulama penceresindeki aktif sekme ('login' | 'register').
  * @type {'login'|'register'}
  */
-let currentAuthTab = 'login'; 
+let currentAuthTab = 'login';
 
 /**
  * Giriş yapmış mevcut kullanıcı profili.
@@ -91,13 +95,13 @@ let activeTarget = null;
  * Kullanıcının kişi listesi.
  * @type {Array&lt;Object>}
  */
-let myContacts = []; 
+let myContacts = [];
 
 /**
  * Kişilere göre okunmamış mesaj sayaçları (userId -> count).
  * @type {Object.&lt;string, number>}
  */
-let unreadCounts = {}; 
+let unreadCounts = {};
 
 /**
  * Sohbet oturumu boyunca alınan görsellerin Base64 dizisi (Galeri görünümü için).
@@ -147,8 +151,23 @@ function safeEmit(event, data, callback) {
  * @returns {void}
  */
 function triggerDesktopNotification(title, body) {
-    if (window.siberBridge &amp;&amp; typeof window.siberBridge.showNotification === 'function') {
+    if (
+        window.electronAPI &amp;&amp;
+        typeof window.electronAPI.showNotification === 'function'
+    ) {
+        window.electronAPI.showNotification(title, body);
+    } else if (
+        window.siberBridge &amp;&amp;
+        typeof window.siberBridge.showNotification === 'function'
+    ) {
         window.siberBridge.showNotification(title, body);
+    } else if (
+        typeof Notification !== 'undefined' &amp;&amp;
+        Notification.permission === 'granted'
+    ) {
+        try {
+            new Notification(title, { body, icon: 'icon.png' });
+        } catch (_) {}
     }
 }
 
@@ -167,7 +186,7 @@ function showCustomConfirm(message, onConfirmCallback) {
     const msgEl = document.getElementById('cyberConfirmMsg');
     const btnYes = document.getElementById('cyberConfirmBtnYes');
     const btnNo = document.getElementById('cyberConfirmBtnNo');
-    
+
     // [GÜVENLİK FIX] innerHTML yerine textContent — XSS engellenir
     msgEl.textContent = message;
     modal.classList.remove('hidden');
@@ -191,8 +210,15 @@ function showCustomConfirm(message, onConfirmCallback) {
     document.addEventListener('keydown', handleKeyDown);
     modal.addEventListener('click', handleBackdropClick);
 
-    btnYes.onclick = () => { playSound('success'); cleanUp(); onConfirmCallback(); };
-    btnNo.onclick = () => { playSound('type'); cleanUp(); };
+    btnYes.onclick = () => {
+        playSound('success');
+        cleanUp();
+        onConfirmCallback();
+    };
+    btnNo.onclick = () => {
+        playSound('type');
+        cleanUp();
+    };
 }
 
 /**
@@ -236,7 +262,9 @@ function renderLogPlaceholder(logBox, icon, message, spinner = true) {
  * @param {string} type - Ses türü ('error'|'success'|'transit'|'type'|'destroy').
  * @returns {void}
  */
-function playSound(type) { /* Ses özellikleri devre dışı bırakıldı */ }
+function playSound(type) {
+    /* Ses özellikleri devre dışı bırakıldı */
+}
 
 // === TOAST BİLDİRİM SİSTEMİ ===
 
@@ -265,17 +293,47 @@ function showToast(message, type = 'info') {
 
     // Tip konfigürasyonu
     const config = {
-        success: { label: 'Başarılı',      icon: '✓',  cls: 'toast-success',  color: 'var(--neon-green)'  },
-        error:   { label: 'Hata', icon: '✕',  cls: 'toast-error',    color: 'var(--neon-pink)'   },
-        warning: { label: 'Uyarı',       icon: '⚠',  cls: 'toast-warning',  color: 'var(--neon-amber)'  },
-        info:    { label: 'Bilgi',       icon: 'ℹ',  cls: 'toast-info',     color: 'var(--neon-cyan)'   },
-        system:  { label: 'Sistem',      icon: '⚡', cls: 'toast-system',   color: 'var(--neon-purple)' },
+        success: {
+            label: 'Başarılı',
+            icon: '✓',
+            cls: 'toast-success',
+            color: 'var(--neon-green)',
+        },
+        error: {
+            label: 'Hata',
+            icon: '✕',
+            cls: 'toast-error',
+            color: 'var(--neon-pink)',
+        },
+        warning: {
+            label: 'Uyarı',
+            icon: '⚠',
+            cls: 'toast-warning',
+            color: 'var(--neon-amber)',
+        },
+        info: {
+            label: 'Bilgi',
+            icon: 'ℹ',
+            cls: 'toast-info',
+            color: 'var(--neon-cyan)',
+        },
+        system: {
+            label: 'Sistem',
+            icon: '⚡',
+            cls: 'toast-system',
+            color: 'var(--neon-purple)',
+        },
     };
     const cfg = config[type] || config.info;
 
     msgEl.innerText = message;
     if (labelEl) labelEl.textContent = cfg.label;
-    if (iconEl)  { iconEl.textContent = cfg.icon; iconEl.style.borderColor = cfg.color; iconEl.style.color = cfg.color; iconEl.style.boxShadow = `0 0 8px ${cfg.color}`; }
+    if (iconEl) {
+        iconEl.textContent = cfg.icon;
+        iconEl.style.borderColor = cfg.color;
+        iconEl.style.color = cfg.color;
+        iconEl.style.boxShadow = `0 0 8px ${cfg.color}`;
+    }
 
     // Sınıf güncelle
     toast.className = '';
@@ -320,7 +378,7 @@ function setAuthAlert(message, type = 'error') {
     const icons = {
         error: '⚠️',
         info: '🔄',
-        success: '✅'
+        success: '✅',
     };
     alertEl.className = `auth-alert auth-alert-${type}`;
     // [GÜVENLİK FIX] innerHTML yerine güvenli DOM API — sunucu mesajlarından XSS engellenir
@@ -341,7 +399,13 @@ function setAuthAlert(message, type = 'error') {
  */
 function clearAuthAlert() {
     setAuthAlert(null);
-    ['serverIp', 'authUsername', 'authEmail', 'authPassword', 'authPasswordConfirm'].forEach(id => {
+    [
+        'serverIp',
+        'authUsername',
+        'authEmail',
+        'authPassword',
+        'authPasswordConfirm',
+    ].forEach((id) => {
         const el = document.getElementById(id);
         if (el) el.classList.remove('input-error');
     });
@@ -359,7 +423,9 @@ function switchAuthTab(tab) {
     clearAuthAlert();
 
     const regContainer = document.getElementById('regUsernameContainer');
-    const regConfirmContainer = document.getElementById('regPasswordConfirmContainer');
+    const regConfirmContainer = document.getElementById(
+        'regPasswordConfirmContainer',
+    );
     const tabLoginBtn = document.getElementById('tabLoginBtn');
     const tabRegisterBtn = document.getElementById('tabRegisterBtn');
     const authSubmitBtn = document.getElementById('authSubmitBtn');
@@ -368,32 +434,38 @@ function switchAuthTab(tab) {
     const authSwitchPrompt = document.getElementById('authSwitchPrompt');
     const authSwitchLink = document.getElementById('authSwitchLink');
 
-    const activeClass = "flex-1 py-2 bg-[--accent-light] text-[--accent] rounded-lg font-medium transition-colors text-sm shadow-sm";
-    const inactiveClass = "flex-1 py-2 bg-transparent text-[--text-secondary] rounded-lg font-medium hover:bg-[--surface-hover] transition-colors text-sm";
+    const activeClass =
+        'flex-1 py-2 bg-[--accent-light] text-[--accent] rounded-lg font-medium transition-colors text-sm shadow-sm';
+    const inactiveClass =
+        'flex-1 py-2 bg-transparent text-[--text-secondary] rounded-lg font-medium hover:bg-[--surface-hover] transition-colors text-sm';
 
     if (tab === 'login') {
         if (regContainer) regContainer.classList.add('hidden');
         if (regConfirmContainer) regConfirmContainer.classList.add('hidden');
         if (tabLoginBtn) tabLoginBtn.className = activeClass;
         if (tabRegisterBtn) tabRegisterBtn.className = inactiveClass;
-        if (authSubmitBtn) authSubmitBtn.innerText = "Giriş Yap";
-        if (authTitle) authTitle.innerText = "Giriş Yap";
-        if (authSubtitle) authSubtitle.innerText = "Uçtan Uca Şifreli Güvenli Bağlantı";
-        if (authSwitchPrompt) authSwitchPrompt.innerText = "Hesabınız yok mu?";
-        if (authSwitchLink) authSwitchLink.innerText = "Kayıt Olun";
+        if (authSubmitBtn) authSubmitBtn.innerText = 'Giriş Yap';
+        if (authTitle) authTitle.innerText = 'Giriş Yap';
+        if (authSubtitle)
+            authSubtitle.innerText = 'Uçtan Uca Şifreli Güvenli Bağlantı';
+        if (authSwitchPrompt) authSwitchPrompt.innerText = 'Hesabınız yok mu?';
+        if (authSwitchLink) authSwitchLink.innerText = 'Kayıt Olun';
 
         const emailInput = document.getElementById('authEmail');
-        if (emailInput &amp;&amp; document.activeElement !== emailInput) emailInput.focus();
+        if (emailInput &amp;&amp; document.activeElement !== emailInput)
+            emailInput.focus();
     } else {
         if (regContainer) regContainer.classList.remove('hidden');
         if (regConfirmContainer) regConfirmContainer.classList.remove('hidden');
         if (tabRegisterBtn) tabRegisterBtn.className = activeClass;
         if (tabLoginBtn) tabLoginBtn.className = inactiveClass;
-        if (authSubmitBtn) authSubmitBtn.innerText = "Kayıt Ol ve Giriş Yap";
-        if (authTitle) authTitle.innerText = "Hesap Oluştur";
-        if (authSubtitle) authSubtitle.innerText = "Yeni E2EE Güvenlik Kimliği Oluşturma";
-        if (authSwitchPrompt) authSwitchPrompt.innerText = "Zaten bir hesabınız var mı?";
-        if (authSwitchLink) authSwitchLink.innerText = "Giriş Yapın";
+        if (authSubmitBtn) authSubmitBtn.innerText = 'Kayıt Ol ve Giriş Yap';
+        if (authTitle) authTitle.innerText = 'Hesap Oluştur';
+        if (authSubtitle)
+            authSubtitle.innerText = 'Yeni E2EE Güvenlik Kimliği Oluşturma';
+        if (authSwitchPrompt)
+            authSwitchPrompt.innerText = 'Zaten bir hesabınız var mı?';
+        if (authSwitchLink) authSwitchLink.innerText = 'Giriş Yapın';
 
         const userInput = document.getElementById('authUsername');
         if (userInput) userInput.focus();
@@ -415,17 +487,21 @@ function handleAuthSubmit() {
     const usernameInput = document.getElementById('authUsername');
     const passwordConfirmInput = document.getElementById('authPasswordConfirm');
 
-    const serverUrl = (serverUrlInput ? serverUrlInput.value.trim() : '') || 'http://localhost:3000';
+    const serverUrl =
+        (serverUrlInput ? serverUrlInput.value.trim() : '') ||
+        'http://localhost:3000';
     const email = emailInput ? emailInput.value.trim() : '';
     const password = passwordInput ? passwordInput.value.trim() : '';
     const username = usernameInput ? usernameInput.value.trim() : '';
-    const passwordConfirm = passwordConfirmInput ? passwordConfirmInput.value.trim() : '';
+    const passwordConfirm = passwordConfirmInput
+        ? passwordConfirmInput.value.trim()
+        : '';
 
     // Validasyon
     if (!email) {
         playSound('error');
         if (emailInput) emailInput.classList.add('input-error');
-        setAuthAlert("Lütfen e-posta adresinizi girin.", 'error');
+        setAuthAlert('Lütfen e-posta adresinizi girin.', 'error');
         if (emailInput) emailInput.focus();
         return;
     }
@@ -433,32 +509,39 @@ function handleAuthSubmit() {
     if (!password) {
         playSound('error');
         if (passwordInput) passwordInput.classList.add('input-error');
-        setAuthAlert("Lütfen şifrenizi girin.", 'error');
+        setAuthAlert('Lütfen şifrenizi girin.', 'error');
         if (passwordInput) passwordInput.focus();
         return;
     }
 
     if (currentAuthTab === 'register') {
-        if (!username) {
+        if (!username || username.length &lt; 2 || username.length > 32) {
             playSound('error');
             if (usernameInput) usernameInput.classList.add('input-error');
-            setAuthAlert("Lütfen bir kullanıcı adı (kod adı) belirleyin.", 'error');
+            setAuthAlert(
+                'Kullanıcı adı 2-32 karakter uzunluğunda olmalıdır.',
+                'error',
+            );
             if (usernameInput) usernameInput.focus();
             return;
         }
 
         if (passwordConfirm &amp;&amp; password !== passwordConfirm) {
             playSound('error');
-            if (passwordConfirmInput) passwordConfirmInput.classList.add('input-error');
-            setAuthAlert("Girdiğiniz şifreler birbiriyle eşleşmiyor.", 'error');
+            if (passwordConfirmInput)
+                passwordConfirmInput.classList.add('input-error');
+            setAuthAlert('Girdiğiniz şifreler birbiriyle eşleşmiyor.', 'error');
             if (passwordConfirmInput) passwordConfirmInput.focus();
             return;
         }
 
-        if (password.length &lt; 4) {
+        if (password.length &lt; 8 || password.length > 72) {
             playSound('error');
             if (passwordInput) passwordInput.classList.add('input-error');
-            setAuthAlert("Şifre en az 4 karakter uzunluğunda olmalıdır.", 'error');
+            setAuthAlert(
+                'Şifre en az 8, en fazla 72 karakter uzunluğunda olmalıdır.',
+                'error',
+            );
             if (passwordInput) passwordInput.focus();
             return;
         }
@@ -469,7 +552,10 @@ function handleAuthSubmit() {
     const originalText = btn ? btn.innerText : 'Gönder';
     if (btn) {
         btn.classList.add('opacity-50', 'cursor-not-allowed');
-        btn.innerText = currentAuthTab === 'register' ? 'Kayıt Yapılıyor...' : 'Giriş Yapılıyor...';
+        btn.innerText =
+            currentAuthTab === 'register'
+                ? 'Kayıt Yapılıyor...'
+                : 'Giriş Yapılıyor...';
         btn.disabled = true;
     }
 
@@ -481,20 +567,23 @@ function handleAuthSubmit() {
         }
     };
 
-    setAuthAlert("Sunucuya bağlanılıyor...", 'info');
+    setAuthAlert('Sunucuya bağlanılıyor...', 'info');
 
     let connectionTimeout = setTimeout(() => {
         restoreBtn();
         playSound('error');
-        setAuthAlert(`Sunucuya bağlanılamadı (${serverUrl}). Lütfen Node.js sunucusunun açık olduğundan emin olun.`, 'error');
-        showToast("Sunucu bağlantı zaman aşımı.", 'error');
+        setAuthAlert(
+            `Sunucuya bağlanılamadı (${serverUrl}). Lütfen Node.js sunucusunun açık olduğundan emin olun.`,
+            'error',
+        );
+        showToast('Sunucu bağlantı zaman aşımı.', 'error');
     }, 6000);
 
     const runAuthAction = () => {
         clearTimeout(connectionTimeout);
 
         if (currentAuthTab === 'register') {
-            setAuthAlert("Hesap oluşturuluyor...", 'info');
+            setAuthAlert('Hesap oluşturuluyor...', 'info');
             socket.emit('register', { email, password, username }, (res) => {
                 restoreBtn();
                 if (res &amp;&amp; res.success) {
@@ -503,12 +592,24 @@ function handleAuthSubmit() {
                         localStorage.setItem('cyber_jwt', res.token);
                         socket.auth = { token: res.token };
                         currentUser = res.user;
-                        setAuthAlert("Kayıt başarılı! Güvenli oturum başlatılıyor...", 'success');
-                        showToast("Hesap oluşturuldu ve giriş yapıldı!", 'success');
+                        setAuthAlert(
+                            'Kayıt başarılı! Güvenli oturum başlatılıyor...',
+                            'success',
+                        );
+                        showToast(
+                            'Hesap oluşturuldu ve giriş yapıldı!',
+                            'success',
+                        );
                         finishLoginSetup();
                     } else {
-                        setAuthAlert("Hesap oluşturuldu! Giriş yapılıyor...", 'success');
-                        showToast("Hesap oluşturuldu! Giriş yapılıyor...", 'success');
+                        setAuthAlert(
+                            'Hesap oluşturuldu! Giriş yapılıyor...',
+                            'success',
+                        );
+                        showToast(
+                            'Hesap oluşturuldu! Giriş yapılıyor...',
+                            'success',
+                        );
                         switchAuthTab('login');
                         if (emailInput) emailInput.value = email;
                         if (passwordInput) passwordInput.value = password;
@@ -516,12 +617,18 @@ function handleAuthSubmit() {
                     }
                 } else {
                     playSound('error');
-                    setAuthAlert(`Kayıt Hatası: ${res ? res.message : 'Sunucudan yanıt alınamadı'}`, 'error');
-                    showToast(`Kayıt Hatası: ${res ? res.message : 'Yanıt alınamadı'}`, 'error');
+                    setAuthAlert(
+                        `Kayıt Hatası: ${res ? res.message : 'Sunucudan yanıt alınamadı'}`,
+                        'error',
+                    );
+                    showToast(
+                        `Kayıt Hatası: ${res ? res.message : 'Yanıt alınamadı'}`,
+                        'error',
+                    );
                 }
             });
         } else {
-            setAuthAlert("Kimlik doğrulanıyor...", 'info');
+            setAuthAlert('Kimlik doğrulanıyor...', 'info');
             socket.emit('login', { email, password }, (res) => {
                 restoreBtn();
                 if (res &amp;&amp; res.success) {
@@ -530,23 +637,42 @@ function handleAuthSubmit() {
                         socket.auth = { token: res.token };
                     }
                     currentUser = res.user;
-                    setAuthAlert("Doğrulama başarılı! Yönlendiriliyorsunuz...", 'success');
+                    setAuthAlert(
+                        'Doğrulama başarılı! Yönlendiriliyorsunuz...',
+                        'success',
+                    );
                     finishLoginSetup();
                 } else {
                     playSound('error');
-                    setAuthAlert(`Giriş Hatası: ${res ? res.message : 'Kullanıcı adı veya şifre hatalı'}`, 'error');
-                    showToast(`Giriş Hatası: ${res ? res.message : 'Yanıt alınamadı'}`, 'error');
+                    setAuthAlert(
+                        `Giriş Hatası: ${res ? res.message : 'Kullanıcı adı veya şifre hatalı'}`,
+                        'error',
+                    );
+                    showToast(
+                        `Giriş Hatası: ${res ? res.message : 'Yanıt alınamadı'}`,
+                        'error',
+                    );
                 }
             });
         }
     };
 
     // Socket bağlantı kontrolü ve başlatma
-    const configuredBackend = (window.APP_CONFIG &amp;&amp; window.APP_CONFIG.BACKEND_URL) ? window.APP_CONFIG.BACKEND_URL.trim() : '';
+    const configuredBackend =
+        window.APP_CONFIG &amp;&amp; window.APP_CONFIG.BACKEND_URL
+            ? window.APP_CONFIG.BACKEND_URL.trim()
+            : '';
     let targetUrl = serverUrl;
-    if (configuredBackend &amp;&amp; (!serverUrl || serverUrl === 'http://localhost:3000')) {
+    if (
+        configuredBackend &amp;&amp;
+        (!serverUrl || serverUrl === 'http://localhost:3000')
+    ) {
         targetUrl = configuredBackend;
-    } else if (window.location.origin &amp;&amp; window.location.origin !== 'null' &amp;&amp; !window.location.origin.startsWith('file://')) {
+    } else if (
+        window.location.origin &amp;&amp;
+        window.location.origin !== 'null' &amp;&amp;
+        !window.location.origin.startsWith('file://')
+    ) {
         if (!serverUrl || serverUrl === 'http://localhost:3000') {
             targetUrl = window.location.origin;
         }
@@ -554,7 +680,9 @@ function handleAuthSubmit() {
 
     if (!socket || !socket.connected) {
         if (socket) {
-            try { socket.disconnect(); } catch(e) {}
+            try {
+                socket.disconnect();
+            } catch (e) {}
         }
         console.log('[+] Socket bağlantısı kuruluyor:', targetUrl);
         socket = io(targetUrl, {
@@ -563,12 +691,15 @@ function handleAuthSubmit() {
             reconnectionAttempts: 3,
             reconnectionDelay: 1000,
             timeout: 5000,
-            forceNew: true
+            forceNew: true,
         });
         setupSocketEvents(socket);
 
         socket.once('connect', () => {
-            console.log('[+] Socket bağlantısı başarılı. Socket ID:', socket.id);
+            console.log(
+                '[+] Socket bağlantısı başarılı. Socket ID:',
+                socket.id,
+            );
             runAuthAction();
         });
 
@@ -577,8 +708,11 @@ function handleAuthSubmit() {
             clearTimeout(connectionTimeout);
             restoreBtn();
             playSound('error');
-            setAuthAlert(`Sunucuya bağlanılamadı (${targetUrl}): ${err.message || 'Bağlantı hatası'}. Backend servisinin açık olduğundan emin olun.`, 'error');
-            showToast("Sunucuya bağlanılamadı.", 'error');
+            setAuthAlert(
+                `Sunucuya bağlanılamadı (${targetUrl}): ${err.message || 'Bağlantı hatası'}. Backend servisinin açık olduğundan emin olun.`,
+                'error',
+            );
+            showToast('Sunucuya bağlanılamadı.', 'error');
         });
     } else {
         runAuthAction();
@@ -593,14 +727,27 @@ function handleAuthSubmit() {
 function autoLoginAttempt() {
     const token = localStorage.getItem('cyber_jwt');
     if (!token) return;
-    
-    const configuredBackend = (window.APP_CONFIG &amp;&amp; window.APP_CONFIG.BACKEND_URL) ? window.APP_CONFIG.BACKEND_URL.trim() : '';
+
+    const configuredBackend =
+        window.APP_CONFIG &amp;&amp; window.APP_CONFIG.BACKEND_URL
+            ? window.APP_CONFIG.BACKEND_URL.trim()
+            : '';
     const input = document.getElementById('serverIp');
-    const serverUrl = (input &amp;&amp; input.value.trim()) || configuredBackend || (window.location.origin &amp;&amp; !window.location.origin.startsWith('file://') ? window.location.origin : 'http://localhost:3000');
-    
-    showToast("Oturum doğrulanıyor...", 'info');
-    
-    socket = io(serverUrl, { transports: ['polling', 'websocket'], auth: { token }, reconnectionAttempts: 20, reconnectionDelay: 2000 });
+    const serverUrl =
+        (input &amp;&amp; input.value.trim()) ||
+        configuredBackend ||
+        (window.location.origin &amp;&amp; !window.location.origin.startsWith('file://')
+            ? window.location.origin
+            : 'http://localhost:3000');
+
+    showToast('Oturum doğrulanıyor...', 'info');
+
+    socket = io(serverUrl, {
+        transports: ['polling', 'websocket'],
+        auth: { token },
+        reconnectionAttempts: 20,
+        reconnectionDelay: 2000,
+    });
     setupSocketEvents(socket);
 
     socket.once('connect', () => {
@@ -611,7 +758,10 @@ function autoLoginAttempt() {
             } else {
                 localStorage.removeItem('cyber_jwt');
                 socket.disconnect();
-                showToast("Oturum süresi doldu, lütfen tekrar giriş yapın.", 'error');
+                showToast(
+                    'Oturum süresi doldu, lütfen tekrar giriş yapın.',
+                    'error',
+                );
             }
         });
     });
@@ -668,18 +818,18 @@ function setupSocketEvents(sock) {
 
     sock.on('disconnect', (reason) => {
         console.warn(`[!] Bağlantı kesildi: ${reason}`);
-        
+
         // İstemci tarafından istenerek yapılan bağlantı kesimi (logout vb.)
         if (reason === 'io client disconnect') {
             handleDisconnectUI();
             return;
         }
-        
+
         // İstemsiz bağlantı kesimi — oturum açıksa overlay göster, state'i koru
         if (currentUser) {
             showReconnectOverlay();
             updateReconnectStatus('YENİDEN BAĞLANILIYOR...');
-            showToast("Bağlantı kesildi, yeniden bağlanılıyor...", 'warning');
+            showToast('Bağlantı kesildi, yeniden bağlanılıyor...', 'warning');
         } else {
             handleDisconnectUI();
         }
@@ -691,7 +841,7 @@ function setupSocketEvents(sock) {
 
     sock.io.on('reconnect_failed', () => {
         updateReconnectStatus('BAĞLANTI BAŞARISIZ — MANUEL BAĞLAN');
-        showToast("OTOMATİK BAĞLANTI BAŞARISIZ. TEKRAR DENEYİN.", 'error');
+        showToast('OTOMATİK BAĞLANTI BAŞARISIZ. TEKRAR DENEYİN.', 'error');
     });
 
     sock.on('connect', () => {
@@ -702,13 +852,17 @@ function setupSocketEvents(sock) {
                 if (res &amp;&amp; res.success) {
                     currentUser = res.user;
                     hideReconnectOverlay();
-                    showToast("Bağlantı yeniden kuruldu!", 'success');
+                    showToast('Bağlantı yeniden kuruldu!', 'success');
                     playSound('success');
 
                     // Kripto anahtarlarını tekrar yayınla ve durumları senkronize et
-                    if (myPublicKeyJwk) sock.emit('publish_public_key', myPublicKeyJwk);
+                    if (myPublicKeyJwk)
+                        sock.emit('publish_public_key', myPublicKeyJwk);
                     if (myContacts.length > 0) {
-                        safeEmit('join_status_rooms', myContacts.map(c => c.id));
+                        safeEmit(
+                            'join_status_rooms',
+                            myContacts.map((c) => c.id),
+                        );
                     }
                     sock.emit('client_ready');
                     checkOnlineStatuses();
@@ -718,7 +872,10 @@ function setupSocketEvents(sock) {
                     hideReconnectOverlay();
                     localStorage.removeItem('cyber_jwt');
                     handleDisconnectUI();
-                    showToast("OTURUM GEÇERSİZLEŞTİ — TEKRAR GİRİŞ GEREKLİ.", 'error');
+                    showToast(
+                        'OTURUM GEÇERSİZLEŞTİ — TEKRAR GİRİŞ GEREKLİ.',
+                        'error',
+                    );
                 }
             });
         }
@@ -763,35 +920,51 @@ function updateMyAvatarUI() {
  * @returns {void}
  */
 async function finishLoginSetup() {
-    playSound('success'); showToast("Doğrulama başarılı!", 'success');
+    playSound('success');
+    showToast('Doğrulama başarılı!', 'success');
     // Scroll-to-bottom FAB başlat
     setTimeout(initScrollToBottomFab, 200); // DOM hazır olunca bağla
-    loadContactsFromVault(); loadSecretsFromVault();
+    loadContactsFromVault();
+    loadSecretsFromVault();
     try {
         await initEcdhKeys();
         if (myPublicKeyJwk) socket.emit('publish_public_key', myPublicKeyJwk);
     } catch (e) {
         console.error('[!] initEcdhKeys hatası:', e);
     }
-    
+
     if (myContacts.length > 0) {
-        safeEmit('join_status_rooms', myContacts.map(c => c.id));
-        safeEmit('get_profiles', myContacts.map(c => c.id), (res) => {
-            if (res &amp;&amp; res.profiles) {
-                myContacts.forEach(c => { 
-                    if (res.profiles[c.id]) {
-                        if (res.profiles[c.id].avatar) c.avatar = res.profiles[c.id].avatar;
-                        if (res.profiles[c.id].username) c.username = res.profiles[c.id].username;
+        safeEmit(
+            'join_status_rooms',
+            myContacts.map((c) => c.id),
+        );
+        safeEmit(
+            'get_profiles',
+            myContacts.map((c) => c.id),
+            (res) => {
+                if (res &amp;&amp; res.profiles) {
+                    myContacts.forEach((c) => {
+                        if (res.profiles[c.id]) {
+                            if (res.profiles[c.id].avatar)
+                                c.avatar = res.profiles[c.id].avatar;
+                            if (res.profiles[c.id].username)
+                                c.username = res.profiles[c.id].username;
+                        }
+                    });
+                    saveContactsToVault();
+                    renderContactsSidebarDebounced();
+                    if (activeTarget &amp;&amp; res.profiles[activeTarget.id]) {
+                        if (res.profiles[activeTarget.id].username)
+                            activeTarget.username =
+                                res.profiles[activeTarget.id].username;
+                        if (res.profiles[activeTarget.id].avatar)
+                            activeTarget.avatar =
+                                res.profiles[activeTarget.id].avatar;
+                        updateChatHeaderUI();
                     }
-                });
-                saveContactsToVault(); renderContactsSidebarDebounced();
-                if (activeTarget &amp;&amp; res.profiles[activeTarget.id]) {
-                    if (res.profiles[activeTarget.id].username) activeTarget.username = res.profiles[activeTarget.id].username;
-                    if (res.profiles[activeTarget.id].avatar) activeTarget.avatar = res.profiles[activeTarget.id].avatar;
-                    updateChatHeaderUI();
                 }
-            }
-        });
+            },
+        );
     }
 
     document.getElementById('profileUsername').innerText = currentUser.username;
@@ -800,11 +973,13 @@ async function finishLoginSetup() {
 
     document.getElementById('authGateway').classList.add('hidden');
     document.getElementById('chatTerminalWrapper').classList.remove('hidden');
-    
-    renderContactsSidebar(); bindSocketEvents(); checkOnlineStatuses();
+
+    renderContactsSidebar();
+    bindSocketEvents();
+    checkOnlineStatuses();
     migrateLocalStorageToIndexedDB();
 
-    const messageInput =  document.getElementById('messageInput');
+    const messageInput = document.getElementById('messageInput');
     if (messageInput) {
         messageInput.oninput = () => {
             if (activeTarget) {
@@ -812,11 +987,13 @@ async function finishLoginSetup() {
                     isCurrentlyTyping = true;
                     socket.emit('typing', { targetId: activeTarget.id });
                 }
-                
+
                 clearTimeout(localTypingTimeout);
                 localTypingTimeout = setTimeout(() => {
                     if (activeTarget) {
-                        socket.emit('stop_typing', { targetId: activeTarget.id });
+                        socket.emit('stop_typing', {
+                            targetId: activeTarget.id,
+                        });
                     }
                     isCurrentlyTyping = false;
                 }, 3000);
@@ -837,19 +1014,39 @@ async function finishLoginSetup() {
  */
 function handleDisconnectUI() {
     hideReconnectOverlay();
-    document.getElementById('chatTerminalWrapper').classList.add('hidden'); 
+    document.getElementById('chatTerminalWrapper').classList.add('hidden');
     document.getElementById('authGateway').classList.remove('hidden');
     document.getElementById('clearChatBtn').classList.add('hidden');
-    renderLogPlaceholder(document.getElementById('chatLog'), null, "Bağlantı kesildi", true);
-    document.getElementById('packetSizeDisplay').innerText = "";
-    
-    Object.keys(_activeTimers).forEach(id => { clearInterval(_activeTimers[id]); delete _activeTimers[id]; });
+    renderLogPlaceholder(
+        document.getElementById('chatLog'),
+        null,
+        'Bağlantı kesildi',
+        true,
+    );
+    document.getElementById('packetSizeDisplay').innerText = '';
+
+    Object.keys(_activeTimers).forEach((id) => {
+        clearInterval(_activeTimers[id]);
+        delete _activeTimers[id];
+    });
     // [GÜVENLİK] Tüm kriptografik durumu bellekten güvenle temizle (ratchet zincirleri, geçici anahtarlar, AES önbellek)
     if (typeof wipeAllCryptoState === 'function') wipeAllCryptoState();
-    Object.keys(_aesKeyCache).forEach(k => delete _aesKeyCache[k]);
-    if (localTypingTimeout) { clearTimeout(localTypingTimeout); localTypingTimeout = null; }
+    Object.keys(_aesKeyCache).forEach((k) => delete _aesKeyCache[k]);
+    if (localTypingTimeout) {
+        clearTimeout(localTypingTimeout);
+        localTypingTimeout = null;
+    }
     isCurrentlyTyping = false;
-    window.receivedImages = []; currentUser = null; activeTarget = null; myContacts = []; unreadCounts = {}; derivedSecrets = {}; myEcdhKeyPair = null; myPublicKeyJwk = null; socket = null;
+    _lastDateLabel = null;
+    window.receivedImages = [];
+    currentUser = null;
+    activeTarget = null;
+    myContacts = [];
+    unreadCounts = {};
+    derivedSecrets = {};
+    myEcdhKeyPair = null;
+    myPublicKeyJwk = null;
+    socket = null;
     updateMobileLayout();
 }
 
@@ -858,18 +1055,20 @@ function handleDisconnectUI() {
  * @function disconnectFromServer
  * @returns {void}
  */
-function disconnectFromServer() { 
-    if (socket) { 
+function disconnectFromServer() {
+    if (socket) {
         playSound('error');
         const token = localStorage.getItem('cyber_jwt');
         if (token) {
-            try { socket.emit('logout', { token }); } catch (e) {}
+            try {
+                socket.emit('logout', { token });
+            } catch (e) {}
         }
         socket.disconnect();
-        showToast("Çıkış yapıldı.", 'warning'); 
+        showToast('Çıkış yapıldı.', 'warning');
         localStorage.removeItem('cyber_jwt');
-        handleDisconnectUI(); 
-    } 
+        handleDisconnectUI();
+    }
 }
 
 // === KİŞİ LİSTESİ / DURUM ===
@@ -882,17 +1081,18 @@ function disconnectFromServer() {
  * @returns {void}
  */
 function updateContactStatusUI(userId, isOnline) {
-    const contact = myContacts.find(c => c.id === userId);
+    const contact = myContacts.find((c) => c.id === userId);
     if (contact) contact.isOnline = isOnline;
     const dot = document.getElementById(`status_dot_${userId}`);
     if (dot) {
         dot.className = `absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[--bg-secondary] ${isOnline ? 'bg-[--success]' : 'bg-gray-500/50'}`;
         dot.title = isOnline ? 'Çevrimiçi' : 'Çevrimdışı';
     }
-    
+
     if (activeTarget &amp;&amp; activeTarget.id === userId) {
         const headerDot = document.getElementById('chatStatusDot');
-        if (headerDot) headerDot.className = `status-dot ${isOnline ? 'status-online' : 'status-offline'} shrink-0`;
+        if (headerDot)
+            headerDot.className = `status-dot ${isOnline ? 'status-online' : 'status-offline'} shrink-0`;
     }
 }
 
@@ -903,10 +1103,11 @@ function updateContactStatusUI(userId, isOnline) {
  */
 function checkOnlineStatuses() {
     if (myContacts.length === 0) return;
-    const ids = myContacts.map(c => c.id);
+    const ids = myContacts.map((c) => c.id);
     safeEmit('check_node_statuses', ids, (res) => {
         if (!res || !res.statuses) return;
-        for (const userId in res.statuses) updateContactStatusUI(userId, res.statuses[userId]);
+        for (const userId in res.statuses)
+            updateContactStatusUI(userId, res.statuses[userId]);
     });
 }
 
@@ -932,7 +1133,10 @@ let _renderContactsTimer = null;
  */
 function renderContactsSidebarDebounced() {
     if (_renderContactsTimer) return;
-    _renderContactsTimer = setTimeout(() => { _renderContactsTimer = null; renderContactsSidebar(); }, 50);
+    _renderContactsTimer = setTimeout(() => {
+        _renderContactsTimer = null;
+        renderContactsSidebar();
+    }, 50);
 }
 
 /**
@@ -947,16 +1151,19 @@ function renderContactsSidebar() {
 
     let filtered = myContacts;
     if (_contactSearchTerm) {
-        filtered = myContacts.filter(c => 
-            c.id.toLowerCase().includes(_contactSearchTerm) || 
-            (c.username &amp;&amp; c.username.toLowerCase().includes(_contactSearchTerm))
+        filtered = myContacts.filter(
+            (c) =>
+                c.id.toLowerCase().includes(_contactSearchTerm) ||
+                (c.username &amp;&amp;
+                    c.username.toLowerCase().includes(_contactSearchTerm)),
         );
     }
 
     if (filtered.length === 0) {
         listContainer.replaceChildren();
         const emptyDiv = document.createElement('div');
-        emptyDiv.className = 'flex flex-col items-center justify-center py-8 px-4 text-center';
+        emptyDiv.className =
+            'flex flex-col items-center justify-center py-8 px-4 text-center';
         emptyDiv.innerHTML = _contactSearchTerm
             ? '&lt;span class="text-2xl mb-2 opacity-50">🔍&lt;/span>&lt;div class="text-xs text-[--text-muted]">Sonuç bulunamadı.&lt;/div>'
             : '&lt;span class="text-3xl mb-2 opacity-50">💬&lt;/span>&lt;div class="text-xs text-[--text-secondary] font-medium">Henüz bir sohbet yok&lt;/div>&lt;div class="text-[11px] text-[--text-muted] mt-1">Yeni kişi ekleyerek güvenli sohbete başlayın.&lt;/div>';
@@ -965,15 +1172,18 @@ function renderContactsSidebar() {
     }
 
     const fragment = document.createDocumentFragment();
-    filtered.forEach(contact => {
+    filtered.forEach((contact) => {
         const isActive = activeTarget &amp;&amp; activeTarget.id === contact.id;
         const unreadCount = unreadCounts[contact.id] || 0;
-        const hasSecret = !!derivedSecrets[contact.id];
+        const hasRatchet =
+            typeof hasRatchetSession === 'function' &amp;&amp;
+            hasRatchetSession(contact.id);
+        const hasSecret = hasRatchet || !!derivedSecrets[contact.id];
 
         const item = document.createElement('div');
         item.className = `group flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all duration-200 border relative ${
-            isActive 
-                ? 'bg-[--surface-hover] border-[--border-active] shadow-sm' 
+            isActive
+                ? 'bg-[--surface-hover] border-[--border-active] shadow-sm'
                 : 'hover:bg-[--surface-hover]/50 border-transparent'
         }`;
         // [GÜVENLİK FIX] CSP uyumlu olay dinleyici — inline onclick engellenir
@@ -984,15 +1194,20 @@ function renderContactsSidebar() {
 
         // Sol: Avatar + Online Noktası (WhatsApp Tarzı)
         const avatarWrap = document.createElement('div');
-        avatarWrap.className = 'relative w-10 h-10 shrink-0 rounded-full bg-[--surface-hover] flex items-center justify-center overflow-hidden border border-[--border]';
-        
+        avatarWrap.className =
+            'relative w-10 h-10 shrink-0 rounded-full bg-[--surface-hover] flex items-center justify-center overflow-hidden border border-[--border]';
+
         if (contact.avatar) {
             const img = document.createElement('img');
             img.src = contact.avatar;
             img.className = 'w-full h-full object-cover';
             avatarWrap.appendChild(img);
         } else {
-            const initial = (contact.username || contact.id || '').replace(/^AGN-/, '').charAt(0).toUpperCase() || 'U';
+            const initial =
+                (contact.username || contact.id || '')
+                    .replace(/^AGN-/, '')
+                    .charAt(0)
+                    .toUpperCase() || 'U';
             const spn = document.createElement('span');
             spn.className = 'text-xs font-semibold text-[--text-primary]';
             spn.innerText = initial;
@@ -1015,12 +1230,22 @@ function renderContactsSidebar() {
         topRow.className = 'flex items-center justify-between gap-1 mb-0.5';
 
         const nameSpan = document.createElement('span');
-        nameSpan.className = 'text-xs font-semibold truncate text-[--text-primary]';
+        nameSpan.className =
+            'text-xs font-semibold truncate text-[--text-primary]';
         nameSpan.textContent = contact.username ? contact.username : contact.id;
 
         const e2eeBadge = document.createElement('span');
         e2eeBadge.className = `text-[10px] font-medium shrink-0 ${hasSecret ? 'text-[--success]' : 'text-[--warning]'}`;
-        e2eeBadge.textContent = hasSecret ? '🔒 E2EE' : '⏳ Bekliyor';
+        e2eeBadge.textContent = hasRatchet
+            ? '🛡️ PFS+E2EE'
+            : hasSecret
+              ? '🔒 E2EE'
+              : '⏳ Bekliyor';
+        e2eeBadge.title = hasRatchet
+            ? 'ECDHE + KDF Ratchet aktif (İleriye Dönük Gizlilik / PFS)'
+            : hasSecret
+              ? 'Statik ECDH uçtan uca şifreleme aktif'
+              : 'Anahtar anlaşması bekleniyor';
 
         topRow.appendChild(nameSpan);
         topRow.appendChild(e2eeBadge);
@@ -1037,14 +1262,16 @@ function renderContactsSidebar() {
 
         if (unreadCount > 0) {
             const badge = document.createElement('span');
-            badge.className = 'bg-[--success] text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1';
+            badge.className =
+                'bg-[--success] text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1';
             badge.textContent = unreadCount;
             rightBadges.appendChild(badge);
         }
 
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
-        deleteBtn.className = 'w-6 h-6 flex items-center justify-center rounded-md hover:bg-[--error]/15 text-[--text-muted] hover:text-[--error] text-xs transition-all cursor-pointer opacity-70 md:opacity-0 md:group-hover:opacity-100 shrink-0';
+        deleteBtn.className =
+            'w-6 h-6 flex items-center justify-center rounded-md hover:bg-[--error]/15 text-[--text-muted] hover:text-[--error] text-xs transition-all cursor-pointer opacity-70 md:opacity-0 md:group-hover:opacity-100 shrink-0';
         deleteBtn.title = 'Sohbeti Sil';
         deleteBtn.setAttribute('aria-label', 'Sohbeti Sil');
         deleteBtn.textContent = '✕';
@@ -1081,55 +1308,72 @@ function removeContact(targetId, event) {
         event.stopPropagation();
         event.preventDefault();
     }
-    const contact = myContacts.find(c => c.id === targetId);
-    const displayName = contact &amp;&amp; contact.username ? `${contact.username} (${targetId})` : targetId;
-    
-    showCustomConfirm(`${displayName} kişisine ait tüm sohbet geçmişi ve şifreleme anahtarları silinecektir. Bu işlem geri alınamaz.`, async () => {
-        // 1. myContacts listesinden kaldır ve kasaya kaydet
-        myContacts = myContacts.filter(c => c.id !== targetId);
-        saveContactsToVault();
+    const contact = myContacts.find((c) => c.id === targetId);
+    const displayName =
+        contact &amp;&amp; contact.username
+            ? `${contact.username} (${targetId})`
+            : targetId;
 
-        // 2. Okunmamış sayaçları temizle
-        if (unreadCounts[targetId]) delete unreadCounts[targetId];
+    showCustomConfirm(
+        `${displayName} kişisine ait tüm sohbet geçmişi ve şifreleme anahtarları silinecektir. Bu işlem geri alınamaz.`,
+        async () => {
+            // 1. myContacts listesinden kaldır ve kasaya kaydet
+            myContacts = myContacts.filter((c) => c.id !== targetId);
+            saveContactsToVault();
 
-        // 3. Kasadaki (IndexedDB) tüm mesajları sil
-        await clearPeerPacketsFromVault(targetId);
+            // 2. Okunmamış sayaçları temizle
+            if (unreadCounts[targetId]) delete unreadCounts[targetId];
 
-        // 4. Varsa legacy localStorage geçmişini temizle
-        if (currentUser) {
-            try {
-                localStorage.removeItem(`cyber_history_idx_${currentUser.userId}_${targetId}`);
-            } catch (_) {}
-        }
+            // 3. Kasadaki (IndexedDB) tüm mesajları sil
+            await clearPeerPacketsFromVault(targetId);
 
-        // 5. Türetilmiş ECDH şifreleme anahtarlarını ve ratchet zincirini güvenle sil
-        if (typeof wipeTargetCryptoState === 'function') {
-            wipeTargetCryptoState(targetId);
-        } else if (derivedSecrets[targetId]) {
-            delete derivedSecrets[targetId];
-            saveSecretsToVault();
-        }
+            // 4. Varsa legacy localStorage geçmişini temizle
+            if (currentUser) {
+                try {
+                    localStorage.removeItem(
+                        `cyber_history_idx_${currentUser.userId}_${targetId}`,
+                    );
+                } catch (_) {}
+            }
 
-        // [GÜVENLİK FIX] Karşı tarafın da eski oturum anahtarlarını silmesi için iki taraflı sıfırlama sinyali gönder
-        safeEmit('reset_chat_session', { targetId: targetId });
+            // 5. Türetilmiş ECDH şifreleme anahtarlarını ve ratchet zincirini güvenle sil
+            if (typeof wipeTargetCryptoState === 'function') {
+                wipeTargetCryptoState(targetId);
+            } else if (derivedSecrets[targetId]) {
+                delete derivedSecrets[targetId];
+                saveSecretsToVault();
+            }
 
-        // 6. Eğer aktif sohbet buysa ekranı sıfırla
-        if (activeTarget &amp;&amp; activeTarget.id === targetId) {
-            activeTarget = null;
-            updateChatHeaderUI();
-            const clearChatBtn = document.getElementById('clearChatBtn');
-            if (clearChatBtn) clearChatBtn.classList.add('hidden');
-            disableChatUI();
-            const chatLog = document.getElementById('chatLog');
-            if (chatLog) renderLogPlaceholder(chatLog, '🔒', 'Bir sohbet seçin', false);
-            updateMobileLayout();
-        }
+            // [GÜVENLİK FIX] Karşı tarafın da eski oturum anahtarlarını silmesi için iki taraflı sıfırlama sinyali gönder
+            safeEmit('reset_chat_session', { targetId: targetId });
 
-        // 7. Sidebar'ı yeniden çiz ve bildirim ver
-        renderContactsSidebar();
-        playSound('destroy');
-        showToast(`${displayName} kişi listenizden ve sohbet geçmişinizden silindi.`, 'warning');
-    });
+            // 6. Eğer aktif sohbet buysa ekranı sıfırla
+            if (activeTarget &amp;&amp; activeTarget.id === targetId) {
+                activeTarget = null;
+                updateChatHeaderUI();
+                const clearChatBtn = document.getElementById('clearChatBtn');
+                if (clearChatBtn) clearChatBtn.classList.add('hidden');
+                disableChatUI();
+                const chatLog = document.getElementById('chatLog');
+                if (chatLog)
+                    renderLogPlaceholder(
+                        chatLog,
+                        '🔒',
+                        'Bir sohbet seçin',
+                        false,
+                    );
+                updateMobileLayout();
+            }
+
+            // 7. Sidebar'ı yeniden çiz ve bildirim ver
+            renderContactsSidebar();
+            playSound('destroy');
+            showToast(
+                `${displayName} kişi listenizden ve sohbet geçmişinizden silindi.`,
+                'warning',
+            );
+        },
+    );
 }
 
 // === SOHBET ALANI ===
@@ -1142,22 +1386,23 @@ function removeContact(targetId, event) {
 function updateChatHeaderUI() {
     const headerEl = document.getElementById('chatTargetHeader');
     if (!headerEl) return;
-    
+
     if (!activeTarget) {
-        headerEl.textContent = "Bir sohbet seçin";
+        headerEl.textContent = 'Bir sohbet seçin';
         return;
     }
-    
+
     headerEl.replaceChildren();
     if (activeTarget.username) {
         const nameSpan = document.createElement('span');
         nameSpan.className = 'font-bold text-[--text-primary]';
         nameSpan.textContent = activeTarget.username;
-        
+
         const idSpan = document.createElement('span');
-        idSpan.className = 'text-xs font-mono text-[--text-muted] ml-1.5 font-normal';
+        idSpan.className =
+            'text-xs font-mono text-[--text-muted] ml-1.5 font-normal';
         idSpan.textContent = `(${activeTarget.id})`;
-        
+
         headerEl.appendChild(nameSpan);
         headerEl.appendChild(idSpan);
     } else {
@@ -1171,9 +1416,11 @@ function updateChatHeaderUI() {
  * @returns {void}
  */
 function enableChatUI() {
-    document.getElementById('messageInput').disabled = false; document.getElementById('messageInput').placeholder = "Mesaj yazın...";
+    document.getElementById('messageInput').disabled = false;
+    document.getElementById('messageInput').placeholder = 'Mesaj yazın...';
     document.getElementById('sendPacketBtn').disabled = false;
-    document.getElementById('sendPacketBtn').className = "px-4 sm:px-8 py-2 sm:py-0 bg-green-500/20 text-green-500 font-black border-2 border-[#00ff66] text-[10px] sm:text-sm  transition-all duration-300 uppercase tracking-normal hover:bg-green-500 hover:text-black   flex-shrink-0";
+    document.getElementById('sendPacketBtn').className =
+        'px-4 sm:px-8 py-2 sm:py-0 bg-green-500/20 text-green-500 font-black border-2 border-[#00ff66] text-[10px] sm:text-sm  transition-all duration-300 uppercase tracking-normal hover:bg-green-500 hover:text-black   flex-shrink-0';
 }
 
 /**
@@ -1182,9 +1429,12 @@ function enableChatUI() {
  * @returns {void}
  */
 function disableChatUI() {
-    document.getElementById('messageInput').disabled = true; document.getElementById('messageInput').placeholder = "Bağlantı bekleniyor...";
+    document.getElementById('messageInput').disabled = true;
+    document.getElementById('messageInput').placeholder =
+        'Bağlantı bekleniyor...';
     document.getElementById('sendPacketBtn').disabled = true;
-    document.getElementById('sendPacketBtn').className = "px-4 sm:px-8 py-2 sm:py-0 bg-gray-900 text-gray-600 font-black border border-gray-700 text-[10px] sm:text-sm  transition-all duration-300 uppercase tracking-normal flex-shrink-0";
+    document.getElementById('sendPacketBtn').className =
+        'px-4 sm:px-8 py-2 sm:py-0 bg-gray-900 text-gray-600 font-black border border-gray-700 text-[10px] sm:text-sm  transition-all duration-300 uppercase tracking-normal flex-shrink-0';
 }
 
 /**
@@ -1196,18 +1446,23 @@ function disableChatUI() {
  * @returns {Promise&lt;void>}
  */
 async function selectTarget(targetId) {
-    const selected = myContacts.find(c => c.id === targetId); if (!selected) return;
-    
+    const selected = myContacts.find((c) => c.id === targetId);
+    if (!selected) return;
+
     if (activeTarget &amp;&amp; isCurrentlyTyping) {
         clearTimeout(localTypingTimeout);
         socket.emit('stop_typing', { targetId: activeTarget.id });
         isCurrentlyTyping = false;
     }
-    
-    playSound('success'); activeTarget = selected; unreadCounts[targetId] = 0; renderContactsSidebar();
-    
+
+    playSound('success');
+    activeTarget = selected;
+    unreadCounts[targetId] = 0;
+    renderContactsSidebar();
+
     updateChatHeaderUI();
-    document.getElementById('clearChatBtn').classList.remove('hidden'); keyRevealed = false;
+    document.getElementById('clearChatBtn').classList.remove('hidden');
+    keyRevealed = false;
 
     // Profil eksikse veya güncel değilse arka planda sorgula
     if (!activeTarget.username || !activeTarget.avatar) {
@@ -1232,37 +1487,119 @@ async function selectTarget(targetId) {
         });
     }
 
-    const hasSecret = !!derivedSecrets[selected.id];
-    if (hasSecret) enableChatUI(); 
-    else {
-        disableChatUI(); const success = await ensureSharedSecret(selected.id);
-        if (success) { if (activeTarget &amp;&amp; activeTarget.id === selected.id) { enableChatUI(); showToast(`Şifreli kanal kuruldu!`); } renderContactsSidebar(); } 
-        else setTimeout(() => initiateEcdhHandshake(selected.id), 300);
+    const hasSecret =
+        !!derivedSecrets[selected.id] ||
+        (typeof hasRatchetSession === 'function' &amp;&amp;
+            hasRatchetSession(selected.id));
+    if (hasSecret) {
+        enableChatUI();
+        if (
+            selected.isOnline &amp;&amp;
+            typeof hasRatchetSession === 'function' &amp;&amp;
+            !hasRatchetSession(selected.id) &amp;&amp;
+            typeof initiateEcdhHandshake === 'function'
+        ) {
+            initiateEcdhHandshake(selected.id);
+        }
+    } else {
+        disableChatUI();
+        const success = await ensureSharedSecret(selected.id);
+        if (success) {
+            if (activeTarget &amp;&amp; activeTarget.id === selected.id) {
+                enableChatUI();
+                showToast(`Şifreli kanal kuruldu!`);
+            }
+            renderContactsSidebar();
+            if (
+                selected.isOnline &amp;&amp;
+                typeof hasRatchetSession === 'function' &amp;&amp;
+                !hasRatchetSession(selected.id) &amp;&amp;
+                typeof initiateEcdhHandshake === 'function'
+            ) {
+                initiateEcdhHandshake(selected.id);
+            }
+        } else if (typeof initiateEcdhHandshake === 'function') {
+            setTimeout(() => initiateEcdhHandshake(selected.id), 300);
+        }
     }
-    safeEmit('check_node_status', activeTarget.id, (res) => { updateContactStatusUI(res.userId, res.isOnline); });
-    
-    const logBox = document.getElementById('chatLog'); logBox.innerHTML = ''; window.receivedImages = [];
+    safeEmit('check_node_status', activeTarget.id, (res) => {
+        if (!res) return;
+        updateContactStatusUI(res.userId, res.isOnline);
+        if (
+            res.isOnline &amp;&amp;
+            typeof hasRatchetSession === 'function' &amp;&amp;
+            !hasRatchetSession(res.userId) &amp;&amp;
+            typeof initiateEcdhHandshake === 'function'
+        ) {
+            initiateEcdhHandshake(res.userId);
+        }
+    });
+
+    const logBox = document.getElementById('chatLog');
+    logBox.innerHTML = '';
+    window.receivedImages = [];
+    _lastDateLabel = null;
     const history = await loadHistoryFromVault(activeTarget.id);
-    
+
     if (history.length > 0) {
         const topBanner = document.createElement('div');
-        topBanner.className = 'text-green-500/50 text-center tracking-[0.1em] sm:tracking-normal uppercase font-bold text-[8px] sm:text-[10px] my-2 sm:my-4 border-b border-green-500/20 pb-1 sm:pb-2 drop-shadow-md';
-        topBanner.innerText = '/// GÜVENLİ YEREL BELLEK GERİ YÜKLENDİ (IDB) ///';
+        topBanner.className =
+            'text-green-500/50 text-center tracking-[0.1em] sm:tracking-normal uppercase font-bold text-[8px] sm:text-[10px] my-2 sm:my-4 border-b border-green-500/20 pb-1 sm:pb-2 drop-shadow-md';
+        topBanner.innerText =
+            '/// GÜVENLİ YEREL BELLEK GERİ YÜKLENDİ (IDB) ///';
         logBox.appendChild(topBanner);
 
-        const INITIAL_LOAD = 20; const first = history.slice(-INITIAL_LOAD); const rest  = history.slice(0, -INITIAL_LOAD);
-        const decryptedFirst = await Promise.all(first.map(p => decryptPacketForDisplay(p, activeTarget)));
-        for (const data of decryptedFirst) { if (data) appendMessageToUI(data.id, data.sender, data.text, data.file, data.isMine, data.isError, data.ttl, data.timestamp, data.fileName); }
+        const INITIAL_LOAD = 20;
+        const first = history.slice(0, INITIAL_LOAD);
+        const rest = history.slice(INITIAL_LOAD);
+        const decryptedFirst = await Promise.all(
+            first.map((p) => decryptPacketForDisplay(p, activeTarget)),
+        );
+        for (const data of decryptedFirst) {
+            if (data)
+                appendMessageToUI(
+                    data.id,
+                    data.sender,
+                    data.text,
+                    data.file,
+                    data.isMine,
+                    data.isError,
+                    data.ttl,
+                    data.timestamp,
+                    data.fileName,
+                );
+        }
         logBox.scrollTop = logBox.scrollHeight;
-        
+
         if (rest.length > 0) {
             let i = 0;
-            function processRest() { 
-                if (i >= rest.length) return; 
-                decryptPacketForDisplay(rest[i++], activeTarget).then((data) => { 
-                    if(data) appendMessageToUI(data.id, data.sender, data.text, data.file, data.isMine, data.isError, data.ttl, data.timestamp, data.fileName);
-                    idleCallback(processRest); 
-                }); 
+            function processRest() {
+                if (
+                    i >= rest.length ||
+                    !activeTarget ||
+                    activeTarget.id !== targetId
+                )
+                    return;
+                decryptPacketForDisplay(rest[i++], activeTarget).then(
+                    (data) => {
+                        if (!activeTarget || activeTarget.id !== targetId)
+                            return;
+                        if (data)
+                            appendMessageToUI(
+                                data.id,
+                                data.sender,
+                                data.text,
+                                data.file,
+                                data.isMine,
+                                data.isError,
+                                data.ttl,
+                                data.timestamp,
+                                data.fileName,
+                            );
+                        logBox.scrollTop = logBox.scrollHeight;
+                        idleCallback(processRest);
+                    },
+                );
             }
             idleCallback(processRest);
         }
@@ -1280,45 +1617,73 @@ async function selectTarget(targetId) {
 function clearActiveChat() {
     if (!activeTarget) return;
     const targetId = activeTarget.id;
-    const displayName = activeTarget.username ? `${activeTarget.username} (${activeTarget.id})` : activeTarget.id;
-    showCustomConfirm(`${displayName} ile olan sohbet geçmişi silinecektir. Bu işlem geri alınamaz.`, async () => {
-        await clearPeerPacketsFromVault(targetId);
-        if (currentUser) {
-            try {
-                localStorage.removeItem(`cyber_history_idx_${currentUser.userId}_${targetId}`);
-            } catch (_) {}
-        }
+    const displayName = activeTarget.username
+        ? `${activeTarget.username} (${activeTarget.id})`
+        : activeTarget.id;
+    showCustomConfirm(
+        `${displayName} ile olan sohbet geçmişi silinecektir. Bu işlem geri alınamaz.`,
+        async () => {
+            await clearPeerPacketsFromVault(targetId);
+            if (currentUser) {
+                try {
+                    localStorage.removeItem(
+                        `cyber_history_idx_${currentUser.userId}_${targetId}`,
+                    );
+                } catch (_) {}
+            }
 
-        // [GÜVENLİK FIX] İki taraflı kriptografik oturum sıfırlama
-        if (typeof wipeTargetCryptoState === 'function') {
-            wipeTargetCryptoState(targetId);
-        }
-        if (typeof derivedSecrets !== 'undefined' &amp;&amp; derivedSecrets[targetId]) {
-            delete derivedSecrets[targetId];
-        }
-        activeTarget.key = null;
-        activeTarget.ecdhStatus = 'pending';
-        let contact = myContacts.find(c => c.id === targetId);
-        if (contact) {
-            contact.key = null;
-            contact.ecdhStatus = 'pending';
-            saveContactsToVault();
-            renderContactsSidebarDebounced();
-        }
-        updateChatHeaderUI();
+            // [GÜVENLİK FIX] İki taraflı kriptografik oturum sıfırlama
+            if (typeof wipeTargetCryptoState === 'function') {
+                wipeTargetCryptoState(targetId);
+            }
+            if (
+                typeof derivedSecrets !== 'undefined' &amp;&amp;
+                derivedSecrets[targetId]
+            ) {
+                delete derivedSecrets[targetId];
+            }
+            activeTarget.key = null;
+            activeTarget.ecdhStatus = 'pending';
+            let contact = myContacts.find((c) => c.id === targetId);
+            if (contact) {
+                contact.key = null;
+                contact.ecdhStatus = 'pending';
+                saveContactsToVault();
+                renderContactsSidebarDebounced();
+            }
+            updateChatHeaderUI();
 
-        // Karşı tarafa da oturumu sıfırlaması için sinyal gönder
-        safeEmit('reset_chat_session', { targetId: targetId });
+            // Karşı tarafa da oturumu sıfırlaması için sinyal gönder
+            safeEmit('reset_chat_session', { targetId: targetId });
 
-        renderLogPlaceholder(document.getElementById('chatLog'), '📭', '// BELLEK SIFIRLANDI //', false);
-        showToast("Sohbet geçmişi ve oturum anahtarları sıfırlandı.", 'success');
-        playSound('destroy');
+            _lastDateLabel = null;
+            renderLogPlaceholder(
+                document.getElementById('chatLog'),
+                '📭',
+                '// BELLEK SIFIRLANDI //',
+                false,
+            );
+            showToast(
+                'Sohbet geçmişi ve oturum anahtarları sıfırlandı.',
+                'success',
+            );
+            playSound('destroy');
 
-        // Yeni el sıkışma için hazırla
-        if (typeof initiateEcdhHandshake === 'function' &amp;&amp; activeTarget.isOnline) {
-            initiateEcdhHandshake(targetId);
-        }
-    });
+            // Statik yedek anahtarı ve çevrimiçiyse yeni ECDHE el sıkışmasını hazırla
+            if (typeof ensureSharedSecret === 'function') {
+                ensureSharedSecret(targetId).then((success) => {
+                    if (success &amp;&amp; activeTarget &amp;&amp; activeTarget.id === targetId)
+                        enableChatUI();
+                });
+            }
+            if (
+                typeof initiateEcdhHandshake === 'function' &amp;&amp;
+                activeTarget.isOnline
+            ) {
+                initiateEcdhHandshake(targetId);
+            }
+        },
+    );
 }
 
 // === KİŞİ EKLEME MODALI ===
@@ -1328,14 +1693,22 @@ function clearActiveChat() {
  * @function showContactConfigModal
  * @returns {void}
  */
-function showContactConfigModal() { playSound('type'); const modal = document.getElementById('contactConfigModal'); document.getElementById('modalTargetId').value = ''; modal.classList.remove('hidden'); }
+function showContactConfigModal() {
+    playSound('type');
+    const modal = document.getElementById('contactConfigModal');
+    document.getElementById('modalTargetId').value = '';
+    modal.classList.remove('hidden');
+}
 
 /**
  * Manuel kişi ekleme modal penceresini kapatır.
  * @function hideContactConfigModal
  * @returns {void}
  */
-function hideContactConfigModal() { playSound('type'); document.getElementById('contactConfigModal').classList.add('hidden'); }
+function hideContactConfigModal() {
+    playSound('type');
+    document.getElementById('contactConfigModal').classList.add('hidden');
+}
 
 // === YENİ AJAN EKLEME (REUSABLE) ===
 
@@ -1350,48 +1723,64 @@ function addContact(targetId, username = null) {
     if (!targetId) return false;
     targetId = targetId.toUpperCase();
     if (targetId === currentUser.userId) return false;
-    
-    let existing = myContacts.find(c => c.id === targetId);
+
+    let existing = myContacts.find((c) => c.id === targetId);
     if (!existing) {
-        myContacts.push({ 
-            id: targetId, 
-            username: username || null, 
-            key: null, 
-            ecdhStatus: 'pending', 
-            isOnline: false, 
-            avatar: null 
+        myContacts.push({
+            id: targetId,
+            username: username || null,
+            key: null,
+            ecdhStatus: 'pending',
+            isOnline: false,
+            avatar: null,
         });
         saveContactsToVault();
         const display = username ? `${username} (${targetId})` : targetId;
         showToast(`${display} kişi listesine eklendi.`, 'success');
-        safeEmit('join_status_rooms', [targetId]); 
-        safeEmit('check_node_status', targetId, (res) => { if (res) updateContactStatusUI(res.userId, res.isOnline); });
-        safeEmit('get_profiles', [targetId], (res) => {
-            if (res &amp;&amp; res.profiles &amp;&amp; res.profiles[targetId]) {
-                const c = myContacts.find(x => x.id === targetId);
-                if (c) {
-                    if (res.profiles[targetId].avatar) c.avatar = res.profiles[targetId].avatar;
-                    if (res.profiles[targetId].username) c.username = res.profiles[targetId].username;
-                    saveContactsToVault();
-                    renderContactsSidebarDebounced();
-                    if (activeTarget &amp;&amp; activeTarget.id === targetId) updateChatHeaderUI();
+        safeEmit('join_status_rooms', [targetId]);
+        safeEmit('check_node_status', targetId, (res) => {
+            if (res) {
+                updateContactStatusUI(res.userId, res.isOnline);
+                if (
+                    res.isOnline &amp;&amp;
+                    typeof hasRatchetSession === 'function' &amp;&amp;
+                    !hasRatchetSession(targetId) &amp;&amp;
+                    typeof initiateEcdhHandshake === 'function'
+                ) {
+                    initiateEcdhHandshake(targetId);
                 }
             }
         });
-        
+        safeEmit('get_profiles', [targetId], (res) => {
+            if (res &amp;&amp; res.profiles &amp;&amp; res.profiles[targetId]) {
+                const c = myContacts.find((x) => x.id === targetId);
+                if (c) {
+                    if (res.profiles[targetId].avatar)
+                        c.avatar = res.profiles[targetId].avatar;
+                    if (res.profiles[targetId].username)
+                        c.username = res.profiles[targetId].username;
+                    saveContactsToVault();
+                    renderContactsSidebarDebounced();
+                    if (activeTarget &amp;&amp; activeTarget.id === targetId)
+                        updateChatHeaderUI();
+                }
+            }
+        });
+
         // Ekleme başarılı olunca karşıya bildirim gönder
         notifyContactAddition(targetId);
-        
+
         // ECDH tüneli otomatik başlat
         ensureSharedSecret(targetId);
-        
+
         return true;
     } else {
         if (username &amp;&amp; !existing.username) {
             existing.username = username;
             saveContactsToVault();
             renderContactsSidebarDebounced();
-            if (activeTarget &amp;&amp; activeTarget.id === targetId) updateChatHeaderUI();
+            if (activeTarget &amp;&amp; activeTarget.id === targetId)
+                updateChatHeaderUI();
         }
     }
     return false;
@@ -1408,7 +1797,8 @@ function showSearchModal() {
     playSound('type');
     const modal = document.getElementById('searchModal');
     document.getElementById('searchQuery').value = '';
-    document.getElementById('searchResultsList').innerHTML = 'Arama yapmak için bir şeyler yazın...';
+    document.getElementById('searchResultsList').innerHTML =
+        'Arama yapmak için bir şeyler yazın...';
     modal.classList.remove('hidden');
 }
 
@@ -1436,17 +1826,20 @@ function performSearch() {
     }
     safeEmit('search_users', query, (res) => {
         if (!res || !res.results) {
-            resultsList.innerHTML = '&lt;span class="text-red-500">// ARAMA BAŞARISIZ //&lt;/span>';
+            resultsList.innerHTML =
+                '&lt;span class="text-red-500">// ARAMA BAŞARISIZ //&lt;/span>';
             return;
         }
         if (res.results.length === 0) {
-            resultsList.innerHTML = '&lt;span class="text-gray-400">// SONUÇ BULUNAMADI //&lt;/span>';
+            resultsList.innerHTML =
+                '&lt;span class="text-gray-400">// SONUÇ BULUNAMADI //&lt;/span>';
             return;
         }
         resultsList.replaceChildren();
-        res.results.forEach(user => {
+        res.results.forEach((user) => {
             const item = document.createElement('div');
-            item.className = 'flex items-center justify-between p-2 bg-purple-950/20 border border-purple-500/20  text-xs font-mono mb-2';
+            item.className =
+                'flex items-center justify-between p-2 bg-purple-950/20 border border-purple-500/20  text-xs font-mono mb-2';
 
             const left = document.createElement('div');
             left.className = 'flex items-center gap-2 min-w-0';
@@ -1456,7 +1849,8 @@ function performSearch() {
             left.appendChild(dot);
 
             const avatar = document.createElement('div');
-            avatar.className = 'w-6 h-6 rounded-full border border-purple-500/40 flex items-center justify-center overflow-hidden bg-purple-950/40 flex-shrink-0';
+            avatar.className =
+                'w-6 h-6 rounded-full border border-purple-500/40 flex items-center justify-center overflow-hidden bg-purple-950/40 flex-shrink-0';
             if (user.avatar) {
                 const img = document.createElement('img');
                 img.src = user.avatar;
@@ -1485,21 +1879,24 @@ function performSearch() {
 
             item.appendChild(left);
 
-            const isAlreadyAdded = myContacts.some(c => c.id === user.userId);
+            const isAlreadyAdded = myContacts.some((c) => c.id === user.userId);
             const btn = document.createElement('button');
             if (isAlreadyAdded) {
                 btn.disabled = true;
-                btn.className = 'px-3 py-1.5 border border-purple-500/30 text-purple-500/40 text-[10px] font-black  uppercase tracking-wider cursor-not-allowed';
+                btn.className =
+                    'px-3 py-1.5 border border-purple-500/30 text-purple-500/40 text-[10px] font-black  uppercase tracking-wider cursor-not-allowed';
                 btn.innerText = 'EKLI';
             } else {
-                btn.className = 'px-3 py-1.5 bg-purple-500 text-black hover:bg-white hover:text-black font-black border border-purple-400 text-[10px]  uppercase tracking-wider transition-all cursor-pointer';
+                btn.className =
+                    'px-3 py-1.5 bg-purple-500 text-black hover:bg-white hover:text-black font-black border border-purple-400 text-[10px]  uppercase tracking-wider transition-all cursor-pointer';
                 btn.innerText = 'EKLE';
                 btn.onclick = () => {
                     const added = addContact(user.userId, user.username);
                     if (added) {
                         playSound('success');
                         btn.disabled = true;
-                        btn.className = 'px-3 py-1.5 border border-purple-500/30 text-purple-500/40 text-[10px] font-black  uppercase tracking-wider cursor-not-allowed';
+                        btn.className =
+                            'px-3 py-1.5 border border-purple-500/30 text-purple-500/40 text-[10px] font-black  uppercase tracking-wider cursor-not-allowed';
                         btn.innerText = 'EKLI';
                         renderContactsSidebar();
                     }
@@ -1534,12 +1931,12 @@ function notifyContactAddition(targetId) {
 function showContactRequest(data) {
     playSound('transit');
     pendingContactRequest = data;
-    
+
     const modal = document.getElementById('contactRequestModal');
     const avatarContainer = document.getElementById('crModalAvatar');
     const nameEl = document.getElementById('crModalName');
     const idEl = document.getElementById('crModalId');
-    
+
     avatarContainer.innerHTML = '';
     if (data.avatar) {
         const img = document.createElement('img');
@@ -1553,7 +1950,7 @@ function showContactRequest(data) {
         spn.innerText = initial;
         avatarContainer.appendChild(spn);
     }
-    
+
     nameEl.innerText = data.username;
     idEl.innerText = data.senderId;
     modal.classList.remove('hidden');
@@ -1569,7 +1966,7 @@ function handleContactRequestResponse(accepted) {
     if (!pendingContactRequest) return;
     const targetId = pendingContactRequest.senderId;
     const username = pendingContactRequest.username;
-    
+
     safeEmit('respond_contact_request', { targetId, accepted }, (res) => {
         if (accepted) {
             addContact(targetId, username);
@@ -1590,18 +1987,30 @@ function handleContactRequestResponse(accepted) {
  */
 function showContactRequestResponse(data) {
     if (data.accepted) {
-        const c = myContacts.find(x => x.id === data.senderId);
-        if (c &amp;&amp; data.username) {
-            c.username = data.username;
+        const c = myContacts.find((x) => x.id === data.senderId);
+        if (c) {
+            c.isOnline = true;
+            if (data.username) c.username = data.username;
             if (data.avatar) c.avatar = data.avatar;
             saveContactsToVault();
             renderContactsSidebarDebounced();
-            if (activeTarget &amp;&amp; activeTarget.id === data.senderId) updateChatHeaderUI();
+            if (activeTarget &amp;&amp; activeTarget.id === data.senderId)
+                updateChatHeaderUI();
         }
-        const name = data.username ? `${data.username} (${data.senderId})` : data.senderId;
+        const name = data.username
+            ? `${data.username} (${data.senderId})`
+            : data.senderId;
         showToast(`${name} bağlantı isteğinizi kabul etti!`, 'success');
         playSound('success');
-        ensureSharedSecret(data.senderId);
+        ensureSharedSecret(data.senderId).then(() => {
+            if (
+                typeof hasRatchetSession === 'function' &amp;&amp;
+                !hasRatchetSession(data.senderId) &amp;&amp;
+                typeof initiateEcdhHandshake === 'function'
+            ) {
+                initiateEcdhHandshake(data.senderId);
+            }
+        });
     } else {
         showToast(`${data.senderId} bağlantı isteğinizi reddetti.`, 'error');
         playSound('destroy');
@@ -1614,16 +2023,27 @@ function showContactRequestResponse(data) {
  * @returns {void}
  */
 function handleContactSubmit() {
-    const targetId = document.getElementById('modalTargetId').value.trim().toUpperCase();
-    if (!targetId) { playSound('error'); showToast("Lütfen bir ID girin.", 'error'); return; }
-    if (targetId === currentUser.userId) { playSound('error'); showToast("Kendinizi ekleyemezsiniz.", 'error'); return; }
-    
+    const targetId = document
+        .getElementById('modalTargetId')
+        .value.trim()
+        .toUpperCase();
+    if (!targetId) {
+        playSound('error');
+        showToast('Lütfen bir ID girin.', 'error');
+        return;
+    }
+    if (targetId === currentUser.userId) {
+        playSound('error');
+        showToast('Kendinizi ekleyemezsiniz.', 'error');
+        return;
+    }
+
     const added = addContact(targetId);
     if (added) {
         playSound('success');
     } else {
         playSound('error');
-        showToast("Bu kişi zaten listenizde.", 'warning');
+        showToast('Bu kişi zaten listenizde.', 'warning');
     }
     hideContactConfigModal();
     renderContactsSidebar();
@@ -1649,59 +2069,112 @@ async function sendSecurePacket() {
         }
     }
     if (!sharedSecret) {
-        if (typeof initiateEcdhHandshake === 'function' &amp;&amp; activeTarget.isOnline) {
+        if (
+            typeof initiateEcdhHandshake === 'function' &amp;&amp;
+            activeTarget.isOnline
+        ) {
             initiateEcdhHandshake(activeTarget.id);
         }
         playSound('error');
-        showToast("Şifreleme anahtarı oluşturuluyor, lütfen birkaç saniye sonra tekrar deneyin...", 'warning');
+        showToast(
+            'Şifreleme anahtarı oluşturuluyor, lütfen birkaç saniye sonra tekrar deneyin...',
+            'warning',
+        );
         return;
     }
-    
-    
-    activeTarget.key = sharedSecret; playSound('type');
-    
+
+    activeTarget.key = sharedSecret;
+    playSound('type');
+
     const msgInput = document.getElementById('messageInput');
-    const rawText = msgInput.value.trim(); const hasFile = activeFileBase64 !== null;
-    const ttl = parseInt(document.getElementById('messageTtl').value); 
+    const rawText = msgInput.value.trim();
+    const hasFile = activeFileBase64 !== null;
+    const ttl = parseInt(document.getElementById('messageTtl').value);
     if (!rawText &amp;&amp; !hasFile) return;
     msgInput.value = '';
 
-    let encryptedText = null; let encryptedFile = null;
+    let encryptedText = null;
+    let encryptedFile = null;
     let msgIndex = null; // KDF Ratchet mesaj indeksi
     try {
         // [ECDHE] KDF Ratchet aktifse mesaj bazlı anahtar rotasyonu kullan
-        if (typeof hasRatchetSession === 'function' &amp;&amp; hasRatchetSession(activeTarget.id)) {
+        if (
+            typeof hasRatchetSession === 'function' &amp;&amp;
+            hasRatchetSession(activeTarget.id)
+        ) {
             if (rawText) {
-                const result = await encryptWithRatchet(rawText, activeTarget.id);
-                if (result) { encryptedText = result.ciphertext; msgIndex = result.messageIndex; }
+                const result = await encryptWithRatchet(
+                    rawText,
+                    activeTarget.id,
+                );
+                if (result) {
+                    encryptedText = result.ciphertext;
+                    msgIndex = result.messageIndex;
+                }
             }
             if (hasFile) {
-                const result = await encryptWithRatchet(activeFileBase64, activeTarget.id);
-                if (result) { encryptedFile = result.ciphertext; if (msgIndex === null) msgIndex = result.messageIndex; }
+                const result = await encryptWithRatchet(
+                    activeFileBase64,
+                    activeTarget.id,
+                );
+                if (result) {
+                    encryptedFile = result.ciphertext;
+                    if (msgIndex === null) msgIndex = result.messageIndex;
+                }
             }
         } else {
-            // Geriye uyumluluk: Eski statik anahtar ile şifreleme
-            if (rawText) encryptedText = await encryptGCM(rawText, activeTarget.key);
-            if (hasFile) encryptedFile = await encryptGCM(activeFileBase64, activeTarget.key);
+            // Çevrimdışı veya henüz ratchet kurulmamışsa statik anahtar ile şifrele
+            const fallbackKey =
+                (typeof getStaticSecret === 'function' &amp;&amp;
+                    getStaticSecret(activeTarget.id)) ||
+                activeTarget.key;
+            if (rawText) encryptedText = await encryptGCM(rawText, fallbackKey);
+            if (hasFile)
+                encryptedFile = await encryptGCM(activeFileBase64, fallbackKey);
+            // Karşı taraf çevrimiçiyse arka planda ECDHE + KDF Ratchet el sıkışmasını tetikle
+            if (
+                activeTarget.isOnline &amp;&amp;
+                typeof initiateEcdhHandshake === 'function'
+            ) {
+                initiateEcdhHandshake(activeTarget.id);
+            }
         }
-    } catch (e) { playSound('error'); showToast("Şifreleme hatası oluştu.", 'error'); return; }
+    } catch (e) {
+        playSound('error');
+        showToast('Şifreleme hatası oluştu.', 'error');
+        return;
+    }
 
-    const packetId = crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase();
-    const packet = { 
-        id: packetId, 
-        senderId: currentUser.userId, 
-        targetId: activeTarget.id, 
-        textPayload: encryptedText, 
-        filePayload: encryptedFile, 
-        fileName: activeFileName || null, 
-        ttl: ttl > 0 ? ttl : null, 
-        timestamp: new Date().getTime(), 
+    const packetId = crypto
+        .randomUUID()
+        .replace(/-/g, '')
+        .substring(0, 12)
+        .toUpperCase();
+    const packet = {
+        id: packetId,
+        senderId: currentUser.userId,
+        targetId: activeTarget.id,
+        textPayload: encryptedText,
+        filePayload: encryptedFile,
+        fileName: activeFileName || null,
+        ttl: ttl > 0 ? ttl : null,
+        timestamp: new Date().getTime(),
         messageIndex: msgIndex,
         cachedText: rawText || null,
-        cachedFile: activeFileBase64 || null
+        cachedFile: activeFileBase64 || null,
     };
-    
-    appendMessageToUI(packetId, 'SEN', rawText, activeFileBase64, true, false, packet.ttl, packet.timestamp, activeFileName);
+
+    appendMessageToUI(
+        packetId,
+        'SEN',
+        rawText,
+        activeFileBase64,
+        true,
+        false,
+        packet.ttl,
+        packet.timestamp,
+        activeFileName,
+    );
     await savePacketToVault(activeTarget.id, packet);
     playSound('transit');
 
@@ -1720,7 +2193,7 @@ async function sendSecurePacket() {
     clearTimeout(localTypingTimeout);
     isCurrentlyTyping = false;
     safeEmit('stop_typing', { targetId: activeTarget.id });
-    
+
     const wirePacket = {
         id: packet.id,
         senderId: packet.senderId,
@@ -1730,16 +2203,24 @@ async function sendSecurePacket() {
         fileName: packet.fileName,
         ttl: packet.ttl,
         timestamp: packet.timestamp,
-        messageIndex: packet.messageIndex
+        messageIndex: packet.messageIndex,
     };
 
-    safeEmit('send_secure_packet', wirePacket, (res) => { 
-        if (res &amp;&amp; res.queued) showToast("Kişi çevrimdışı, mesaj kuyruğa eklendi.", 'warning');
-        else if (res &amp;&amp; res.error === "RATE_LIMIT") { playSound('error'); showToast("Çok hızlı mesaj gönderiyorsunuz, lütfen bekleyin.", 'error'); }
+    safeEmit('send_secure_packet', wirePacket, (res) => {
+        if (res &amp;&amp; res.queued)
+            showToast('Kişi çevrimdışı, mesaj kuyruğa eklendi.', 'warning');
+        else if (res &amp;&amp; res.error === 'RATE_LIMIT') {
+            playSound('error');
+            showToast(
+                'Çok hızlı mesaj gönderiyorsunuz, lütfen bekleyin.',
+                'error',
+            );
+        }
     });
-    
+
     const pSize = new Blob([JSON.stringify(wirePacket)]).size;
-    document.getElementById('packetSizeDisplay').innerText = `[(${(pSize / 1024).toFixed(1)} KB)]`;
+    document.getElementById('packetSizeDisplay').innerText =
+        `[(${(pSize / 1024).toFixed(1)} KB)]`;
     if (hasFile) clearFileInput();
 }
 
@@ -1758,11 +2239,16 @@ async function decryptPacketForDisplay(packet, contactInfo) {
 
     let remainingTtl = null;
     if (packet.ttl) {
-        const elapsedSeconds = Math.round((Date.now() - packet.timestamp) / 1000);
+        const elapsedSeconds = Math.round(
+            (Date.now() - packet.timestamp) / 1000,
+        );
         remainingTtl = packet.ttl - elapsedSeconds;
         if (remainingTtl &lt;= 0) {
-            await removePacketFromVault(isMine ? packet.targetId : packet.senderId, packet.id);
-            return null; 
+            await removePacketFromVault(
+                isMine ? packet.targetId : packet.senderId,
+                packet.id,
+            );
+            return null;
         }
     }
 
@@ -1770,54 +2256,101 @@ async function decryptPacketForDisplay(packet, contactInfo) {
 
     // 1. Kasada daha önce çözülmüş / saklanmış düz metin varsa doğrudan kullan
     if (packet.cachedText !== undefined || packet.cachedFile !== undefined) {
-        return { 
-            id: packet.id, 
-            sender: senderLabel, 
-            text: packet.cachedText || null, 
-            file: packet.cachedFile || null, 
-            fileName: packet.fileName || null, 
-            isMine, 
-            isError: false, 
-            ttl: remainingTtl, 
-            timestamp: packet.timestamp 
+        return {
+            id: packet.id,
+            sender: senderLabel,
+            text: packet.cachedText || null,
+            file: packet.cachedFile || null,
+            fileName: packet.fileName || null,
+            isMine,
+            isError: false,
+            ttl: remainingTtl,
+            timestamp: packet.timestamp,
         };
     }
 
-    let decryptedText = null; let decryptedFile = null; let hasError = false;
-    let cryptoKey = derivedSecrets[peerId] || (contactInfo ? contactInfo.key : null);
+    let decryptedText = null;
+    let decryptedFile = null;
+    let hasError = false;
+    let cryptoKey =
+        derivedSecrets[peerId] || (contactInfo ? contactInfo.key : null);
 
     if (!cryptoKey &amp;&amp; typeof ensureSharedSecret === 'function') {
         await ensureSharedSecret(peerId);
-        cryptoKey = derivedSecrets[peerId] || (contactInfo ? contactInfo.key : null);
+        cryptoKey =
+            derivedSecrets[peerId] || (contactInfo ? contactInfo.key : null);
     }
 
-    if (!cryptoKey || cryptoKey.trim() === '') { 
-        hasError = 'no_key'; 
+    // Statik veya yedek anahtarlarla AES-GCM çözme yardımcısı (ECDHE sonrası çevrimdışı/eski paket uyumluluğu)
+    const tryStaticDecrypt = async (payload) => {
+        const staticKey =
+            typeof getStaticSecret === 'function'
+                ? getStaticSecret(peerId)
+                : null;
+        const candidates = [staticKey, cryptoKey].filter(
+            (k, idx, arr) =>
+                k &amp;&amp; typeof k === 'string' &amp;&amp; arr.indexOf(k) === idx,
+        );
+        for (const candidateKey of candidates) {
+            try {
+                return await decryptGCM(payload, candidateKey);
+            } catch (_) {}
+        }
+        return null;
+    };
+
+    if (!cryptoKey || cryptoKey.trim() === '') {
+        hasError = 'no_key';
     } else {
         try {
             // [ECDHE] KDF Ratchet: Karşı tarafın mesajı ise ve messageIndex varsa ratchet ile deşifre et
-            const useRatchet = !isMine &amp;&amp; typeof decryptWithRatchet === 'function' 
-                &amp;&amp; packet.messageIndex !== null &amp;&amp; packet.messageIndex !== undefined
-                &amp;&amp; hasRatchetSession(peerId);
-            
+            const useRatchet =
+                !isMine &amp;&amp;
+                typeof decryptWithRatchet === 'function' &amp;&amp;
+                packet.messageIndex !== null &amp;&amp;
+                packet.messageIndex !== undefined &amp;&amp;
+                hasRatchetSession(peerId);
+
             if (useRatchet) {
-                if (packet.textPayload) { 
-                    decryptedText = await decryptWithRatchet(packet.textPayload, peerId, packet.messageIndex); 
+                if (packet.textPayload) {
+                    decryptedText = await decryptWithRatchet(
+                        packet.textPayload,
+                        peerId,
+                        packet.messageIndex,
+                    );
                 }
-                if (packet.filePayload) { 
-                    const fileIndex = packet.textPayload ? (packet.messageIndex + 1) : packet.messageIndex;
-                    decryptedFile = await decryptWithRatchet(packet.filePayload, peerId, fileIndex); 
+                if (packet.filePayload) {
+                    const fileIndex = packet.textPayload
+                        ? packet.messageIndex + 1
+                        : packet.messageIndex;
+                    decryptedFile = await decryptWithRatchet(
+                        packet.filePayload,
+                        peerId,
+                        fileIndex,
+                    );
                 }
                 // Ratchet başarısız olduysa veya null döndüyse statik anahtar ile fallback dene
-                if ((packet.textPayload &amp;&amp; !decryptedText) || (packet.filePayload &amp;&amp; !decryptedFile)) {
+                if (
+                    (packet.textPayload &amp;&amp; !decryptedText) ||
+                    (packet.filePayload &amp;&amp; !decryptedFile)
+                ) {
                     if (packet.textPayload &amp;&amp; !decryptedText) {
-                        decryptedText = await decryptGCM(packet.textPayload, cryptoKey).catch(() => null);
+                        decryptedText = await tryStaticDecrypt(
+                            packet.textPayload,
+                        );
                     }
                     if (packet.filePayload &amp;&amp; !decryptedFile) {
-                        decryptedFile = await decryptGCM(packet.filePayload, cryptoKey).catch(() => null);
+                        decryptedFile = await tryStaticDecrypt(
+                            packet.filePayload,
+                        );
                     }
                 }
-            } else if (!isMine &amp;&amp; packet.messageIndex !== null &amp;&amp; packet.messageIndex !== undefined &amp;&amp; !hasRatchetSession(peerId)) {
+            } else if (
+                !isMine &amp;&amp;
+                packet.messageIndex !== null &amp;&amp;
+                packet.messageIndex !== undefined &amp;&amp;
+                !hasRatchetSession(peerId)
+            ) {
                 // [GÜVENLİK FIX] Karşı taraf ratchet oturumuyla şifrelemiş fakat bu tarafta oturum sıfırlanmış / silinmiş
                 hasError = 'session_desync';
                 if (typeof initiateEcdhHandshake === 'function') {
@@ -1827,36 +2360,53 @@ async function decryptPacketForDisplay(packet, contactInfo) {
                     safeEmit('reset_chat_session', { targetId: peerId });
                 }
             } else {
-                // Statik anahtar ile deşifreleme
-                if (packet.textPayload) { 
-                    decryptedText = await decryptGCM(packet.textPayload, cryptoKey); 
+                // Statik anahtar ile deşifreleme (önce statik kimlik sırrı, sonra aktif anahtar denenir)
+                if (packet.textPayload) {
+                    decryptedText = await tryStaticDecrypt(packet.textPayload);
                 }
-                if (packet.filePayload) { 
-                    decryptedFile = await decryptGCM(packet.filePayload, cryptoKey); 
+                if (packet.filePayload) {
+                    decryptedFile = await tryStaticDecrypt(packet.filePayload);
                 }
             }
 
             if (packet.textPayload &amp;&amp; decryptedText === null) {
-                hasError = true;
+                hasError = hasError || true;
             }
             if (packet.filePayload) {
-                if (!decryptedFile || (!decryptedFile.startsWith("data:image") &amp;&amp; !decryptedFile.startsWith("data:application/pdf"))) {
-                    hasError = true;
+                if (
+                    !decryptedFile ||
+                    (!decryptedFile.startsWith('data:image') &amp;&amp;
+                        !decryptedFile.startsWith('data:application/pdf'))
+                ) {
+                    hasError = hasError || true;
                 }
             }
 
             // Başarıyla çözüldüyse kasada önbelleğe al
-            if (!hasError &amp;&amp; (decryptedText !== null || decryptedFile !== null)) {
+            if (
+                !hasError &amp;&amp;
+                (decryptedText !== null || decryptedFile !== null)
+            ) {
                 packet.cachedText = decryptedText;
                 packet.cachedFile = decryptedFile;
                 savePacketToVault(peerId, packet).catch(() => {});
             }
-        } catch (e) { 
-            hasError = true; 
+        } catch (e) {
+            hasError = hasError || true;
         }
     }
 
-    return { id: packet.id, sender: senderLabel, text: decryptedText, file: decryptedFile, fileName: packet.fileName || null, isMine, isError: hasError, ttl: remainingTtl, timestamp: packet.timestamp };
+    return {
+        id: packet.id,
+        sender: senderLabel,
+        text: decryptedText,
+        file: decryptedFile,
+        fileName: packet.fileName || null,
+        isMine,
+        isError: hasError,
+        ttl: remainingTtl,
+        timestamp: packet.timestamp,
+    };
 }
 
 /**
@@ -1869,7 +2419,18 @@ async function decryptPacketForDisplay(packet, contactInfo) {
  */
 async function processIncomingPacket(packet, contactInfo) {
     const data = await decryptPacketForDisplay(packet, contactInfo);
-    if (data) appendMessageToUI(data.id, data.sender, data.text, data.file, data.isMine, data.isError, data.ttl, data.timestamp, data.fileName);
+    if (data)
+        appendMessageToUI(
+            data.id,
+            data.sender,
+            data.text,
+            data.file,
+            data.isMine,
+            data.isError,
+            data.ttl,
+            data.timestamp,
+            data.fileName,
+        );
 }
 
 /**
@@ -1880,13 +2441,20 @@ async function processIncomingPacket(packet, contactInfo) {
  */
 function revokeMessage(packetId) {
     if (!activeTarget) return;
-    showCustomConfirm("Bu mesaj hem sizden hem de karşı taraftan silinecektir. Devam etmek istiyor musunuz?", async () => {
-        await removePacketFromVault(activeTarget.id, packetId);
-        const msgElement = document.getElementById(`msg-${packetId}`);
-        fadeOutAndRemoveElement(msgElement);
-        safeEmit('revoke_packet', { targetId: activeTarget.id, packetId: packetId, senderId: currentUser.userId });
-        showToast("Mesaj silindi.", 'warning');
-    });
+    showCustomConfirm(
+        'Bu mesaj hem sizden hem de karşı taraftan silinecektir. Devam etmek istiyor musunuz?',
+        async () => {
+            await removePacketFromVault(activeTarget.id, packetId);
+            const msgElement = document.getElementById(`msg-${packetId}`);
+            fadeOutAndRemoveElement(msgElement);
+            safeEmit('revoke_packet', {
+                targetId: activeTarget.id,
+                packetId: packetId,
+                senderId: currentUser.userId,
+            });
+            showToast('Mesaj silindi.', 'warning');
+        },
+    );
 }
 
 // === SCROLL FAB ===
@@ -1903,7 +2471,9 @@ function initScrollToBottomFab() {
     if (!chatLog || !fab) return;
     chatLog.addEventListener('scroll', () => {
         const threshold = 120;
-        const isNearBottom = chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight &lt; threshold;
+        const isNearBottom =
+            chatLog.scrollHeight - chatLog.scrollTop - chatLog.clientHeight &lt;
+            threshold;
         if (isNearBottom) {
             fab.classList.remove('visible');
             if (dot) dot.classList.remove('has-new');
@@ -1921,7 +2491,8 @@ function initScrollToBottomFab() {
 function scrollChatToBottom() {
     const chatLog = document.getElementById('chatLog');
     const dot = document.getElementById('fabNewMsgDot');
-    if (chatLog) chatLog.scrollTo({ top: chatLog.scrollHeight, behavior: 'smooth' });
+    if (chatLog)
+        chatLog.scrollTo({ top: chatLog.scrollHeight, behavior: 'smooth' });
     if (dot) dot.classList.remove('has-new');
     document.getElementById('scrollToBottomBtn')?.classList.remove('visible');
 }
@@ -1944,7 +2515,9 @@ function renderMessageTextWithLinks(container, text, isMine) {
 
     while ((match = urlRegex.exec(text)) !== null) {
         if (match.index > lastIndex) {
-            container.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+            container.appendChild(
+                document.createTextNode(text.substring(lastIndex, match.index)),
+            );
         }
 
         let rawUrl = match[0];
@@ -1963,7 +2536,10 @@ function renderMessageTextWithLinks(container, text, isMine) {
         let isValid = false;
         try {
             const parsedUrl = new URL(href);
-            if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+            if (
+                parsedUrl.protocol === 'http:' ||
+                parsedUrl.protocol === 'https:'
+            ) {
                 isValid = true;
             }
         } catch (_) {
@@ -1993,7 +2569,9 @@ function renderMessageTextWithLinks(container, text, isMine) {
     }
 
     if (lastIndex &lt; text.length) {
-        container.appendChild(document.createTextNode(text.substring(lastIndex)));
+        container.appendChild(
+            document.createTextNode(text.substring(lastIndex)),
+        );
     }
 }
 
@@ -2017,7 +2595,17 @@ let _lastDateLabel = null;
  * @param {string|null} [fileName=null] - Ekli dosyanın orijinal adı.
  * @returns {void}
  */
-function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl, timestamp, fileName = null) {
+function appendMessageToUI(
+    packetId,
+    sender,
+    text,
+    fileSrc,
+    isMine,
+    isError,
+    ttl,
+    timestamp,
+    fileName = null,
+) {
     const logBox = document.getElementById('chatLog');
     const placeholder = logBox.querySelector('.chat-placeholder');
     if (placeholder) placeholder.remove();
@@ -2027,7 +2615,11 @@ function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl
 
     // Tarih ayırıcı
     const msgDate = timestamp ? new Date(timestamp) : new Date();
-    const dateLabel = msgDate.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' });
+    const dateLabel = msgDate.toLocaleDateString('tr-TR', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+    });
     if (dateLabel !== _lastDateLabel) {
         _lastDateLabel = dateLabel;
         const divider = document.createElement('div');
@@ -2036,88 +2628,139 @@ function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl
         logBox.appendChild(divider);
     }
 
-    const msgDiv = document.createElement('div'); msgDiv.id = elementId;
+    const msgDiv = document.createElement('div');
+    msgDiv.id = elementId;
     msgDiv.className = `flex flex-col ${isMine ? 'items-end msg-mine' : 'items-start msg-theirs'} my-2 sm:my-4 relative`;
 
     const headerSpan = document.createElement('span');
-    headerSpan.className = 'text-[8px] sm:text-[10px] block mb-1 sm:mb-1.5 font-mono tracking-[0.1em] flex items-center bg-black/60 px-1.5 sm:px-2 py-0.5  border border-gray-700/60 max-w-[90%] gap-1';
-    const timeStr = msgDate.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second:'2-digit' });
-    const senderColor = isMine ? 'text-blue-400' : 'text-[var(--text-secondary)]';
-    
+    headerSpan.className =
+        'text-[8px] sm:text-[10px] block mb-1 sm:mb-1.5 font-mono tracking-[0.1em] flex items-center bg-black/60 px-1.5 sm:px-2 py-0.5  border border-gray-700/60 max-w-[90%] gap-1';
+    const timeStr = msgDate.toLocaleTimeString('tr-TR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
+    const senderColor = isMine
+        ? 'text-blue-400'
+        : 'text-[var(--text-secondary)]';
+
     if (isMine) {
-        const timeSpan = document.createElement('span'); timeSpan.className = 'text-gray-500 mr-1.5 sm:mr-2 flex-shrink-0'; timeSpan.textContent = `[${timeStr}]`; headerSpan.appendChild(timeSpan);
-        const senderSpan = document.createElement('span'); senderSpan.className = `font-black ${senderColor} truncate`; senderSpan.textContent = `>_ ${sender}`; headerSpan.appendChild(senderSpan);
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'text-gray-500 mr-1.5 sm:mr-2 flex-shrink-0';
+        timeSpan.textContent = `[${timeStr}]`;
+        headerSpan.appendChild(timeSpan);
+        const senderSpan = document.createElement('span');
+        senderSpan.className = `font-black ${senderColor} truncate`;
+        senderSpan.textContent = `>_ ${sender}`;
+        headerSpan.appendChild(senderSpan);
         const revokeBtn = document.createElement('button');
-        revokeBtn.className = 'ml-2 sm:ml-3 text-red-500 hover:text-white hover:bg-red-500 font-mono text-[7px] sm:text-[9px] border border-red-500/50 px-1 sm:px-1.5 py-0.5  transition-all font-bold  flex-shrink-0';
-        revokeBtn.title = 'Herkesten Sil'; revokeBtn.textContent = 'Sil';
+        revokeBtn.className =
+            'ml-2 sm:ml-3 text-red-500 hover:text-white hover:bg-red-500 font-mono text-[7px] sm:text-[9px] border border-red-500/50 px-1 sm:px-1.5 py-0.5  transition-all font-bold  flex-shrink-0';
+        revokeBtn.title = 'Herkesten Sil';
+        revokeBtn.textContent = 'Sil';
         revokeBtn.addEventListener('click', () => revokeMessage(packetId));
         headerSpan.appendChild(revokeBtn);
     } else {
-        const contact = myContacts.find(c => c.id === sender);
-        const displayName = (contact &amp;&amp; contact.username) ? `${contact.username} (${sender})` : sender;
-        const senderSpan = document.createElement('span'); senderSpan.className = `font-black ${senderColor} truncate`; senderSpan.textContent = displayName; headerSpan.appendChild(senderSpan);
-        const timeSpan = document.createElement('span'); timeSpan.className = 'text-gray-500 ml-1.5 sm:ml-2 flex-shrink-0'; timeSpan.textContent = `[${timeStr}]`; headerSpan.appendChild(timeSpan);
+        const contact = myContacts.find((c) => c.id === sender);
+        const displayName =
+            contact &amp;&amp; contact.username
+                ? `${contact.username} (${sender})`
+                : sender;
+        const senderSpan = document.createElement('span');
+        senderSpan.className = `font-black ${senderColor} truncate`;
+        senderSpan.textContent = displayName;
+        headerSpan.appendChild(senderSpan);
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'text-gray-500 ml-1.5 sm:ml-2 flex-shrink-0';
+        timeSpan.textContent = `[${timeStr}]`;
+        headerSpan.appendChild(timeSpan);
     }
 
     if (ttl &amp;&amp; ttl > 0) {
-        const ttlBadge = document.createElement('span'); ttlBadge.id = `ttl-badge-${packetId}`;
-        ttlBadge.className = 'mx-1.5 sm:mx-2 px-1 sm:px-1.5 py-0.5 bg-red-950/80 border border-red-500 text-red-400 font-mono text-[7px] sm:text-[9px] animate-pulse font-black   flex-shrink-0';
+        const ttlBadge = document.createElement('span');
+        ttlBadge.id = `ttl-badge-${packetId}`;
+        ttlBadge.className =
+            'mx-1.5 sm:mx-2 px-1 sm:px-1.5 py-0.5 bg-red-950/80 border border-red-500 text-red-400 font-mono text-[7px] sm:text-[9px] animate-pulse font-black   flex-shrink-0';
         ttlBadge.textContent = `TTL:${ttl}s`;
-        if (isMine) headerSpan.insertBefore(ttlBadge, headerSpan.firstChild); else headerSpan.appendChild(ttlBadge);
+        if (isMine) headerSpan.insertBefore(ttlBadge, headerSpan.firstChild);
+        else headerSpan.appendChild(ttlBadge);
     }
     msgDiv.appendChild(headerSpan);
 
     if (isError === 'no_key') {
-        const errDiv = document.createElement('div'); errDiv.className = 'border-l-4 border-yellow-500 bg-yellow-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-yellow-400 my-1 max-w-[90%] sm:max-w-sm    font-bold tracking-wider'; errDiv.innerText = '[!] UYARI: ANAHTAR EŞLEŞMEDİ.'; msgDiv.appendChild(errDiv);
+        const errDiv = document.createElement('div');
+        errDiv.className =
+            'border-l-4 border-yellow-500 bg-yellow-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-yellow-400 my-1 max-w-[90%] sm:max-w-sm    font-bold tracking-wider';
+        errDiv.innerText = '[!] UYARI: ANAHTAR EŞLEŞMEDİ.';
+        msgDiv.appendChild(errDiv);
     } else if (isError === 'session_desync') {
-        const errDiv = document.createElement('div'); errDiv.className = 'border-l-4 border-amber-500 bg-amber-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-amber-400 my-1 max-w-[90%] sm:max-w-sm    font-bold tracking-wider'; errDiv.innerText = '[!] UYARI: OTURUM SIFIRLANMIŞ / YENİDEN EL SIKIŞMA BAŞLATILDI.'; msgDiv.appendChild(errDiv);
+        const errDiv = document.createElement('div');
+        errDiv.className =
+            'border-l-4 border-amber-500 bg-amber-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-amber-400 my-1 max-w-[90%] sm:max-w-sm    font-bold tracking-wider';
+        errDiv.innerText =
+            '[!] UYARI: OTURUM SIFIRLANMIŞ / YENİDEN EL SIKIŞMA BAŞLATILDI.';
+        msgDiv.appendChild(errDiv);
     } else if (isError) {
-        const errDiv = document.createElement('div'); errDiv.className = 'border-l-4 border-red-500 bg-red-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-red-400 my-1 max-w-[90%] sm:max-w-sm    font-bold tracking-wider'; errDiv.innerText = '[!] KRİTİK: PAKET BÜTÜNLÜĞÜ BOZUK!'; msgDiv.appendChild(errDiv);
+        const errDiv = document.createElement('div');
+        errDiv.className =
+            'border-l-4 border-red-500 bg-red-950/40 p-2 sm:p-3 text-[10px] sm:text-xs text-red-400 my-1 max-w-[90%] sm:max-w-sm    font-bold tracking-wider';
+        errDiv.innerText = '[!] KRİTİK: PAKET BÜTÜNLÜĞÜ BOZUK!';
+        msgDiv.appendChild(errDiv);
     } else {
         if (fileSrc) {
             if (fileSrc.startsWith('data:application/pdf')) {
                 const pdfCard = document.createElement('div');
-                pdfCard.className = 'my-1 sm:my-2 p-3 bg-black/60 border border-red-500/40 rounded-xl flex flex-col gap-2.5 max-w-[280px] sm:max-w-xs font-mono backdrop-blur-md shadow-xl hover:border-red-400 transition-colors';
-                
+                pdfCard.className =
+                    'my-1 sm:my-2 p-3 bg-black/60 border border-red-500/40 rounded-xl flex flex-col gap-2.5 max-w-[280px] sm:max-w-xs font-mono backdrop-blur-md shadow-xl hover:border-red-400 transition-colors';
+
                 const safeFileName = fileName || 'belge.pdf';
                 const commaIdx = fileSrc.indexOf(',');
-                const approxBytes = (commaIdx !== -1 ? fileSrc.length - commaIdx - 1 : fileSrc.length) * 0.75;
+                const approxBytes =
+                    (commaIdx !== -1
+                        ? fileSrc.length - commaIdx - 1
+                        : fileSrc.length) * 0.75;
                 const sizeMB = (approxBytes / (1024 * 1024)).toFixed(2);
-                
+
                 const cardHeader = document.createElement('div');
                 cardHeader.className = 'flex items-center gap-3 min-w-0';
                 // [GÜVENLİK FIX] innerHTML yerine güvenli DOM API — dosya adı XSS engellenir
                 const iconWrap = document.createElement('div');
-                iconWrap.className = 'w-10 h-10 rounded-lg bg-red-500/20 border border-red-500/50 flex items-center justify-center text-red-400 text-xl shrink-0 shadow-inner';
+                iconWrap.className =
+                    'w-10 h-10 rounded-lg bg-red-500/20 border border-red-500/50 flex items-center justify-center text-red-400 text-xl shrink-0 shadow-inner';
                 iconWrap.textContent = '📄';
                 cardHeader.appendChild(iconWrap);
                 const infoWrap = document.createElement('div');
                 infoWrap.className = 'flex flex-col min-w-0 flex-1';
                 const nameSpan = document.createElement('span');
-                nameSpan.className = 'text-xs text-gray-200 font-semibold truncate';
+                nameSpan.className =
+                    'text-xs text-gray-200 font-semibold truncate';
                 nameSpan.title = safeFileName;
                 nameSpan.textContent = safeFileName;
                 infoWrap.appendChild(nameSpan);
                 const sizeSpan = document.createElement('span');
-                sizeSpan.className = 'text-[10px] text-gray-400 font-mono tracking-wider';
+                sizeSpan.className =
+                    'text-[10px] text-gray-400 font-mono tracking-wider';
                 sizeSpan.textContent = sizeMB + ' MB • PDF';
                 infoWrap.appendChild(sizeSpan);
                 cardHeader.appendChild(infoWrap);
                 pdfCard.appendChild(cardHeader);
 
                 const cardActions = document.createElement('div');
-                cardActions.className = 'flex items-center gap-2 pt-2 border-t border-gray-800/80';
+                cardActions.className =
+                    'flex items-center gap-2 pt-2 border-t border-gray-800/80';
 
                 const downloadBtn = document.createElement('button');
                 downloadBtn.type = 'button';
-                downloadBtn.className = 'flex-1 py-1.5 px-2 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-400 hover:text-red-300 text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer';
+                downloadBtn.className =
+                    'flex-1 py-1.5 px-2 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-400 hover:text-red-300 text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer';
                 downloadBtn.textContent = '📥 İndir';
                 downloadBtn.onclick = () => downloadPdf(fileSrc, safeFileName);
                 cardActions.appendChild(downloadBtn);
 
                 const viewBtn = document.createElement('button');
                 viewBtn.type = 'button';
-                viewBtn.className = 'flex-1 py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 border border-gray-700 text-gray-300 hover:text-white text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer';
+                viewBtn.className =
+                    'flex-1 py-1.5 px-2 rounded-lg bg-white/5 hover:bg-white/10 border border-gray-700 text-gray-300 hover:text-white text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer';
                 viewBtn.textContent = '👁 Görüntüle';
                 viewBtn.onclick = () => openPdfViewer(fileSrc, safeFileName);
                 cardActions.appendChild(viewBtn);
@@ -2125,24 +2768,33 @@ function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl
                 pdfCard.appendChild(cardActions);
                 msgDiv.appendChild(pdfCard);
             } else {
-                window.receivedImages.push(fileSrc); const imageIndex = window.receivedImages.length - 1;
-                const img = document.createElement('img'); img.src = fileSrc;
-                img.className = 'w-48 sm:w-56 md:w-72 max-w-[90%] h-auto max-h-48 sm:max-h-64 my-1 sm:my-2  border-2 border-cyan-500/40 cursor-pointer hover:border-cyan-400 transition-all  opacity-90 hover:opacity-100 object-contain rounded-lg';
-                img.title = 'Görüntülemek için Tıkla'; img.onclick = () => showImageModal(imageIndex);
+                window.receivedImages.push(fileSrc);
+                const imageIndex = window.receivedImages.length - 1;
+                const img = document.createElement('img');
+                img.src = fileSrc;
+                img.className =
+                    'w-48 sm:w-56 md:w-72 max-w-[90%] h-auto max-h-48 sm:max-h-64 my-1 sm:my-2  border-2 border-cyan-500/40 cursor-pointer hover:border-cyan-400 transition-all  opacity-90 hover:opacity-100 object-contain rounded-lg';
+                img.title = 'Görüntülemek için Tıkla';
+                img.onclick = () => showImageModal(imageIndex);
                 msgDiv.appendChild(img);
             }
         }
         if (text) {
             const textSpan = document.createElement('div');
-            const bubbleClass = isMine ? 'msg-bubble-mine bg-blue-600 text-white rounded-2xl rounded-tr-sm' : 'msg-bubble-theirs bg-surface text-gray-200 rounded-2xl rounded-tl-sm';
+            const bubbleClass = isMine
+                ? 'msg-bubble-mine bg-blue-600 text-white rounded-2xl rounded-tr-sm'
+                : 'msg-bubble-theirs bg-surface text-gray-200 rounded-2xl rounded-tl-sm';
             textSpan.className = `px-3 sm:px-5 py-2 sm:py-3 border font-mono text-[11px] sm:text-[13px] leading-relaxed max-w-[95%] sm:max-w-[80%] text-left whitespace-pre-wrap break-words backdrop-blur-sm ${bubbleClass}`;
-            renderMessageTextWithLinks(textSpan, text, isMine); msgDiv.appendChild(textSpan);
+            renderMessageTextWithLinks(textSpan, text, isMine);
+            msgDiv.appendChild(textSpan);
         }
     }
 
     // Scroll konumuna göre FAB göster
     const threshold = 120;
-    const isNearBottom = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight &lt; threshold;
+    const isNearBottom =
+        logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight &lt;
+        threshold;
     logBox.appendChild(msgDiv);
     if (isNearBottom) {
         logBox.scrollTop = logBox.scrollHeight;
@@ -2154,7 +2806,12 @@ function appendMessageToUI(packetId, sender, text, fileSrc, isMine, isError, ttl
         if (dot) dot.classList.add('has-new');
     }
 
-    if (ttl &amp;&amp; ttl > 0) startSelfDestructTimer(packetId, ttl, isMine ? activeTarget.id : sender);
+    if (ttl &amp;&amp; ttl > 0)
+        startSelfDestructTimer(
+            packetId,
+            ttl,
+            isMine ? activeTarget.id : sender,
+        );
 }
 
 /**
@@ -2174,22 +2831,28 @@ const _activeTimers = {};
  */
 function startSelfDestructTimer(packetId, duration, targetUser) {
     if (_activeTimers[packetId]) {
-        if (_activeTimers[packetId].interval) clearInterval(_activeTimers[packetId].interval);
-        if (_activeTimers[packetId].timeout) clearTimeout(_activeTimers[packetId].timeout);
+        if (_activeTimers[packetId].interval)
+            clearInterval(_activeTimers[packetId].interval);
+        if (_activeTimers[packetId].timeout)
+            clearTimeout(_activeTimers[packetId].timeout);
         delete _activeTimers[packetId];
     }
-    const expiresAt = Date.now() + (duration * 1000);
+    const expiresAt = Date.now() + duration * 1000;
     const badge = document.getElementById(`ttl-badge-${packetId}`);
 
     const destroyMessage = () => {
         if (_activeTimers[packetId]) {
-            if (_activeTimers[packetId].interval) clearInterval(_activeTimers[packetId].interval);
-            if (_activeTimers[packetId].timeout) clearTimeout(_activeTimers[packetId].timeout);
+            if (_activeTimers[packetId].interval)
+                clearInterval(_activeTimers[packetId].interval);
+            if (_activeTimers[packetId].timeout)
+                clearTimeout(_activeTimers[packetId].timeout);
             delete _activeTimers[packetId];
         }
         const msgElement = document.getElementById(`msg-${packetId}`);
         if (msgElement) {
-            fadeOutAndRemoveElement(msgElement, () => removePacketFromVault(targetUser, packetId));
+            fadeOutAndRemoveElement(msgElement, () =>
+                removePacketFromVault(targetUser, packetId),
+            );
         } else {
             removePacketFromVault(targetUser, packetId);
         }
@@ -2221,7 +2884,10 @@ document.addEventListener('visibilitychange', () => {
                 if (timerObj.timeout) clearTimeout(timerObj.timeout);
                 delete _activeTimers[packetId];
                 const msgElement = document.getElementById(`msg-${packetId}`);
-                if (msgElement) fadeOutAndRemoveElement(msgElement, () => removePacketFromVault(timerObj.targetUser, packetId));
+                if (msgElement)
+                    fadeOutAndRemoveElement(msgElement, () =>
+                        removePacketFromVault(timerObj.targetUser, packetId),
+                    );
                 else removePacketFromVault(timerObj.targetUser, packetId);
             }
         }
@@ -2240,7 +2906,8 @@ function changeFontSize(delta) {
     currentScale = Math.max(0.8, Math.min(1.8, currentScale + delta));
     document.documentElement.style.setProperty('--font-scale', currentScale);
     const fontDisplay = document.getElementById('fontScaleDisplay');
-    if (fontDisplay) fontDisplay.innerText = Math.round(currentScale * 100) + '%';
+    if (fontDisplay)
+        fontDisplay.innerText = Math.round(currentScale * 100) + '%';
     playSound('type');
 }
 
@@ -2252,13 +2919,22 @@ function changeFontSize(delta) {
  */
 function copyMyId() {
     if (!currentUser) return;
-    navigator.clipboard.writeText(currentUser.userId).then(() => {
-        playSound('success'); showToast("ID kopyalandı.");
-    }).catch(() => {
-        const tempInput = document.createElement("input"); tempInput.value = currentUser.userId;
-        document.body.appendChild(tempInput); tempInput.select(); document.execCommand("copy"); document.body.removeChild(tempInput);
-        playSound('success'); showToast("ID kopyalandı.");
-    });
+    navigator.clipboard
+        .writeText(currentUser.userId)
+        .then(() => {
+            playSound('success');
+            showToast('ID kopyalandı.');
+        })
+        .catch(() => {
+            const tempInput = document.createElement('input');
+            tempInput.value = currentUser.userId;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+            playSound('success');
+            showToast('ID kopyalandı.');
+        });
 }
 
 /**
@@ -2267,11 +2943,12 @@ function copyMyId() {
  * @returns {void}
  */
 function toggleKeyReveal() {
-    if (!activeTarget) return; playSound('type');
-    const keyText = document.getElementById('profileKey'); 
+    if (!activeTarget) return;
+    playSound('type');
+    const keyText = document.getElementById('profileKey');
     if (keyText) {
         keyRevealed = !keyRevealed;
-        keyText.innerText = keyRevealed ? activeTarget.key : "••••••••••••••••";
+        keyText.innerText = keyRevealed ? activeTarget.key : '••••••••••••••••';
     }
 }
 
@@ -2315,10 +2992,10 @@ function downloadPdf(fileSrc, fileName) {
         a.click();
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(blobUrl), 15000);
-        showToast("PDF indiriliyor...", "info");
+        showToast('PDF indiriliyor...', 'info');
     } catch (e) {
-        console.error("PDF indirme hatası:", e);
-        showToast("PDF indirilemedi.", "error");
+        console.error('PDF indirme hatası:', e);
+        showToast('PDF indirilemedi.', 'error');
     }
 }
 
@@ -2337,8 +3014,8 @@ function openPdfViewer(fileSrc, fileName) {
         window.open(blobUrl, '_blank');
         setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
     } catch (e) {
-        console.error("PDF görüntüleme hatası:", e);
-        showToast("PDF görüntülenemedi.", "error");
+        console.error('PDF görüntüleme hatası:', e);
+        showToast('PDF görüntülenemedi.', 'error');
     }
 }
 
@@ -2350,65 +3027,82 @@ function openPdfViewer(fileSrc, fileName) {
  * @returns {void}
  */
 function handleFileSelect(input) {
-    const file = input.files[0]; 
+    const file = input.files[0];
     if (!file) return;
-    
+
     // 5 MB boyut sınırı kontrolü
     const MAX_FILE_SIZE = 5 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
         playSound('error');
-        showToast("Dosya boyutu çok büyük (Maksimum 5 MB).", "error");
+        showToast('Dosya boyutu çok büyük (Maksimum 5 MB).', 'error');
         input.value = '';
         return;
     }
 
-    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    const isPdf =
+        file.type === 'application/pdf' ||
+        file.name.toLowerCase().endsWith('.pdf');
     const isImage = file.type.startsWith('image/');
 
     if (isPdf) {
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function (e) {
             activeFileBase64 = e.target.result;
             activeFileName = file.name;
             const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-            document.getElementById('fileName').innerText = `📄 ${file.name} [${sizeMB}MB]`;
-            document.getElementById('previewContainer').classList.remove('hidden');
+            document.getElementById('fileName').innerText =
+                `📄 ${file.name} [${sizeMB}MB]`;
+            document
+                .getElementById('previewContainer')
+                .classList.remove('hidden');
             playSound('type');
         };
         reader.readAsDataURL(file);
     } else if (isImage) {
         activeFileName = file.name;
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function (e) {
             const img = new Image();
-            img.onload = function() {
-                const canvas = document.createElement('canvas'); 
-                let width = img.width; 
-                let height = img.height; 
+            img.onload = function () {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
                 const MAX_DIM = 1200;
-                if (width > height) { 
-                    if (width > MAX_DIM) { height *= MAX_DIM / width; width = MAX_DIM; } 
-                } else { 
-                    if (height > MAX_DIM) { width *= MAX_DIM / height; height = MAX_DIM; } 
+                if (width > height) {
+                    if (width > MAX_DIM) {
+                        height *= MAX_DIM / width;
+                        width = MAX_DIM;
+                    }
+                } else {
+                    if (height > MAX_DIM) {
+                        width *= MAX_DIM / height;
+                        height = MAX_DIM;
+                    }
                 }
-                canvas.width = width; 
-                canvas.height = height; 
-                const ctx = canvas.getContext('2d'); 
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
-                activeFileBase64 = canvas.toDataURL('image/jpeg', 0.7); 
-                canvas.width = 0; 
-                canvas.height = 0; 
+                activeFileBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                canvas.width = 0;
+                canvas.height = 0;
                 const sizeMB = (activeFileBase64.length * 0.75) / (1024 * 1024);
-                document.getElementById('fileName').innerText = `DATA_IMG [${sizeMB.toFixed(2)}MB]`; 
-                document.getElementById('previewContainer').classList.remove('hidden'); 
+                document.getElementById('fileName').innerText =
+                    `DATA_IMG [${sizeMB.toFixed(2)}MB]`;
+                document
+                    .getElementById('previewContainer')
+                    .classList.remove('hidden');
                 playSound('type');
-            }; 
+            };
             img.src = e.target.result;
-        }; 
+        };
         reader.readAsDataURL(file);
     } else {
         playSound('error');
-        showToast("Desteklenmeyen dosya türü (Sadece resim veya PDF).", "warning");
+        showToast(
+            'Desteklenmeyen dosya türü (Sadece resim veya PDF).',
+            'warning',
+        );
         input.value = '';
     }
 }
@@ -2418,12 +3112,12 @@ function handleFileSelect(input) {
  * @function clearFileInput
  * @returns {void}
  */
-function clearFileInput() { 
-    playSound('error'); 
-    activeFileBase64 = null; 
+function clearFileInput() {
+    playSound('error');
+    activeFileBase64 = null;
     activeFileName = null;
-    document.getElementById('previewContainer').classList.add('hidden'); 
-    document.getElementById('fileInput').value = ''; 
+    document.getElementById('previewContainer').classList.add('hidden');
+    document.getElementById('fileInput').value = '';
 }
 
 /**
@@ -2432,14 +3126,14 @@ function clearFileInput() {
  * @param {number} index - receivedImages dizisindeki resim dizin numarası.
  * @returns {void}
  */
-function showImageModal(index) { 
-    const modal = document.getElementById('imageModal'); 
-    const modalImg = document.getElementById('modalImage'); 
-    if (window.receivedImages[index]) { 
-        playSound('success'); 
-        modalImg.src = window.receivedImages[index]; 
-        modal.classList.remove('hidden'); 
-    } 
+function showImageModal(index) {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('modalImage');
+    if (window.receivedImages[index]) {
+        playSound('success');
+        modalImg.src = window.receivedImages[index];
+        modal.classList.remove('hidden');
+    }
 }
 
 /**
@@ -2447,9 +3141,9 @@ function showImageModal(index) {
  * @function hideImageModal
  * @returns {void}
  */
-function hideImageModal() { 
-    playSound('type'); 
-    document.getElementById('imageModal').classList.add('hidden'); 
+function hideImageModal() {
+    playSound('type');
+    document.getElementById('imageModal').classList.add('hidden');
 }
 
 // === AYARLAR VE PROFİL ===
@@ -2459,12 +3153,13 @@ function hideImageModal() {
  * @function showSettingsModal
  * @returns {void}
  */
-function showSettingsModal() { 
-    playSound('type'); 
-    document.getElementById('settingsModal').classList.remove('hidden'); 
+function showSettingsModal() {
+    playSound('type');
+    document.getElementById('settingsModal').classList.remove('hidden');
     switchSettingsTab('profile');
     if (currentUser &amp;&amp; currentUser.avatar) {
-        document.getElementById('settingsAvatarPreview').innerHTML = `&lt;img src="${currentUser.avatar}" class="w-full h-full object-cover">`;
+        document.getElementById('settingsAvatarPreview').innerHTML =
+            `&lt;img src="${currentUser.avatar}" class="w-full h-full object-cover">`;
     }
 }
 
@@ -2473,7 +3168,10 @@ function showSettingsModal() {
  * @function hideSettingsModal
  * @returns {void}
  */
-function hideSettingsModal() { playSound('type'); document.getElementById('settingsModal').classList.add('hidden'); }
+function hideSettingsModal() {
+    playSound('type');
+    document.getElementById('settingsModal').classList.add('hidden');
+}
 
 /**
  * Ayarlar penceresinde 'profile' (profil) ve 'security' (güvenlik) sekmeleri arasında geçiş yapar.
@@ -2483,17 +3181,25 @@ function hideSettingsModal() { playSound('type'); document.getElementById('setti
  */
 function switchSettingsTab(tab) {
     playSound('type');
-    const tProf = document.getElementById('settingsProfileTab'); const tSec = document.getElementById('settingsSecurityTab');
-    const bProf = document.getElementById('tabProfileBtn'); const bSec = document.getElementById('tabSecurityBtn');
-    const activeClass = "flex-1 py-1.5 bg-cyan-500/20 border border-cyan-400 text-blue-300 font-bold tracking-normal  text-[10px] sm:text-xs transition-all";
-    const inactiveClass = "flex-1 py-1.5 bg-transparent border border-gray-600 text-gray-500 font-bold tracking-normal  text-[10px] sm:text-xs hover:border-cyan-500/50 hover:text-blue-400 transition-all";
-    
+    const tProf = document.getElementById('settingsProfileTab');
+    const tSec = document.getElementById('settingsSecurityTab');
+    const bProf = document.getElementById('tabProfileBtn');
+    const bSec = document.getElementById('tabSecurityBtn');
+    const activeClass =
+        'flex-1 py-1.5 bg-cyan-500/20 border border-cyan-400 text-blue-300 font-bold tracking-normal  text-[10px] sm:text-xs transition-all';
+    const inactiveClass =
+        'flex-1 py-1.5 bg-transparent border border-gray-600 text-gray-500 font-bold tracking-normal  text-[10px] sm:text-xs hover:border-cyan-500/50 hover:text-blue-400 transition-all';
+
     if (tab === 'profile') {
-        tProf.classList.remove('hidden'); tSec.classList.add('hidden');
-        bProf.className = activeClass; bSec.className = inactiveClass;
+        tProf.classList.remove('hidden');
+        tSec.classList.add('hidden');
+        bProf.className = activeClass;
+        bSec.className = inactiveClass;
     } else {
-        tSec.classList.remove('hidden'); tProf.classList.add('hidden');
-        bSec.className = activeClass; bProf.className = inactiveClass;
+        tSec.classList.remove('hidden');
+        tProf.classList.add('hidden');
+        bSec.className = activeClass;
+        bProf.className = inactiveClass;
     }
 }
 
@@ -2510,22 +3216,29 @@ let pendingAvatarBase64 = null;
  * @returns {void}
  */
 function handleSettingsAvatarSelect(input) {
-    const file = input.files[0]; if (!file) return;
+    const file = input.files[0];
+    if (!file) return;
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
         const img = new Image();
-        img.onload = function() {
-            const canvas = document.createElement('canvas'); 
-            const MAX_DIM = 150; const size = Math.min(img.width, img.height);
-            canvas.width = MAX_DIM; canvas.height = MAX_DIM; 
-            const ctx = canvas.getContext('2d'); 
-            const sx = (img.width - size) / 2; const sy = (img.height - size) / 2;
+        img.onload = function () {
+            const canvas = document.createElement('canvas');
+            const MAX_DIM = 150;
+            const size = Math.min(img.width, img.height);
+            canvas.width = MAX_DIM;
+            canvas.height = MAX_DIM;
+            const ctx = canvas.getContext('2d');
+            const sx = (img.width - size) / 2;
+            const sy = (img.height - size) / 2;
             ctx.drawImage(img, sx, sy, size, size, 0, 0, MAX_DIM, MAX_DIM);
-            pendingAvatarBase64 = canvas.toDataURL('image/jpeg', 0.8); 
-            document.getElementById('settingsAvatarPreview').innerHTML = `&lt;img src="${pendingAvatarBase64}" class="w-full h-full object-cover">`;
+            pendingAvatarBase64 = canvas.toDataURL('image/jpeg', 0.8);
+            document.getElementById('settingsAvatarPreview').innerHTML =
+                `&lt;img src="${pendingAvatarBase64}" class="w-full h-full object-cover">`;
             playSound('success');
-        }; img.src = e.target.result;
-    }; reader.readAsDataURL(file);
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
 }
 
 /**
@@ -2537,9 +3250,16 @@ function saveProfileSettings() {
     if (!pendingAvatarBase64) return;
     safeEmit('update_avatar', pendingAvatarBase64, (res) => {
         if (res &amp;&amp; res.success) {
-            playSound('success'); currentUser.avatar = pendingAvatarBase64; pendingAvatarBase64 = null;
-            updateMyAvatarUI(); showToast("Profil fotoğrafı güncellendi.", 'success'); hideSettingsModal();
-        } else { playSound('error'); showToast(`HATA: ${res ? res.message : 'Güncellenemedi'}`, 'error'); }
+            playSound('success');
+            currentUser.avatar = pendingAvatarBase64;
+            pendingAvatarBase64 = null;
+            updateMyAvatarUI();
+            showToast('Profil fotoğrafı güncellendi.', 'success');
+            hideSettingsModal();
+        } else {
+            playSound('error');
+            showToast(`HATA: ${res ? res.message : 'Güncellenemedi'}`, 'error');
+        }
     });
 }
 
@@ -2549,14 +3269,37 @@ function saveProfileSettings() {
  * @returns {void}
  */
 function changeUserPassword() {
-    const oldP = document.getElementById('setOldPwd').value; const newP = document.getElementById('setNewPwd').value;
-    if(!oldP || !newP) { playSound('error'); showToast("Lütfen şifre alanlarını doldurun.", 'error'); return; }
-    safeEmit('change_password', { oldPassword: oldP, newPassword: newP }, (res) => {
-        if (res &amp;&amp; res.success) {
-            playSound('success'); showToast("Şifre değiştirildi.", 'success');
-            document.getElementById('setOldPwd').value = ''; document.getElementById('setNewPwd').value = ''; hideSettingsModal();
-        } else { playSound('error'); showToast(`HATA: ${res ? res.message : 'Başarısız'}`, 'error'); }
-    });
+    const oldP = document.getElementById('setOldPwd').value;
+    const newP = document.getElementById('setNewPwd').value;
+    if (!oldP || !newP) {
+        playSound('error');
+        showToast('Lütfen şifre alanlarını doldurun.', 'error');
+        return;
+    }
+    if (newP.length &lt; 8 || newP.length > 72) {
+        playSound('error');
+        showToast(
+            'Yeni şifre en az 8, en fazla 72 karakter olmalıdır.',
+            'error',
+        );
+        return;
+    }
+    safeEmit(
+        'change_password',
+        { oldPassword: oldP, newPassword: newP },
+        (res) => {
+            if (res &amp;&amp; res.success) {
+                playSound('success');
+                showToast('Şifre değiştirildi.', 'success');
+                document.getElementById('setOldPwd').value = '';
+                document.getElementById('setNewPwd').value = '';
+                hideSettingsModal();
+            } else {
+                playSound('error');
+                showToast(`HATA: ${res ? res.message : 'Başarısız'}`, 'error');
+            }
+        },
+    );
 }
 
 /**
@@ -2566,16 +3309,29 @@ function changeUserPassword() {
  */
 function deleteUserAccount() {
     const pwd = document.getElementById('setDelPwd').value;
-    if(!pwd) { playSound('error'); showToast("Lütfen onay şifrenizi girin."); return; }
-    showCustomConfirm("Hesabınız ve tüm verileriniz kalıcı olarak silinecektir. Bu işlem geri alınamaz.", () => {
-        safeEmit('delete_account', { password: pwd }, (res) => {
-            if (res &amp;&amp; res.success) {
-                playSound('destroy'); localStorage.clear(); sessionStorage.clear(); indexedDB.deleteDatabase(DB_NAME);
-                showToast("Hesap silindi.", 'system');
-                setTimeout(() => window.location.reload(), 2000);
-            } else { playSound('error'); showToast(`HATA: ${res ? res.message : 'Silinemedi'}`); }
-        });
-    });
+    if (!pwd) {
+        playSound('error');
+        showToast('Lütfen onay şifrenizi girin.');
+        return;
+    }
+    showCustomConfirm(
+        'Hesabınız ve tüm verileriniz kalıcı olarak silinecektir. Bu işlem geri alınamaz.',
+        () => {
+            safeEmit('delete_account', { password: pwd }, (res) => {
+                if (res &amp;&amp; res.success) {
+                    playSound('destroy');
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    indexedDB.deleteDatabase(DB_NAME);
+                    showToast('Hesap silindi.', 'system');
+                    setTimeout(() => window.location.reload(), 2000);
+                } else {
+                    playSound('error');
+                    showToast(`HATA: ${res ? res.message : 'Silinemedi'}`);
+                }
+            });
+        },
+    );
 }
 
 // === MOBİL LAYOUT ===
@@ -2586,11 +3342,13 @@ function deleteUserAccount() {
  * @returns {void}
  */
 function updateMobileLayout() {
-    const sidebar = document.getElementById('chatSidebar') || document.querySelector('#chatTerminal > section:first-of-type');
+    const sidebar =
+        document.getElementById('chatSidebar') ||
+        document.querySelector('#chatTerminal > section:first-of-type');
     const chatArea = document.getElementById('chatStreamContainer');
-    
+
     if (!sidebar || !chatArea) return;
-    
+
     if (window.innerWidth &lt; 1024) {
         if (activeTarget) {
             sidebar.classList.add('hidden');
@@ -2616,14 +3374,20 @@ function updateMobileLayout() {
  */
 function mobileGoBack() {
     activeTarget = null;
+    _lastDateLabel = null;
     updateMobileLayout();
     renderContactsSidebar();
-    
+
     // reset chat ui header &amp; content
     updateChatHeaderUI();
     document.getElementById('clearChatBtn').classList.add('hidden');
     disableChatUI();
-    renderLogPlaceholder(document.getElementById('chatLog'), null, "// GÜVENLİ TÜNEL BEKLENİYOR //", true);
+    renderLogPlaceholder(
+        document.getElementById('chatLog'),
+        null,
+        '// GÜVENLİ TÜNEL BEKLENİYOR //',
+        true,
+    );
 }
 
 window.addEventListener('resize', () => {
@@ -2672,7 +3436,13 @@ function initAuthEvents() {
     }
 
     // Input değiştiğinde hataları temizleme
-    ['serverIp', 'authUsername', 'authEmail', 'authPassword', 'authPasswordConfirm'].forEach(id => {
+    [
+        'serverIp',
+        'authUsername',
+        'authEmail',
+        'authPassword',
+        'authPasswordConfirm',
+    ].forEach((id) => {
         const input = document.getElementById(id);
         if (input) {
             input.addEventListener('input', () => {
@@ -2742,7 +3512,9 @@ function initAppEvents() {
 
     const contactSearch = document.getElementById('contactSearchInput');
     if (contactSearch) {
-        contactSearch.addEventListener('input', (e) => filterContactsList(e.target.value));
+        contactSearch.addEventListener('input', (e) =>
+            filterContactsList(e.target.value),
+        );
     }
 
     const searchQueryInput = document.getElementById('searchQuery');
@@ -2752,12 +3524,16 @@ function initAppEvents() {
 
     const fileInputEl = document.getElementById('fileInput');
     if (fileInputEl) {
-        fileInputEl.addEventListener('change', (e) => handleFileSelect(e.target));
+        fileInputEl.addEventListener('change', (e) =>
+            handleFileSelect(e.target),
+        );
     }
 
     const settingsAvatarEl = document.getElementById('settingsAvatarInput');
     if (settingsAvatarEl) {
-        settingsAvatarEl.addEventListener('change', (e) => handleSettingsAvatarSelect(e.target));
+        settingsAvatarEl.addEventListener('change', (e) =>
+            handleSettingsAvatarSelect(e.target),
+        );
     }
 
     const msgInput = document.getElementById('messageInput');
@@ -2786,9 +3562,10 @@ function initAppEvents() {
 function autoFillServerUrl() {
     const input = document.getElementById('serverIp');
     const toggleBtn = document.getElementById('serverIpToggleBtn');
-    const configuredBackend = (window.APP_CONFIG &amp;&amp; window.APP_CONFIG.BACKEND_URL) 
-        ? window.APP_CONFIG.BACKEND_URL.trim() 
-        : '';
+    const configuredBackend =
+        window.APP_CONFIG &amp;&amp; window.APP_CONFIG.BACKEND_URL
+            ? window.APP_CONFIG.BACKEND_URL.trim()
+            : '';
 
     if (input) {
         if (configuredBackend) {
@@ -2815,7 +3592,6 @@ if (document.readyState === 'loading') {
 } else {
     autoFillServerUrl();
 }
-
 </code></pre>
         </article>
     </section>
@@ -2832,7 +3608,7 @@ if (document.readyState === 'loading') {
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Wed Sep 30 2026 16:13:51 GMT+0300 (Türkiye Standart Saati)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Tue Oct 20 2026 16:29:09 GMT+0300 (Türkiye Standart Saati)
 </footer>
 
 <script> prettyPrint(); </script>
