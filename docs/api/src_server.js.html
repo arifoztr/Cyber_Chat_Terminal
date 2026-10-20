@@ -34,7 +34,9 @@
  * CSWSH ve CORS savunması ile Graceful Shutdown mekanizmalarını barındırır.
  */
 
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+require('dotenv').config({
+    path: require('path').join(__dirname, '..', '.env'),
+});
 const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
@@ -60,14 +62,20 @@ app.disable('x-powered-by');
  */
 app.use((req, res, next) => {
     if (process.env.NODE_ENV === 'production') {
-        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        res.setHeader(
+            'Strict-Transport-Security',
+            'max-age=31536000; includeSubDomains',
+        );
     }
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '0'); // Modern tarayıcı standardı: Eski hatalı XSS filtresi kapatılır, CSP devralır
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    
+    res.setHeader(
+        'Permissions-Policy',
+        'camera=(), microphone=(), geolocation=()',
+    );
+
     // [GÜVENLİK FIX - SEC-13] Sıkılaştırılmış Content-Security-Policy:
     // 'unsafe-inline' ve harici CDN alan adları script-src direktifinden tamamen kaldırıldı.
     const cspPolicy = [
@@ -79,12 +87,15 @@ app.use((req, res, next) => {
         "connect-src 'self' ws: wss: http: https:",
         "object-src 'none'",
         "base-uri 'self'",
-        "frame-ancestors 'none'"
+        "frame-ancestors 'none'",
     ].join('; ');
     res.setHeader('Content-Security-Policy', cspPolicy);
 
     // Geliştirme ortamında önbelleği devre dışı bırak (F5 atıldığında yeni kod gelsin)
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader(
+        'Cache-Control',
+        'no-store, no-cache, must-revalidate, proxy-revalidate',
+    );
 
     if (!req.url.includes('/socket.io/')) {
         console.log(`[HTTP ${req.method}] ${req.url}`);
@@ -115,7 +126,9 @@ app.use((req, res, next) => {
         return next();
     }
     if (record.count >= 120) {
-        return res.status(429).json({ error: 'Çok fazla istek yapıldı. Lütfen bir dakika bekleyin.' });
+        return res.status(429).json({
+            error: 'Çok fazla istek yapıldı. Lütfen bir dakika bekleyin.',
+        });
     }
     record.count++;
     next();
@@ -141,7 +154,12 @@ app.get('/health', (req, res) => {
 });
 
 // [FİX-1] Yalnızca ./public/ dizinindeki istemci dosyaları sunuluyor.
-app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: 0, etag: false }));
+app.use(
+    express.static(path.join(__dirname, '..', 'public'), {
+        maxAge: 0,
+        etag: false,
+    }),
+);
 
 /**
  * Ana sayfa HTML dosyasını sunar.
@@ -151,7 +169,10 @@ app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: 0, etag: 
  * @param {express.Response} res - Express yanıt nesnesi.
  */
 app.get('/', (req, res) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader(
+        'Cache-Control',
+        'no-store, no-cache, must-revalidate, proxy-revalidate',
+    );
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
@@ -162,7 +183,10 @@ app.use((req, res, next) => {
 });
 
 app.use((err, req, res, next) => {
-    console.error(`[!] [${new Date().toISOString()}] Unhandled HTTP Error:`, err?.message || err);
+    console.error(
+        `[!] [${new Date().toISOString()}] Unhandled HTTP Error:`,
+        err?.message || err,
+    );
     res.status(err?.status || 500).json({ error: 'Sunucu hatası oluştu.' });
 });
 
@@ -181,11 +205,15 @@ function isOriginAllowed(origin, callback) {
     }
     // Sandboxed iframe veya data URI kaynaklı 'null' origin'leri engelle (CSWSH Savunması)
     if (origin === 'null') {
-        return callback(new Error('CSWSH Savunması: "null" origin bağlantısı reddedildi'));
+        return callback(
+            new Error('CSWSH Savunması: "null" origin bağlantısı reddedildi'),
+        );
     }
     // .env dosyasında CORS_ORIGIN tanımlıysa sadece bu domainlere izin ver
     if (process.env.CORS_ORIGIN) {
-        const whitelist = process.env.CORS_ORIGIN.split(',').map(o => o.trim()).filter(Boolean);
+        const whitelist = process.env.CORS_ORIGIN.split(',')
+            .map((o) => o.trim())
+            .filter(Boolean);
         if (whitelist.includes(origin)) return callback(null, true);
         return callback(new Error('CORS Savunması: Yetkisiz Origin'));
     }
@@ -197,7 +225,9 @@ function isOriginAllowed(origin, callback) {
             return callback(null, true);
         }
     } catch (_) {}
-    return callback(new Error('CSWSH Savunması: Bilinmeyen Origin bağlantısı reddedildi'));
+    return callback(
+        new Error('CSWSH Savunması: Bilinmeyen Origin bağlantısı reddedildi'),
+    );
 }
 
 /**
@@ -206,9 +236,13 @@ function isOriginAllowed(origin, callback) {
  * @type {Object}
  */
 const io = require('socket.io')(http, {
-    cors: { origin: isOriginAllowed, credentials: true, methods: ["GET", "POST"] },
+    cors: {
+        origin: isOriginAllowed,
+        credentials: true,
+        methods: ['GET', 'POST'],
+    },
     transports: ['websocket', 'polling'],
-    maxHttpBufferSize: 10 * 1024 * 1024
+    maxHttpBufferSize: 10 * 1024 * 1024,
 });
 
 // Modüler socket olayları
@@ -225,16 +259,26 @@ function startServer(port = PORT) {
     return dbManager.initDB().then(() => {
         // 2. Çöp Toplayıcıyı Başlat (Zaman aşımına uğrayan paketleri temizler)
         dbManager.startGarbageCollector();
-        
+
         // 3. Sunucuyu Dinlemeye Başla
         return new Promise((resolve) => {
             const server = http.listen(port, '0.0.0.0', () => {
-                console.log(`==================================================`);
-                console.log(`[+] AES-GCM P2P SİBER MERKEZİ AKTİF: http://localhost:${port}`);
+                console.log(
+                    `==================================================`,
+                );
+                console.log(
+                    `[+] AES-GCM P2P SİBER MERKEZİ AKTİF: http://localhost:${port}`,
+                );
                 console.log(`[+] YEREL IP ERİŞİMİ: http://127.0.0.1:${port}`);
-                console.log(`[!] SİSTEM "CLEAN ARCHITECTURE" MODÜLLERİYLE BAŞLADI`);
-                console.log(`[!] FAZ-1: JWT, RATE-LIMIT &amp; SECURE HEADERS AKTİF`);
-                console.log(`==================================================`);
+                console.log(
+                    `[!] SİSTEM "CLEAN ARCHITECTURE" MODÜLLERİYLE BAŞLADI`,
+                );
+                console.log(
+                    `[!] FAZ-1: JWT, RATE-LIMIT &amp; SECURE HEADERS AKTİF`,
+                );
+                console.log(
+                    `==================================================`,
+                );
                 resolve(server);
             });
         });
@@ -249,7 +293,9 @@ function startServer(port = PORT) {
  * @returns {Promise&lt;void>}
  */
 async function gracefulShutdown(signal) {
-    console.log(`\n[${signal}] Sinyal alındı. Kapatılıyor, DB diske yazılıyor...`);
+    console.log(
+        `\n[${signal}] Sinyal alındı. Kapatılıyor, DB diske yazılıyor...`,
+    );
     await dbManager.saveDatabaseImmediate();
     process.exit(0);
 }
@@ -257,7 +303,7 @@ async function gracefulShutdown(signal) {
 if (require.main === module) {
     startServer();
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 
 module.exports = {
@@ -266,7 +312,7 @@ module.exports = {
     io,
     isOriginAllowed,
     gracefulShutdown,
-    startServer
+    startServer,
 };
 </code></pre>
         </article>
@@ -284,7 +330,7 @@ module.exports = {
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Wed Sep 30 2026 16:13:51 GMT+0300 (Türkiye Standart Saati)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Tue Oct 20 2026 16:29:09 GMT+0300 (Türkiye Standart Saati)
 </footer>
 
 <script> prettyPrint(); </script>

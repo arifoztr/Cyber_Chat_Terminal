@@ -16,5 +16,5 @@ window.APP_CONFIG = {
      * Backend API & WebSocket Sunucu Adresi.
      * @type {string}
      */
-    BACKEND_URL: "https://cyber-chat-i7sq.onrender.com"
+    BACKEND_URL: 'https://cyber-chat-i7sq.onrender.com',
 };

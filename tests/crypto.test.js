@@ -9,11 +9,12 @@ const {
     deriveSharedSecret,
     generateKeyFingerprint,
     generateSafetyNumber,
-    setMyEcdhKeyPair
+    setMyEcdhKeyPair,
 } = cryptoModule;
 
 describe('Crypto & E2EE Unit Tests', () => {
-    const testSecret = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+    const testSecret =
+        '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
     describe('Hex & Base64 Helpers', () => {
         it('hexToBytes should convert hex string to Uint8Array', () => {
@@ -28,11 +29,15 @@ describe('Crypto & E2EE Unit Tests', () => {
         });
 
         it('bufferToBase64 and base64ToBuffer should roundtrip successfully', () => {
-            const originalBytes = new Uint8Array([10, 20, 30, 40, 50, 255, 0, 128]);
+            const originalBytes = new Uint8Array([
+                10, 20, 30, 40, 50, 255, 0, 128,
+            ]);
             const base64 = bufferToBase64(originalBytes);
             expect(typeof base64).toBe('string');
             const recoveredBytes = base64ToBuffer(base64);
-            expect(Array.from(recoveredBytes)).toEqual(Array.from(originalBytes));
+            expect(Array.from(recoveredBytes)).toEqual(
+                Array.from(originalBytes),
+            );
         });
 
         it('bufferToBase64 should handle large buffers exceeding 8192 chunk boundary', () => {
@@ -49,17 +54,20 @@ describe('Crypto & E2EE Unit Tests', () => {
 
     describe('AES-256-GCM Encryption / Decryption', () => {
         it('should encrypt and decrypt plaintext successfully', () => {
-            return encryptGCM('Merhaba Cyber Chat!', testSecret).then(async (ciphertext) => {
-                expect(typeof ciphertext).toBe('string');
-                expect(ciphertext.length).toBeGreaterThan(0);
+            return encryptGCM('Merhaba Cyber Chat!', testSecret).then(
+                async (ciphertext) => {
+                    expect(typeof ciphertext).toBe('string');
+                    expect(ciphertext.length).toBeGreaterThan(0);
 
-                const decrypted = await decryptGCM(ciphertext, testSecret);
-                expect(decrypted).toBe('Merhaba Cyber Chat!');
-            });
+                    const decrypted = await decryptGCM(ciphertext, testSecret);
+                    expect(decrypted).toBe('Merhaba Cyber Chat!');
+                },
+            );
         });
 
         it('should correctly handle Turkish characters and emojis', async () => {
-            const specialText = 'Gizli İstihbarat: Şemsi Paşa Pasajı 🚀🔐 🇹🇷 - Özel İzinli Veri #123';
+            const specialText =
+                'Gizli İstihbarat: Şemsi Paşa Pasajı 🚀🔐 🇹🇷 - Özel İzinli Veri #123';
             const encrypted = await encryptGCM(specialText, testSecret);
             const decrypted = await decryptGCM(encrypted, testSecret);
             expect(decrypted).toBe(specialText);
@@ -77,7 +85,8 @@ describe('Crypto & E2EE Unit Tests', () => {
 
         it('should fail decryption if wrong secret key is used', async () => {
             const encrypted = await encryptGCM('Top Secret', testSecret);
-            const wrongSecret = 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
+            const wrongSecret =
+                'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
 
             await expect(decryptGCM(encrypted, wrongSecret)).rejects.toThrow();
         });
@@ -94,8 +103,18 @@ describe('Crypto & E2EE Unit Tests', () => {
     });
 
     describe('Key Fingerprint & Safety Numbers', () => {
-        const dummyKeyA = { crv: 'P-256', kty: 'EC', x: 'dummy_x_coordinate_A', y: 'dummy_y_coordinate_A' };
-        const dummyKeyB = { crv: 'P-256', kty: 'EC', x: 'dummy_x_coordinate_B', y: 'dummy_y_coordinate_B' };
+        const dummyKeyA = {
+            crv: 'P-256',
+            kty: 'EC',
+            x: 'dummy_x_coordinate_A',
+            y: 'dummy_y_coordinate_A',
+        };
+        const dummyKeyB = {
+            crv: 'P-256',
+            kty: 'EC',
+            x: 'dummy_x_coordinate_B',
+            y: 'dummy_y_coordinate_B',
+        };
 
         it('should generate deterministic 4-character chunked fingerprint', async () => {
             const fp1 = await generateKeyFingerprint(dummyKeyA);
@@ -125,17 +144,23 @@ describe('Crypto & E2EE Unit Tests', () => {
             const alicePair = await crypto.subtle.generateKey(
                 { name: 'ECDH', namedCurve: 'P-256' },
                 true,
-                ['deriveKey', 'deriveBits']
+                ['deriveKey', 'deriveBits'],
             );
-            const alicePubJwk = await crypto.subtle.exportKey('jwk', alicePair.publicKey);
+            const alicePubJwk = await crypto.subtle.exportKey(
+                'jwk',
+                alicePair.publicKey,
+            );
 
             // Bob keys
             const bobPair = await crypto.subtle.generateKey(
                 { name: 'ECDH', namedCurve: 'P-256' },
                 true,
-                ['deriveKey', 'deriveBits']
+                ['deriveKey', 'deriveBits'],
             );
-            const bobPubJwk = await crypto.subtle.exportKey('jwk', bobPair.publicKey);
+            const bobPubJwk = await crypto.subtle.exportKey(
+                'jwk',
+                bobPair.publicKey,
+            );
 
             // Alice derives Bob's secret
             setMyEcdhKeyPair(alicePair);
@@ -149,8 +174,12 @@ describe('Crypto & E2EE Unit Tests', () => {
             expect(aliceDerivedSecret).toBe(bobDerivedSecret);
 
             // Test full E2EE loop: Alice encrypts with derived secret, Bob decrypts
-            const secretMessage = 'Merhaba Bob, bu mesaj Alice tarafından şifrelendi!';
-            const encrypted = await encryptGCM(secretMessage, aliceDerivedSecret);
+            const secretMessage =
+                'Merhaba Bob, bu mesaj Alice tarafından şifrelendi!';
+            const encrypted = await encryptGCM(
+                secretMessage,
+                aliceDerivedSecret,
+            );
             const decrypted = await decryptGCM(encrypted, bobDerivedSecret);
             expect(decrypted).toBe(secretMessage);
         });
@@ -189,7 +218,7 @@ describe('Crypto & E2EE Unit Tests', () => {
             const originalWindow = globalThis.window;
             globalThis.window = {
                 btoa: (str) => Buffer.from(str, 'binary').toString('base64'),
-                atob: (b64) => Buffer.from(b64, 'base64').toString('binary')
+                atob: (b64) => Buffer.from(b64, 'base64').toString('binary'),
             };
 
             const b64 = cryptoModule.bufferToBase64(bytes);
@@ -207,10 +236,18 @@ describe('Crypto & E2EE Unit Tests', () => {
 
         it('generateKeyFingerprint and generateSafetyNumber should return null for falsy keys', async () => {
             expect(await cryptoModule.generateKeyFingerprint(null)).toBeNull();
-            expect(await cryptoModule.generateKeyFingerprint(undefined)).toBeNull();
-            expect(await cryptoModule.generateSafetyNumber(null, {})).toBeNull();
-            expect(await cryptoModule.generateSafetyNumber({}, null)).toBeNull();
-            expect(await cryptoModule.generateSafetyNumber(null, null)).toBeNull();
+            expect(
+                await cryptoModule.generateKeyFingerprint(undefined),
+            ).toBeNull();
+            expect(
+                await cryptoModule.generateSafetyNumber(null, {}),
+            ).toBeNull();
+            expect(
+                await cryptoModule.generateSafetyNumber({}, null),
+            ).toBeNull();
+            expect(
+                await cryptoModule.generateSafetyNumber(null, null),
+            ).toBeNull();
         });
     });
 
@@ -224,14 +261,22 @@ describe('Crypto & E2EE Unit Tests', () => {
 
             globalThis.localStorage = {
                 getItem: (k) => mockLocalStorage[k] || null,
-                setItem: (k, v) => { mockLocalStorage[k] = String(v); },
-                removeItem: (k) => { delete mockLocalStorage[k]; }
+                setItem: (k, v) => {
+                    mockLocalStorage[k] = String(v);
+                },
+                removeItem: (k) => {
+                    delete mockLocalStorage[k];
+                },
             };
 
             globalThis.sessionStorage = {
                 getItem: (k) => mockSessionStorage[k] || null,
-                setItem: (k, v) => { mockSessionStorage[k] = String(v); },
-                removeItem: (k) => { delete mockSessionStorage[k]; }
+                setItem: (k, v) => {
+                    mockSessionStorage[k] = String(v);
+                },
+                removeItem: (k) => {
+                    delete mockSessionStorage[k];
+                },
             };
 
             globalThis.currentUser = { userId: 'AGN-TEST-USER' };
@@ -256,28 +301,38 @@ describe('Crypto & E2EE Unit Tests', () => {
         });
 
         it('initEcdhKeys: branch 1 - loads CryptoKey with existing publicKey from IndexedDB vault', async () => {
-            const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+            const pair = await crypto.subtle.generateKey(
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true,
+                ['deriveKey', 'deriveBits'],
+            );
             const jwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
 
             globalThis.loadCryptoKeyFromVault = async () => ({
                 privateKey: pair.privateKey,
                 publicKey: pair.publicKey,
-                publicJwk: jwk
+                publicJwk: jwk,
             });
 
             await cryptoModule.initEcdhKeys();
-            expect(cryptoModule.getMyEcdhKeyPair().privateKey).toBe(pair.privateKey);
+            expect(cryptoModule.getMyEcdhKeyPair().privateKey).toBe(
+                pair.privateKey,
+            );
             expect(cryptoModule.getMyPublicKeyJwk()).toBe(jwk);
         });
 
         it('initEcdhKeys: branch 1b - loads CryptoKey without publicKey from IndexedDB and imports JWK', async () => {
-            const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+            const pair = await crypto.subtle.generateKey(
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true,
+                ['deriveKey', 'deriveBits'],
+            );
             const jwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
 
             globalThis.loadCryptoKeyFromVault = async () => ({
                 privateKey: pair.privateKey,
                 publicKey: null,
-                publicJwk: jwk
+                publicJwk: jwk,
             });
 
             await cryptoModule.initEcdhKeys();
@@ -286,7 +341,9 @@ describe('Crypto & E2EE Unit Tests', () => {
         });
 
         it('initEcdhKeys: branch 1 catch - handles error in loadCryptoKeyFromVault', async () => {
-            globalThis.loadCryptoKeyFromVault = async () => { throw new Error('DB error'); };
+            globalThis.loadCryptoKeyFromVault = async () => {
+                throw new Error('DB error');
+            };
             globalThis.saveCryptoKeyToVault = async () => {};
 
             await cryptoModule.initEcdhKeys();
@@ -294,22 +351,33 @@ describe('Crypto & E2EE Unit Tests', () => {
         });
 
         it('initEcdhKeys: branch 2 - migrates legacy key from localStorage', async () => {
-            const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
-            const privJwk = await crypto.subtle.exportKey('jwk', pair.privateKey);
+            const pair = await crypto.subtle.generateKey(
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true,
+                ['deriveKey', 'deriveBits'],
+            );
+            const privJwk = await crypto.subtle.exportKey(
+                'jwk',
+                pair.privateKey,
+            );
             const pubJwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
 
             globalThis.loadCryptoKeyFromVault = async () => null;
             let savedToVault = null;
-            globalThis.saveCryptoKeyToVault = async (userId, data) => { savedToVault = data; };
+            globalThis.saveCryptoKeyToVault = async (userId, data) => {
+                savedToVault = data;
+            };
 
             mockLocalStorage['ecdh_keypair_AGN-TEST-USER'] = JSON.stringify({
                 privateJwk: privJwk,
-                publicJwk: pubJwk
+                publicJwk: pubJwk,
             });
 
             await cryptoModule.initEcdhKeys();
             expect(savedToVault).toBeDefined();
-            expect(mockLocalStorage['ecdh_keypair_AGN-TEST-USER']).toBeUndefined();
+            expect(
+                mockLocalStorage['ecdh_keypair_AGN-TEST-USER'],
+            ).toBeUndefined();
         });
 
         it('initEcdhKeys: branch 2 catch - handles corrupt legacy JSON in localStorage', async () => {
@@ -324,7 +392,9 @@ describe('Crypto & E2EE Unit Tests', () => {
         it('initEcdhKeys: branch 3 - generates new keypair when no stored key exists', async () => {
             globalThis.loadCryptoKeyFromVault = async () => null;
             let savedToVault = null;
-            globalThis.saveCryptoKeyToVault = async (userId, data) => { savedToVault = data; };
+            globalThis.saveCryptoKeyToVault = async (userId, data) => {
+                savedToVault = data;
+            };
 
             await cryptoModule.initEcdhKeys();
             expect(savedToVault).toBeDefined();
@@ -336,7 +406,9 @@ describe('Crypto & E2EE Unit Tests', () => {
             cryptoModule.setDerivedSecrets({ 'target-123': 'abc' });
             cryptoModule.saveSecretsToVault();
             // [GÜVENLİK] sessionStorage'a artık sır YAZILMIYOR — sırlar sadece bellekte tutulur
-            expect(mockSessionStorage['derived_secrets_AGN-TEST-USER']).toBeUndefined();
+            expect(
+                mockSessionStorage['derived_secrets_AGN-TEST-USER'],
+            ).toBeUndefined();
 
             // loadSecretsFromVault sırları sıfırlar (her oturumda ECDHE ile yeniden türetilir)
             cryptoModule.setDerivedSecrets({ 'target-456': 'xyz' });
@@ -353,7 +425,9 @@ describe('Crypto & E2EE Unit Tests', () => {
             cryptoModule.setMyPublicKeyJwk(null);
             globalThis.socket = null;
             let emitted = null;
-            globalThis.safeEmit = (ev, d) => { emitted = { ev, d }; };
+            globalThis.safeEmit = (ev, d) => {
+                emitted = { ev, d };
+            };
 
             // Anahtar veya soket yoksa erken çıkmalı
             await cryptoModule.initiateEcdhHandshake('peer-1');
@@ -374,22 +448,42 @@ describe('Crypto & E2EE Unit Tests', () => {
             cryptoModule.setDerivedSecrets({});
 
             // Generate Alice and Bob keys
-            const alicePair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+            const alicePair = await crypto.subtle.generateKey(
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true,
+                ['deriveKey', 'deriveBits'],
+            );
             cryptoModule.setMyEcdhKeyPair(alicePair);
 
-            const bobPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
-            const bobJwk = await crypto.subtle.exportKey('jwk', bobPair.publicKey);
+            const bobPair = await crypto.subtle.generateKey(
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true,
+                ['deriveKey', 'deriveBits'],
+            );
+            const bobJwk = await crypto.subtle.exportKey(
+                'jwk',
+                bobPair.publicKey,
+            );
 
             // Set up contact and toast mock
             let toastCalled = false;
-            globalThis.showToast = () => { toastCalled = true; };
-            globalThis.myContacts = [{ id: 'peer-bob', key: null, ecdhStatus: 'pending' }];
+            globalThis.showToast = () => {
+                toastCalled = true;
+            };
+            globalThis.myContacts = [
+                { id: 'peer-bob', key: null, ecdhStatus: 'pending' },
+            ];
 
             // Simulate previous different fingerprint in localStorage to trigger MITM warning
-            mockLocalStorage['cyber_fp_AGN-TEST-USER_peer-bob'] = 'OLD_DIFFERENT_FP';
+            mockLocalStorage['cyber_fp_AGN-TEST-USER_peer-bob'] =
+                'OLD_DIFFERENT_FP';
 
             globalThis.safeEmit = (event, targetId, callback) => {
-                callback({ success: true, publicKey: bobJwk, avatar: 'avatar.png' });
+                callback({
+                    success: true,
+                    publicKey: bobJwk,
+                    avatar: 'avatar.png',
+                });
             };
 
             const result = await cryptoModule.ensureSharedSecret('peer-bob');
@@ -405,7 +499,8 @@ describe('Crypto & E2EE Unit Tests', () => {
             globalThis.safeEmit = (event, targetId, callback) => {
                 callback({ success: false });
             };
-            const result = await cryptoModule.ensureSharedSecret('peer-unreachable');
+            const result =
+                await cryptoModule.ensureSharedSecret('peer-unreachable');
             expect(result).toBe(false);
         });
 
@@ -420,11 +515,22 @@ describe('Crypto & E2EE Unit Tests', () => {
 
         it('ensureSharedSecret: handles target not in myContacts and no avatar', async () => {
             cryptoModule.setDerivedSecrets({});
-            const alicePair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+            const alicePair = await crypto.subtle.generateKey(
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true,
+                ['deriveKey', 'deriveBits'],
+            );
             cryptoModule.setMyEcdhKeyPair(alicePair);
 
-            const bobPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
-            const bobJwk = await crypto.subtle.exportKey('jwk', bobPair.publicKey);
+            const bobPair = await crypto.subtle.generateKey(
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true,
+                ['deriveKey', 'deriveBits'],
+            );
+            const bobJwk = await crypto.subtle.exportKey(
+                'jwk',
+                bobPair.publicKey,
+            );
 
             globalThis.myContacts = []; // no contact
             delete globalThis.showToast; // no showToast function
@@ -437,12 +543,16 @@ describe('Crypto & E2EE Unit Tests', () => {
                 callback({ success: true, publicKey: bobJwk, avatar: null });
             };
 
-            const result = await cryptoModule.ensureSharedSecret('peer-no-contact');
+            const result =
+                await cryptoModule.ensureSharedSecret('peer-no-contact');
             expect(result).toBe(true);
         });
 
         it('initEcdhKeys: vault returns object missing privateKey or publicJwk', async () => {
-            globalThis.loadCryptoKeyFromVault = async () => ({ privateKey: null, publicJwk: null });
+            globalThis.loadCryptoKeyFromVault = async () => ({
+                privateKey: null,
+                publicJwk: null,
+            });
             globalThis.saveCryptoKeyToVault = async () => {};
 
             await cryptoModule.initEcdhKeys();
@@ -459,7 +569,11 @@ describe('Crypto & E2EE Unit Tests', () => {
         });
 
         it('verifyContactFingerprint: first time, match, and MITM warning branches', async () => {
-            const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+            const pair = await crypto.subtle.generateKey(
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true,
+                ['deriveKey', 'deriveBits'],
+            );
             const jwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
             const fp = await cryptoModule.generateKeyFingerprint(jwk);
 
@@ -488,7 +602,9 @@ describe('Crypto & E2EE Unit Tests', () => {
 
         it('acceptNewFingerprint: saves new fingerprint to localStorage', () => {
             cryptoModule.acceptNewFingerprint('peer-z', 'NEW_FP_1234');
-            expect(mockLocalStorage['cyber_fp_AGN-TEST-USER_peer-z']).toBe('NEW_FP_1234');
+            expect(mockLocalStorage['cyber_fp_AGN-TEST-USER_peer-z']).toBe(
+                'NEW_FP_1234',
+            );
 
             // Missing args does nothing
             globalThis.currentUser = null;
@@ -502,9 +618,20 @@ describe('Crypto & E2EE Unit Tests', () => {
 
         beforeEach(async () => {
             cryptoModule.wipeAllCryptoState();
-            alicePair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
-            aliceJwk = await crypto.subtle.exportKey('jwk', alicePair.publicKey);
-            bobPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+            alicePair = await crypto.subtle.generateKey(
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true,
+                ['deriveKey', 'deriveBits'],
+            );
+            aliceJwk = await crypto.subtle.exportKey(
+                'jwk',
+                alicePair.publicKey,
+            );
+            bobPair = await crypto.subtle.generateKey(
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true,
+                ['deriveKey', 'deriveBits'],
+            );
             bobJwk = await crypto.subtle.exportKey('jwk', bobPair.publicKey);
             globalThis.currentUser = { userId: 'AGN-ALICE' };
         });
@@ -517,13 +644,15 @@ describe('Crypto & E2EE Unit Tests', () => {
         });
 
         it('getAesGcmKey: returns cached CryptoKey on second call and getAesGcmKeyFromBytes imports key', async () => {
-            const secret = 'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
+            const secret =
+                'aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899';
             const key1 = await cryptoModule.getAesGcmKey(secret);
             const key2 = await cryptoModule.getAesGcmKey(secret);
             expect(key1).toBe(key2);
 
             const rawBytes = new Uint8Array(32).fill(42);
-            const keyFromBytes = await cryptoModule.getAesGcmKeyFromBytes(rawBytes);
+            const keyFromBytes =
+                await cryptoModule.getAesGcmKeyFromBytes(rawBytes);
             expect(keyFromBytes).toBeDefined();
             expect(keyFromBytes.algorithm.name).toBe('AES-GCM');
         });
@@ -533,14 +662,28 @@ describe('Crypto & E2EE Unit Tests', () => {
 
             // Alice initializes ratchet with Bob
             globalThis.currentUser = { userId: 'AGN-ALICE' };
-            await cryptoModule.initRatchetChain('AGN-BOB', new Uint8Array(sharedSecretBytes));
+            await cryptoModule.initRatchetChain(
+                'AGN-BOB',
+                new Uint8Array(sharedSecretBytes),
+            );
             expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(true);
-            expect(cryptoModule.hasRatchetSession('AGN-NONEXISTENT')).toBe(false);
+            expect(cryptoModule.hasRatchetSession('AGN-NONEXISTENT')).toBe(
+                false,
+            );
 
             // Alice encrypts 3 messages
-            const enc0 = await cryptoModule.encryptWithRatchet('Message 0', 'AGN-BOB');
-            const enc1 = await cryptoModule.encryptWithRatchet('Message 1', 'AGN-BOB');
-            const enc2 = await cryptoModule.encryptWithRatchet('Message 2', 'AGN-BOB');
+            const enc0 = await cryptoModule.encryptWithRatchet(
+                'Message 0',
+                'AGN-BOB',
+            );
+            const enc1 = await cryptoModule.encryptWithRatchet(
+                'Message 1',
+                'AGN-BOB',
+            );
+            const enc2 = await cryptoModule.encryptWithRatchet(
+                'Message 2',
+                'AGN-BOB',
+            );
 
             expect(enc0.messageIndex).toBe(0);
             expect(enc1.messageIndex).toBe(1);
@@ -548,69 +691,122 @@ describe('Crypto & E2EE Unit Tests', () => {
 
             // Bob initializes ratchet with Alice
             globalThis.currentUser = { userId: 'AGN-BOB' };
-            await cryptoModule.initRatchetChain('AGN-ALICE', new Uint8Array(sharedSecretBytes));
+            await cryptoModule.initRatchetChain(
+                'AGN-ALICE',
+                new Uint8Array(sharedSecretBytes),
+            );
 
             // Bob receives message 2 FIRST (out-of-order)
-            const dec2 = await cryptoModule.decryptWithRatchet(enc2.ciphertext, 'AGN-ALICE', 2);
+            const dec2 = await cryptoModule.decryptWithRatchet(
+                enc2.ciphertext,
+                'AGN-ALICE',
+                2,
+            );
             expect(dec2).toBe('Message 2');
 
             // Bob receives message 0 (from skipped keys)
-            const dec0 = await cryptoModule.decryptWithRatchet(enc0.ciphertext, 'AGN-ALICE', 0);
+            const dec0 = await cryptoModule.decryptWithRatchet(
+                enc0.ciphertext,
+                'AGN-ALICE',
+                0,
+            );
             expect(dec0).toBe('Message 0');
 
             // Bob receives message 1 (from skipped keys)
-            const dec1 = await cryptoModule.decryptWithRatchet(enc1.ciphertext, 'AGN-ALICE', 1);
+            const dec1 = await cryptoModule.decryptWithRatchet(
+                enc1.ciphertext,
+                'AGN-ALICE',
+                1,
+            );
             expect(dec1).toBe('Message 1');
         });
 
         it('Ratchet edge cases: returns null when session missing or decryption fails', async () => {
             // Missing session for encrypt
-            const nullEnc = await cryptoModule.encryptWithRatchet('text', 'AGN-NO-SESSION');
+            const nullEnc = await cryptoModule.encryptWithRatchet(
+                'text',
+                'AGN-NO-SESSION',
+            );
             expect(nullEnc).toBeNull();
 
             // Missing session for decrypt
-            const nullDec = await cryptoModule.decryptWithRatchet('cipher', 'AGN-NO-SESSION', 0);
+            const nullDec = await cryptoModule.decryptWithRatchet(
+                'cipher',
+                'AGN-NO-SESSION',
+                0,
+            );
             expect(nullDec).toBeNull();
 
             // Corrupted ciphertext triggers error catch block
             const sharedSecretBytes = new Uint8Array(32).fill(11);
             globalThis.currentUser = { userId: 'AGN-ALICE' };
-            await cryptoModule.initRatchetChain('AGN-BOB', new Uint8Array(sharedSecretBytes));
-            const validEnc = await cryptoModule.encryptWithRatchet('Secret Info', 'AGN-BOB');
+            await cryptoModule.initRatchetChain(
+                'AGN-BOB',
+                new Uint8Array(sharedSecretBytes),
+            );
+            const validEnc = await cryptoModule.encryptWithRatchet(
+                'Secret Info',
+                'AGN-BOB',
+            );
 
             globalThis.currentUser = { userId: 'AGN-BOB' };
-            await cryptoModule.initRatchetChain('AGN-ALICE', new Uint8Array(sharedSecretBytes));
+            await cryptoModule.initRatchetChain(
+                'AGN-ALICE',
+                new Uint8Array(sharedSecretBytes),
+            );
 
-            const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const consoleSpy = vi
+                .spyOn(console, 'error')
+                .mockImplementation(() => {});
             // Corrupt base64 data
-            const corruptedCipher = cryptoModule.bufferToBase64(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]));
-            const failedDec = await cryptoModule.decryptWithRatchet(corruptedCipher, 'AGN-ALICE', 0);
+            const corruptedCipher = cryptoModule.bufferToBase64(
+                new Uint8Array([
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+                ]),
+            );
+            const failedDec = await cryptoModule.decryptWithRatchet(
+                corruptedCipher,
+                'AGN-ALICE',
+                0,
+            );
             expect(failedDec).toBeNull();
-            expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Ratchet deşifreleme hatası'), expect.any(Error));
+            expect(consoleSpy).toHaveBeenCalledWith(
+                expect.stringContaining('Ratchet deşifreleme hatası'),
+                expect.any(Error),
+            );
             consoleSpy.mockRestore();
         });
 
         it('Ephemeral keypair: generates, derives secret, throws on missing key, and wipes key', async () => {
             // Alice generates ephemeral key for Bob
-            const ephAliceJwk = await cryptoModule.generateEphemeralKeyPair('AGN-BOB');
+            const ephAliceJwk =
+                await cryptoModule.generateEphemeralKeyPair('AGN-BOB');
             expect(ephAliceJwk).toBeDefined();
             expect(ephAliceJwk.kty).toBe('EC');
 
             // Bob generates ephemeral key for Alice
-            const ephBobJwk = await cryptoModule.generateEphemeralKeyPair('AGN-ALICE');
+            const ephBobJwk =
+                await cryptoModule.generateEphemeralKeyPair('AGN-ALICE');
             expect(ephBobJwk).toBeDefined();
 
             // Derive shared secret from both sides
-            const aliceDerived = await cryptoModule.deriveEphemeralSecret('AGN-BOB', ephBobJwk);
-            const bobDerived = await cryptoModule.deriveEphemeralSecret('AGN-ALICE', ephAliceJwk);
+            const aliceDerived = await cryptoModule.deriveEphemeralSecret(
+                'AGN-BOB',
+                ephBobJwk,
+            );
+            const bobDerived = await cryptoModule.deriveEphemeralSecret(
+                'AGN-ALICE',
+                ephAliceJwk,
+            );
 
             expect(aliceDerived).toBeInstanceOf(Uint8Array);
             expect(bobDerived).toBeInstanceOf(Uint8Array);
             expect(Array.from(aliceDerived)).toEqual(Array.from(bobDerived));
 
             // Missing ephemeral key throws error
-            await expect(cryptoModule.deriveEphemeralSecret('AGN-UNKNOWN', ephBobJwk))
-                .rejects.toThrow('Geçici anahtar bulunamadı');
+            await expect(
+                cryptoModule.deriveEphemeralSecret('AGN-UNKNOWN', ephBobJwk),
+            ).rejects.toThrow('Geçici anahtar bulunamadı');
 
             // Wipe ephemeral key
             cryptoModule.wipeEphemeralKey('AGN-BOB');
@@ -627,7 +823,9 @@ describe('Crypto & E2EE Unit Tests', () => {
             cryptoModule.setMyPublicKeyJwk(aliceJwk);
             globalThis.socket = {};
             let emitted = null;
-            globalThis.safeEmit = (event, data) => { emitted = { event, data }; };
+            globalThis.safeEmit = (event, data) => {
+                emitted = { event, data };
+            };
 
             await cryptoModule.initiateEcdhHandshake('AGN-BOB');
             expect(emitted).toBeDefined();
@@ -645,7 +843,9 @@ describe('Crypto & E2EE Unit Tests', () => {
             cryptoModule.setMyEcdhKeyPair(alicePair);
             globalThis.socket = {};
             let offerPayload = null;
-            globalThis.safeEmit = (event, data) => { offerPayload = data; };
+            globalThis.safeEmit = (event, data) => {
+                offerPayload = data;
+            };
             await cryptoModule.initiateEcdhHandshake('AGN-BOB');
 
             // Bob handles offer
@@ -658,7 +858,9 @@ describe('Crypto & E2EE Unit Tests', () => {
 
             // Alice handles answer
             globalThis.currentUser = { userId: 'AGN-ALICE' };
-            const aliceSecret = await cryptoModule.handleEcdhAnswer(offerResp.answerData);
+            const aliceSecret = await cryptoModule.handleEcdhAnswer(
+                offerResp.answerData,
+            );
             expect(aliceSecret).toBe(offerResp.secret);
 
             // 2. Legacy Fallback Protocol (no ephemeral key in payload):
@@ -666,9 +868,11 @@ describe('Crypto & E2EE Unit Tests', () => {
             globalThis.currentUser = { userId: 'AGN-BOB' };
             const legacyOfferResp = await cryptoModule.handleEcdhOffer({
                 senderId: 'AGN-ALICE',
-                publicKeyJwk: aliceJwk
+                publicKeyJwk: aliceJwk,
             });
-            expect(legacyOfferResp.answerData.ephemeralPublicKeyJwk).toBeUndefined();
+            expect(
+                legacyOfferResp.answerData.ephemeralPublicKeyJwk,
+            ).toBeUndefined();
             expect(typeof legacyOfferResp.secret).toBe('string');
 
             // Alice handles legacy answer without ephemeral
@@ -677,7 +881,7 @@ describe('Crypto & E2EE Unit Tests', () => {
             cryptoModule.setMyEcdhKeyPair(alicePair);
             const legacyAliceSecret = await cryptoModule.handleEcdhAnswer({
                 senderId: 'AGN-BOB',
-                publicKeyJwk: bobJwk
+                publicKeyJwk: bobJwk,
             });
             expect(legacyAliceSecret).toBe(legacyOfferResp.secret);
         });
@@ -685,7 +889,10 @@ describe('Crypto & E2EE Unit Tests', () => {
         it('Memory hygiene: wipeTargetCryptoState and wipeAllCryptoState clean all keys and state', async () => {
             const dummyBytes = new Uint8Array(32).fill(1);
             globalThis.currentUser = { userId: 'AGN-ALICE' };
-            await cryptoModule.initRatchetChain('AGN-BOB', new Uint8Array(dummyBytes));
+            await cryptoModule.initRatchetChain(
+                'AGN-BOB',
+                new Uint8Array(dummyBytes),
+            );
             await cryptoModule.generateEphemeralKeyPair('AGN-BOB');
             cryptoModule.setDerivedSecrets({ 'AGN-BOB': 'dummysecret' });
 
@@ -698,7 +905,10 @@ describe('Crypto & E2EE Unit Tests', () => {
             expect(cryptoModule.getDerivedSecrets()['AGN-BOB']).toBeUndefined();
 
             // Populate multiple targets and wipe all
-            await cryptoModule.initRatchetChain('AGN-BOB', new Uint8Array(dummyBytes));
+            await cryptoModule.initRatchetChain(
+                'AGN-BOB',
+                new Uint8Array(dummyBytes),
+            );
             await cryptoModule.generateEphemeralKeyPair('AGN-BOB');
             cryptoModule.setMyPublicKeyJwk(aliceJwk);
             cryptoModule.setMyEcdhKeyPair(alicePair);
@@ -713,31 +923,61 @@ describe('Crypto & E2EE Unit Tests', () => {
             const sharedSecretBytes = new Uint8Array(32).fill(21);
 
             globalThis.currentUser = { userId: 'AGN-ALICE' };
-            await cryptoModule.initRatchetChain('AGN-BOB', new Uint8Array(sharedSecretBytes));
-            const enc0 = await cryptoModule.encryptWithRatchet('Msg 0', 'AGN-BOB');
-            const enc1 = await cryptoModule.encryptWithRatchet('Msg 1', 'AGN-BOB');
+            await cryptoModule.initRatchetChain(
+                'AGN-BOB',
+                new Uint8Array(sharedSecretBytes),
+            );
+            const enc0 = await cryptoModule.encryptWithRatchet(
+                'Msg 0',
+                'AGN-BOB',
+            );
+            const enc1 = await cryptoModule.encryptWithRatchet(
+                'Msg 1',
+                'AGN-BOB',
+            );
 
             globalThis.currentUser = { userId: 'AGN-BOB' };
-            await cryptoModule.initRatchetChain('AGN-ALICE', new Uint8Array(sharedSecretBytes));
+            await cryptoModule.initRatchetChain(
+                'AGN-ALICE',
+                new Uint8Array(sharedSecretBytes),
+            );
 
             // Decrypt Msg 0 normally (advances recvCounter to 1)
-            const dec0 = await cryptoModule.decryptWithRatchet(enc0.ciphertext, 'AGN-ALICE', 0);
+            const dec0 = await cryptoModule.decryptWithRatchet(
+                enc0.ciphertext,
+                'AGN-ALICE',
+                0,
+            );
             expect(dec0).toBe('Msg 0');
 
-            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const warnSpy = vi
+                .spyOn(console, 'warn')
+                .mockImplementation(() => {});
 
             // Replay Msg 0 (messageIndex 0 < recvCounter 1) -> returns null without advancing chain
-            const replayDec = await cryptoModule.decryptWithRatchet(enc0.ciphertext, 'AGN-ALICE', 0);
+            const replayDec = await cryptoModule.decryptWithRatchet(
+                enc0.ciphertext,
+                'AGN-ALICE',
+                0,
+            );
             expect(replayDec).toBeNull();
 
             // Excessive skip (messageIndex 500 - recvCounter 1 > MAX_SKIP 100) -> returns null without advancing chain
-            const skipDosDec = await cryptoModule.decryptWithRatchet(enc1.ciphertext, 'AGN-ALICE', 500);
+            const skipDosDec = await cryptoModule.decryptWithRatchet(
+                enc1.ciphertext,
+                'AGN-ALICE',
+                500,
+            );
             expect(skipDosDec).toBeNull();
 
             warnSpy.mockRestore();
 
             // Verify chain is still intact and can decrypt Msg 1 (messageIndex 1)
-            const dec1 = await cryptoModule.decryptWithRatchet(enc1.ciphertext, 'AGN-ALICE', 1);
+            const dec1 = await cryptoModule.decryptWithRatchet(
+                enc1.ciphertext,
+                'AGN-ALICE',
+                1,
+            );
             expect(dec1).toBe('Msg 1');
         });
 
@@ -746,7 +986,9 @@ describe('Crypto & E2EE Unit Tests', () => {
             cryptoModule.setMyEcdhKeyPair(alicePair);
             globalThis.socket = {};
             const emittedOffers = [];
-            globalThis.safeEmit = (event, data) => { emittedOffers.push({ event, data }); };
+            globalThis.safeEmit = (event, data) => {
+                emittedOffers.push({ event, data });
+            };
 
             // 1. In-flight deduplication: calling initiateEcdhHandshake twice rapidly emits only once
             await cryptoModule.initiateEcdhHandshake('AGN-BOB');
@@ -756,14 +998,21 @@ describe('Crypto & E2EE Unit Tests', () => {
             // 2. Simultaneous offer (Glare):
             // Both Alice ('AGN-ALICE') and Bob ('AGN-BOB') have in-flight offers to each other.
             // Alice has smaller ID ('AGN-ALICE' < 'AGN-BOB'), so Alice ignores Bob's offer (returns null).
-            const bobEph = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
-            const bobEphJwk = await crypto.subtle.exportKey('jwk', bobEph.publicKey);
+            const bobEph = await crypto.subtle.generateKey(
+                { name: 'ECDH', namedCurve: 'P-256' },
+                true,
+                ['deriveKey', 'deriveBits'],
+            );
+            const bobEphJwk = await crypto.subtle.exportKey(
+                'jwk',
+                bobEph.publicKey,
+            );
 
             globalThis.currentUser = { userId: 'AGN-ALICE' };
             const aliceGlareResp = await cryptoModule.handleEcdhOffer({
                 senderId: 'AGN-BOB',
                 publicKeyJwk: bobJwk,
-                ephemeralPublicKeyJwk: bobEphJwk
+                ephemeralPublicKeyJwk: bobEphJwk,
             });
             expect(aliceGlareResp).toBeNull();
 
@@ -773,7 +1022,9 @@ describe('Crypto & E2EE Unit Tests', () => {
             cryptoModule.setMyEcdhKeyPair(bobPair);
             await cryptoModule.initiateEcdhHandshake('AGN-ALICE');
 
-            const bobGlareResp = await cryptoModule.handleEcdhOffer(emittedOffers[0].data);
+            const bobGlareResp = await cryptoModule.handleEcdhOffer(
+                emittedOffers[0].data,
+            );
             expect(bobGlareResp).not.toBeNull();
             expect(bobGlareResp.answerData.ephemeralPublicKeyJwk).toBeDefined();
         });
@@ -786,22 +1037,24 @@ describe('Crypto & E2EE Unit Tests', () => {
             // Establish static secret first via legacy/static offer
             const staticResp = await cryptoModule.handleEcdhAnswer({
                 senderId: 'AGN-BOB',
-                publicKeyJwk: bobJwk
+                publicKeyJwk: bobJwk,
             });
             expect(cryptoModule.getStaticSecret('AGN-BOB')).toBe(staticResp);
 
             // Upgrade to ephemeral ratchet session
             const ephSecretBytes = new Uint8Array(32).fill(77);
             await cryptoModule.initRatchetChain('AGN-BOB', ephSecretBytes);
-            cryptoModule.getDerivedSecrets()['AGN-BOB'] = 'ephemeral_hex_secret';
+            cryptoModule.getDerivedSecrets()['AGN-BOB'] =
+                'ephemeral_hex_secret';
             expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(true);
 
             // Peer goes offline -> clearRatchetState clears ratchet but restores static secret
             cryptoModule.clearRatchetState('AGN-BOB');
             expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(false);
             expect(cryptoModule.getStaticSecret('AGN-BOB')).toBe(staticResp);
-            expect(cryptoModule.getDerivedSecrets()['AGN-BOB']).toBe(staticResp);
+            expect(cryptoModule.getDerivedSecrets()['AGN-BOB']).toBe(
+                staticResp,
+            );
         });
     });
 });
-
