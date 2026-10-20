@@ -80,6 +80,21 @@ const _ratchetState = {};
  */
 const _skippedMessageKeys = {};
 
+/**
+ * IndexedDB mesaj kasasını (at-rest) şifrelemek için kullanılan, dışa aktarılamaz (extractable: false) AES-GCM-256 anahtarı.
+ * Yalnızca aktif oturum süresince RAM'de tutulur.
+ * @type {CryptoKey|null}
+ * @private
+ */
+let _vaultCryptoKey = null;
+
+/**
+ * Electron safeStorage (DPAPI/Keychain) tarafından korunan ek kasa sırrı.
+ * @type {string|null}
+ * @private
+ */
+let _vaultExtraSecret = null;
+
 // ============================================================
 // YARDIMCI FONKSİYONLAR
 // ============================================================
@@ -1080,8 +1095,119 @@ function wipeAllCryptoState() {
     // Modül değişkenlerini sıfırla
     derivedSecrets = {};
     _staticSecrets = {};
+    _vaultCryptoKey = null;
+    _vaultExtraSecret = null;
     myEcdhKeyPair = null;
     myPublicKeyJwk = null;
+}
+
+// ============================================================
+// YEREL KASA (AT-REST) ŞİFRELEME / DEŞİFRELEME (IndexedDB Koruması)
+// ============================================================
+
+/**
+ * Electron safeStorage (DPAPI/Keychain) üzerinden çözülen ek kasa sırrını belleğe kaydeder.
+ * @function setVaultExtraSecret
+ * @param {string|null} secret - Ek kasa sırrı.
+ * @returns {void}
+ */
+function setVaultExtraSecret(secret) {
+    _vaultExtraSecret = secret || null;
+    _vaultCryptoKey = null; // Yeni sırla yeniden türetilmesi için önbelleği sıfırla
+}
+
+/**
+ * Kullanıcının dışa aktarılamaz (extractable: false) ECDH kimlik anahtarından ve varsa
+ * işletim sistemi anahtarlığı (safeStorage) sırrından HKDF-SHA256 ile 256-bit AES-GCM kasa anahtarı türetir.
+ * @async
+ * @function getVaultCryptoKey
+ * @returns {Promise<CryptoKey|null>} Dışa aktarılamaz AES-GCM-256 CryptoKey nesnesi.
+ */
+async function getVaultCryptoKey() {
+    if (_vaultCryptoKey) return _vaultCryptoKey;
+
+    if (!myEcdhKeyPair && typeof initEcdhKeys === 'function' && typeof currentUser !== 'undefined' && currentUser) {
+        try {
+            await initEcdhKeys();
+        } catch (_) {}
+    }
+
+    if (!myEcdhKeyPair || !myEcdhKeyPair.privateKey || !myEcdhKeyPair.publicKey) {
+        return null;
+    }
+
+    try {
+        const rawBits = await crypto.subtle.deriveBits(
+            { name: 'ECDH', public: myEcdhKeyPair.publicKey },
+            myEcdhKeyPair.privateKey,
+            256
+        );
+        const rawBytes = new Uint8Array(rawBits);
+        const uid = (typeof currentUser !== 'undefined' && currentUser && currentUser.userId) ? currentUser.userId : 'default';
+        const info = 'CyberVault-AtRest-Key-' + uid + (_vaultExtraSecret ? ':' + _vaultExtraSecret : '');
+        const derivedBytes = await hkdfDerive(rawBytes, info, 'CyberChat-Vault-v2');
+        rawBytes.fill(0);
+
+        _vaultCryptoKey = await crypto.subtle.importKey(
+            'raw',
+            derivedBytes,
+            'AES-GCM',
+            false, // extractable: false
+            ['encrypt', 'decrypt']
+        );
+        derivedBytes.fill(0);
+        return _vaultCryptoKey;
+    } catch (e) {
+        console.error('[!] Kasa şifreleme anahtarı türetme hatası:', e);
+        return null;
+    }
+}
+
+/**
+ * IndexedDB kasasına yazılacak düz metin veriyi (mesaj veya dosya) AES-GCM-256 ile şifreler.
+ * @async
+ * @function encryptVaultField
+ * @param {string} plaintext - Şifrelenecek düz metin.
+ * @returns {Promise<string|null>} Base64 kodlu [12B IV + Ciphertext] veya anahtar yoksa null.
+ */
+async function encryptVaultField(plaintext) {
+    if (plaintext === null || plaintext === undefined) return null;
+    const key = await getVaultCryptoKey();
+    if (!key) return null;
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encoded = new TextEncoder().encode(String(plaintext));
+    const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
+
+    const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(ciphertext), iv.length);
+    return bufferToBase64(combined);
+}
+
+/**
+ * IndexedDB kasasından okunan AES-GCM-256 şifreli veriyi çözer.
+ * @async
+ * @function decryptVaultField
+ * @param {string} cipherBase64 - Base64 kodlu [12B IV + Ciphertext].
+ * @returns {Promise<string|null>} Çözülmüş düz metin veya hata durumunda null.
+ */
+async function decryptVaultField(cipherBase64) {
+    if (!cipherBase64 || typeof cipherBase64 !== 'string') return null;
+    const key = await getVaultCryptoKey();
+    if (!key) return null;
+
+    try {
+        const rawData = base64ToBuffer(cipherBase64);
+        if (rawData.length <= 12) return null;
+        const iv = rawData.slice(0, 12);
+        const data = rawData.slice(12);
+        const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+        return new TextDecoder().decode(decrypted);
+    } catch (e) {
+        console.error('[!] Kasa verisi deşifreleme hatası:', e);
+        return null;
+    }
 }
 
 // ============================================================
@@ -1237,6 +1363,11 @@ if (typeof module !== 'undefined' && module.exports) {
         loadSecretsFromVault,
         wipeTargetCryptoState,
         wipeAllCryptoState,
+        // Yerel Kasa (At-Rest) şifreleme
+        setVaultExtraSecret,
+        getVaultCryptoKey,
+        encryptVaultField,
+        decryptVaultField,
         // Parmak izi & güvenlik numarası
         generateKeyFingerprint,
         checkAndSaveFingerprint,
@@ -1247,6 +1378,7 @@ if (typeof module !== 'undefined' && module.exports) {
         _aesKeyCache,
         setMyEcdhKeyPair: (pair) => {
             myEcdhKeyPair = pair;
+            _vaultCryptoKey = null;
         },
         getMyEcdhKeyPair: () => myEcdhKeyPair,
         setMyPublicKeyJwk: (jwk) => {

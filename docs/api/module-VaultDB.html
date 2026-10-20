@@ -295,6 +295,112 @@ kişi listesi (contacts) yerel depolama yönetimini sağlar.</p></div>
     
 
     
+    <h4 class="name" id="~clearJwtToken"><span class="type-signature">(inner) </span>clearJwtToken<span class="signature">()</span><span class="type-signature"> &rarr; {void}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Oturum kapatıldığında veya geçersizleştiğinde JWT token'ı bellekten ve yerel depolamadan temizler.</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line456">line 456</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">void</span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
     <h4 class="name" id="~clearPeerPacketsFromVault"><span class="type-signature">(async, inner) </span>clearPeerPacketsFromVault<span class="signature">(peerId)</span><span class="type-signature"> &rarr; {Promise.&lt;boolean>}</span></h4>
     
 
@@ -396,7 +502,7 @@ kişi listesi (contacts) yerel depolama yönetimini sağlar.</p></div>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line252">line 252</a>
+        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line292">line 292</a>
     </li></ul></dd>
     
 
@@ -437,6 +543,115 @@ kişi listesi (contacts) yerel depolama yönetimini sağlar.</p></div>
     <dd>
         
 <span class="param-type">Promise.&lt;boolean></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~getActiveJwtToken"><span class="type-signature">(inner) </span>getActiveJwtToken<span class="signature">()</span><span class="type-signature"> &rarr; {string|null}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Bellekteki aktif JWT token'ı senkron olarak döner (yoksa localStorage yedeğine bakar).</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line443">line 443</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">string</span>
+|
+
+<span class="param-type">null</span>
 
 
     </dd>
@@ -506,7 +721,7 @@ kişi listesi (contacts) yerel depolama yönetimini sağlar.</p></div>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line303">line 303</a>
+        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line343">line 343</a>
     </li></ul></dd>
     
 
@@ -569,7 +784,8 @@ kişi listesi (contacts) yerel depolama yönetimini sağlar.</p></div>
 
 <div class="description">
     <p>Kullanıcının saklanan CryptoKey nesnelerini IndexedDB cryptoKeys deposundan yükler.
-Electron ortamında safeStorage ile şifrelenmiş publicJwk verisi otomatik olarak çözülür.</p>
+Electron ortamında safeStorage ile şifrelenmiş kasa sırrını (<code>vaultSecretEncrypted</code>) ve
+geriye dönük uyumluluk için eski <code>publicJwkEncrypted</code> verisini otomatik olarak çözer.</p>
 </div>
 
 
@@ -662,7 +878,7 @@ Electron ortamında safeStorage ile şifrelenmiş publicJwk verisi otomatik olar
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line380">line 380</a>
+        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line521">line 521</a>
     </li></ul></dd>
     
 
@@ -729,7 +945,8 @@ Electron ortamında safeStorage ile şifrelenmiş publicJwk verisi otomatik olar
 
 <div class="description">
     <p>Belirtilen kişi ile olan mesaj geçmişini IndexedDB kasasından yükler.
-TTL süresi dolmuş mesajları otomatik olarak temizler ve kalanları zaman sırasına göre sıralar.</p>
+TTL süresi dolmuş mesajları otomatik olarak temizler, şifreli kasa alanlarını (vaultCipherText / vaultCipherFile)
+bellekte çözer ve kalanları zaman sırasına göre sıralar.</p>
 </div>
 
 
@@ -822,7 +1039,7 @@ TTL süresi dolmuş mesajları otomatik olarak temizler ve kalanları zaman sır
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line130">line 130</a>
+        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line148">line 148</a>
     </li></ul></dd>
     
 
@@ -863,6 +1080,117 @@ TTL süresi dolmuş mesajları otomatik olarak temizler ve kalanları zaman sır
     <dd>
         
 <span class="param-type">Promise.&lt;Array.&lt;Object>></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~loadJwtToken"><span class="type-signature">(async, inner) </span>loadJwtToken<span class="signature">()</span><span class="type-signature"> &rarr; {Promise.&lt;(string|null)>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Saklanan JWT oturum token'ını yükler.
+Electron ortamında 'cyber_jwt_enc' kaydını safeStorage ile çözer; eski düz metin 'cyber_jwt' varsa otomatik şifreleyerek taşır.</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line407">line 407</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+<div class="param-desc">
+    <p>Çözülmüş JWT token dizesi veya yoksa null.</p>
+</div>
+
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;(string|null)></span>
 
 
     </dd>
@@ -1151,7 +1479,7 @@ Süresi dolmuş mesaj paketlerini IndexedDB kasasından kalıcı olarak siler.</
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line174">line 174</a>
+        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line212">line 212</a>
     </li></ul></dd>
     
 
@@ -1306,7 +1634,7 @@ Süresi dolmuş mesaj paketlerini IndexedDB kasasından kalıcı olarak siler.</
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line433">line 433</a>
+        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line583">line 583</a>
     </li></ul></dd>
     
 
@@ -1485,7 +1813,7 @@ Yalnızca silme talebinde bulunan kişi paketin göndericisi veya konuşmanın t
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line205">line 205</a>
+        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line245">line 245</a>
     </li></ul></dd>
     
 
@@ -1596,7 +1924,7 @@ Güvenlik: Simetrik anahtarlar (contact.key) disk sızıntısını önlemek içi
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line283">line 283</a>
+        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line323">line 323</a>
     </li></ul></dd>
     
 
@@ -1659,7 +1987,8 @@ Güvenlik: Simetrik anahtarlar (contact.key) disk sızıntısını önlemek içi
 
 <div class="description">
     <p>Kullanıcının CryptoKey nesnelerini (privateKey, publicKey, publicJwk) IndexedDB cryptoKeys kasasına yazar.
-Electron ortamında publicJwk verisi safeStorage (Windows DPAPI / macOS Keychain) ile şifrelenerek saklanır.</p>
+Electron ortamında yerel kasa (At-Rest) şifrelemesini güçlendiren gizli <code>vaultSecret</code> tohumu
+safeStorage (Windows DPAPI / macOS Keychain / Linux libsecret) ile şifrelenerek saklanır.</p>
 </div>
 
 
@@ -1775,7 +2104,165 @@ Electron ortamında publicJwk verisi safeStorage (Windows DPAPI / macOS Keychain
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line325">line 325</a>
+        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line469">line 469</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+</dl>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h5>Returns:</h5>
+
+        
+
+
+<dl>
+    <dt>
+        Type
+    </dt>
+    <dd>
+        
+<span class="param-type">Promise.&lt;void></span>
+
+
+    </dd>
+</dl>
+
+    
+
+
+
+
+
+        
+            
+
+    
+
+    
+    <h4 class="name" id="~saveJwtToken"><span class="type-signature">(async, inner) </span>saveJwtToken<span class="signature">(token)</span><span class="type-signature"> &rarr; {Promise.&lt;void>}</span></h4>
+    
+
+    
+
+
+
+<div class="description">
+    <p>Oturum JWT token'ını güvenli şekilde saklar.
+Electron ortamında işletim sistemi anahtarlığı (safeStorage: DPAPI / Keychain / libsecret)
+ile şifreleyerek 'cyber_jwt_enc' olarak kaydeder ve düz metin 'cyber_jwt' kaydını siler.
+Tarayıcı ortamında standart localStorage kullanır.</p>
+</div>
+
+
+
+
+
+
+
+
+
+    <h5>Parameters:</h5>
+    
+
+<table class="params">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>token</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Saklanacak JWT token dizesi.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+
+
+
+
+
+<dl class="details">
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+    <dt class="tag-source">Source:</dt>
+    <dd class="tag-source"><ul class="dummy"><li>
+        <a href="public_db.js.html">public/db.js</a>, <a href="public_db.js.html#line376">line 376</a>
     </li></ul></dd>
     
 
@@ -1838,6 +2325,8 @@ Electron ortamında publicJwk verisi safeStorage (Windows DPAPI / macOS Keychain
 
 <div class="description">
     <p>Mesaj paketini IndexedDB kasasına (packets store) kaydeder.
+Çözülmüş mesaj ve dosya içeriklerini (cachedText, cachedFile) diske düz metin olarak YAZMAZ;
+AES-GCM-256 kasa anahtarı ile şifreleyerek (vaultCipherText, vaultCipherFile) saklar.
 TTL süresi dolmuş paketleri kaydetmez.</p>
 </div>
 
@@ -2024,7 +2513,7 @@ TTL süresi dolmuş paketleri kaydetmez.</p>
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Tue Oct 20 2026 16:29:09 GMT+0300 (Türkiye Standart Saati)
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.5</a> on Tue Oct 20 2026 20:48:21 GMT+0300 (East Africa Time)
 </footer>
 
 <script> prettyPrint(); </script>

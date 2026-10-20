@@ -556,12 +556,13 @@ function handleAuthSubmit() {
 
         if (currentAuthTab === 'register') {
             setAuthAlert('Hesap oluşturuluyor...', 'info');
-            socket.emit('register', { email, password, username }, (res) => {
+            socket.emit('register', { email, password, username }, async (res) => {
                 restoreBtn();
                 if (res && res.success) {
                     playSound('success');
                     if (res.token) {
-                        localStorage.setItem('cyber_jwt', res.token);
+                        if (typeof saveJwtToken === 'function') await saveJwtToken(res.token);
+                        else localStorage.setItem('cyber_jwt', res.token);
                         socket.auth = { token: res.token };
                         currentUser = res.user;
                         setAuthAlert(
@@ -601,11 +602,12 @@ function handleAuthSubmit() {
             });
         } else {
             setAuthAlert('Kimlik doğrulanıyor...', 'info');
-            socket.emit('login', { email, password }, (res) => {
+            socket.emit('login', { email, password }, async (res) => {
                 restoreBtn();
                 if (res && res.success) {
                     if (res.token) {
-                        localStorage.setItem('cyber_jwt', res.token);
+                        if (typeof saveJwtToken === 'function') await saveJwtToken(res.token);
+                        else localStorage.setItem('cyber_jwt', res.token);
                         socket.auth = { token: res.token };
                     }
                     currentUser = res.user;
@@ -692,12 +694,13 @@ function handleAuthSubmit() {
 }
 
 /**
- * Sayfa ilk yüklendiğinde localStorage üzerinde kayıtlı JWT varsa otomatik giriş yapmayı dener.
+ * Sayfa ilk yüklendiğinde güvenli kasada (safeStorage / localStorage) kayıtlı JWT varsa otomatik giriş yapmayı dener.
+ * @async
  * @function autoLoginAttempt
- * @returns {void}
+ * @returns {Promise<void>}
  */
-function autoLoginAttempt() {
-    const token = localStorage.getItem('cyber_jwt');
+async function autoLoginAttempt() {
+    const token = (typeof loadJwtToken === 'function') ? await loadJwtToken() : localStorage.getItem('cyber_jwt');
     if (!token) return;
 
     const configuredBackend =
@@ -728,7 +731,8 @@ function autoLoginAttempt() {
                 currentUser = res.user;
                 finishLoginSetup();
             } else {
-                localStorage.removeItem('cyber_jwt');
+                if (typeof clearJwtToken === 'function') clearJwtToken();
+                else localStorage.removeItem('cyber_jwt');
                 socket.disconnect();
                 showToast(
                     'Oturum süresi doldu, lütfen tekrar giriş yapın.',
@@ -788,11 +792,25 @@ function setupSocketEvents(sock) {
         }
     });
 
+    sock.on('session_invalidated', (data) => {
+        const msg = (data && data.message) ? data.message : 'Şifreniz değiştirildiği için oturumunuz sonlandırıldı.';
+        if (typeof clearJwtToken === 'function') clearJwtToken();
+        else localStorage.removeItem('cyber_jwt');
+        disconnectFromServer(msg);
+    });
+
+    sock.on('token_refreshed', async (data) => {
+        if (data && data.token) {
+            if (typeof saveJwtToken === 'function') await saveJwtToken(data.token);
+            else localStorage.setItem('cyber_jwt', data.token);
+            sock.auth = { token: data.token };
+        }
+    });
+
     sock.on('disconnect', (reason) => {
         console.warn(`[!] Bağlantı kesildi: ${reason}`);
-
-        // İstemci tarafından istenerek yapılan bağlantı kesimi (logout vb.)
-        if (reason === 'io client disconnect') {
+        // İstemci veya sunucu tarafından kasıtlı yapılan bağlantı kesimi (logout, session_invalidated vb.)
+        if (reason === 'io client disconnect' || reason === 'io server disconnect') {
             handleDisconnectUI();
             return;
         }
@@ -816,9 +834,9 @@ function setupSocketEvents(sock) {
         showToast('OTOMATİK BAĞLANTI BAŞARISIZ. TEKRAR DENEYİN.', 'error');
     });
 
-    sock.on('connect', () => {
+    sock.on('connect', async () => {
         // Yeniden bağlanma — oturum açıksa JWT ile oturumu doğrula
-        const token = localStorage.getItem('cyber_jwt');
+        const token = (typeof loadJwtToken === 'function') ? await loadJwtToken() : localStorage.getItem('cyber_jwt');
         if (currentUser && token) {
             sock.emit('verify_session', token, (res) => {
                 if (res && res.success) {
@@ -840,9 +858,10 @@ function setupSocketEvents(sock) {
                     checkOnlineStatuses();
                     bindSocketEvents();
                 } else {
-                    // Token geçersizleşmiş (sunucu restart vb.)
+                    // Token geçersizleşmiş (şifre değişimi, sunucu restart vb.)
                     hideReconnectOverlay();
-                    localStorage.removeItem('cyber_jwt');
+                    if (typeof clearJwtToken === 'function') clearJwtToken();
+                    else localStorage.removeItem('cyber_jwt');
                     handleDisconnectUI();
                     showToast(
                         'OTURUM GEÇERSİZLEŞTİ — TEKRAR GİRİŞ GEREKLİ.',
@@ -1025,20 +1044,23 @@ function handleDisconnectUI() {
 /**
  * Kullanıcı oturumunu güvenle sonlandırır, sunucuya logout bildirir ve yerel token'ı temizler.
  * @function disconnectFromServer
+ * @param {string|Event} [customReason] - Opsiyonel özel bildirim mesajı.
  * @returns {void}
  */
-function disconnectFromServer() {
+function disconnectFromServer(customReason) {
     if (socket) {
         playSound('error');
-        const token = localStorage.getItem('cyber_jwt');
+        const token = (typeof getActiveJwtToken === 'function') ? getActiveJwtToken() : localStorage.getItem('cyber_jwt');
         if (token) {
             try {
                 socket.emit('logout', { token });
             } catch (e) {}
         }
         socket.disconnect();
-        showToast('Çıkış yapıldı.', 'warning');
-        localStorage.removeItem('cyber_jwt');
+        const reasonMsg = (typeof customReason === 'string' && customReason) ? customReason : 'Çıkış yapıldı.';
+        showToast(reasonMsg, 'warning');
+        if (typeof clearJwtToken === 'function') clearJwtToken();
+        else localStorage.removeItem('cyber_jwt');
         handleDisconnectUI();
     }
 }

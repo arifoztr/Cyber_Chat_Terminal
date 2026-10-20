@@ -346,8 +346,11 @@ module.exports = function setupSockets(io) {
         const token = socket.handshake.auth?.token;
         if (token) {
             const payload = verifyJWT(token);
-            if (payload && db.users[payload.email]) {
-                socket.user = db.users[payload.email];
+            const email = payload?.email ? String(payload.email).trim().toLowerCase() : null;
+            const user = email ? db.users[email] : null;
+            if (user && (!user.passwordChangedAt || payload.pwdAt === user.passwordChangedAt)) {
+                socket.user = user;
+                socket.authToken = token;
             }
         }
         next();
@@ -460,7 +463,8 @@ module.exports = function setupSockets(io) {
                 if (!onlineNodes.has(userId))
                     onlineNodes.set(userId, new Set());
                 onlineNodes.get(userId).add(socket.id);
-                io.emit('node_status_change', {
+                // [GÜVENLİK FIX] Metadata sızıntısını önlemek için yalnızca status_ odasına yayınla
+                io.to(`status_${userId}`).emit('node_status_change', {
                     userId: userId,
                     status: 'online',
                 });
@@ -472,6 +476,7 @@ module.exports = function setupSockets(io) {
                     email: newUser.email,
                     userId: newUser.userId,
                 });
+                socket.authToken = token;
                 if (callback)
                     callback({
                         success: true,
@@ -578,7 +583,8 @@ module.exports = function setupSockets(io) {
                 if (!onlineNodes.has(user.userId))
                     onlineNodes.set(user.userId, new Set());
                 onlineNodes.get(user.userId).add(socket.id);
-                io.emit('node_status_change', {
+                // [GÜVENLİK FIX] Metadata sızıntısını önlemek için yalnızca status_ odasına yayınla
+                io.to(`status_${user.userId}`).emit('node_status_change', {
                     userId: user.userId,
                     status: 'online',
                 });
@@ -589,7 +595,9 @@ module.exports = function setupSockets(io) {
                 const token = signJWT({
                     email: user.email,
                     userId: user.userId,
+                    ...(user.passwordChangedAt ? { pwdAt: user.passwordChangedAt } : {}),
                 });
+                socket.authToken = token;
 
                 if (callback)
                     callback({
@@ -623,13 +631,15 @@ module.exports = function setupSockets(io) {
             const email = payload?.email
                 ? payload.email.trim().toLowerCase()
                 : null;
-            if (email && db.users[email]) {
-                const user = db.users[email];
+            const user = email && db.users[email] ? db.users[email] : null;
+            if (user && (!user.passwordChangedAt || payload.pwdAt === user.passwordChangedAt)) {
                 socket.user = user;
+                socket.authToken = token;
                 if (!onlineNodes.has(user.userId))
                     onlineNodes.set(user.userId, new Set());
                 onlineNodes.get(user.userId).add(socket.id);
-                io.emit('node_status_change', {
+                // [GÜVENLİK FIX] Metadata sızıntısını önlemek için yalnızca status_ odasına yayınla
+                io.to(`status_${user.userId}`).emit('node_status_change', {
                     userId: user.userId,
                     status: 'online',
                 });
@@ -647,12 +657,19 @@ module.exports = function setupSockets(io) {
          * @param {function(Object): void} [callback] - Geri çağırma fonksiyonu.
          */
         socket.on('logout', (data, callback) => {
-            const token = data?.token || socket.handshake.auth?.token;
+            const token = data?.token || socket.authToken || socket.handshake.auth?.token;
             if (token) {
                 revokeToken(token);
                 console.log(
                     `[-] OTURUM KAPATILDI & TOKEN İPTAL EDİLDİ: ${socket.user?.username || socket.id}`,
                 );
+            }
+            if (socket.rooms && typeof socket.leave === 'function') {
+                for (const room of socket.rooms) {
+                    if (typeof room === 'string' && room.startsWith('status_')) {
+                        socket.leave(room);
+                    }
+                }
             }
             if (socket.user) {
                 const userId = socket.user.userId;
@@ -661,13 +678,14 @@ module.exports = function setupSockets(io) {
                     sockets.delete(socket.id);
                     if (sockets.size === 0) {
                         onlineNodes.delete(userId);
-                        io.emit('node_status_change', {
+                        io.to(`status_${userId}`).emit('node_status_change', {
                             userId,
                             status: 'offline',
                         });
                     }
                 }
                 socket.user = null;
+                socket.authToken = null;
             }
             if (callback) callback({ success: true });
         });
@@ -778,19 +796,44 @@ module.exports = function setupSockets(io) {
                 }
 
                 user.password = await bcrypt.hash(newPassword, 10);
+                user.passwordChangedAt = Date.now();
 
-                // [GÜVENLİK FIX - SEC-26 / Prompt 8.1] Şifre değiştiğinde kullanıcının diğer bağlı soketlerini uyar/kapat
+                // [GÜVENLİK FIX - SEC-26] Şifre değiştiğinde kullanıcının diğer tüm bağlı soketlerini uyar, tokenlarını iptal et ve bağlantıyı kes
                 const userSockets = onlineNodes.get(user.userId);
                 if (userSockets) {
-                    userSockets.forEach((sid) => {
+                    for (const sid of Array.from(userSockets)) {
                         if (sid !== socket.id) {
                             io.to(sid).emit('session_invalidated', {
                                 message:
                                     'Şifreniz değiştirildiği için oturumunuz sonlandırıldı.',
                             });
+                            const otherSock = io.sockets?.sockets?.get(sid);
+                            if (otherSock) {
+                                const otherToken =
+                                    otherSock.authToken ||
+                                    otherSock.handshake?.auth?.token;
+                                if (otherToken) revokeToken(otherToken);
+                                otherSock.user = null;
+                                otherSock.authToken = null;
+                                if (typeof otherSock.disconnect === 'function') {
+                                    otherSock.disconnect(true);
+                                }
+                            }
+                            userSockets.delete(sid);
                         }
-                    });
+                    }
                 }
+
+                // Mevcut soketin eski token'ını iptal et ve yeni şifre zaman damgalı token üret
+                const oldActiveToken = socket.authToken || socket.handshake?.auth?.token;
+                if (oldActiveToken) revokeToken(oldActiveToken);
+                const rotatedToken = signJWT({
+                    email: user.email,
+                    userId: user.userId,
+                    pwdAt: user.passwordChangedAt
+                });
+                socket.authToken = rotatedToken;
+                io.to(socket.id).emit('token_refreshed', { token: rotatedToken });
 
                 await dbManager.saveDatabase();
                 if (callback) callback({ success: true });
@@ -844,8 +887,10 @@ module.exports = function setupSockets(io) {
                     );
                     onlineNodes.delete(userId);
                 }
-
-                io.emit('node_status_change', { userId, status: 'offline' });
+                io.to(`status_${userId}`).emit('node_status_change', {
+                    userId,
+                    status: 'offline',
+                });
                 await dbManager.saveDatabaseImmediate(); // Kritik silme işlemi
 
                 if (callback) callback({ success: true });
@@ -1261,7 +1306,7 @@ module.exports = function setupSockets(io) {
         socket.on('join_status_rooms', (userIds) => {
             if (!socket.user) return;
             if (!Array.isArray(userIds)) return;
-            userIds.forEach((uid) => {
+            userIds.slice(0, 100).forEach((uid) => {
                 if (typeof uid === 'string' && uid.length < 20) {
                     socket.join(`status_${uid}`);
                 }
@@ -1282,7 +1327,7 @@ module.exports = function setupSockets(io) {
                 sockets.delete(socket.id);
                 if (sockets.size === 0) {
                     onlineNodes.delete(userId);
-                    io.emit('node_status_change', {
+                    io.to(`status_${userId}`).emit('node_status_change', {
                         userId,
                         status: 'offline',
                     });
