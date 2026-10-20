@@ -3,6 +3,8 @@ name: Build Linux Desktop App
 on:
   workflow_dispatch: # GitHub arayüzünden manuel olarak "Run workflow" butonu ile başlatma
   push:
+    branches:
+      - '**' # Herhangi bir dala (branch) push yapıldığında çalışır
     tags:
       - 'v*' # Yeni bir sürüm etiketi (tag) push edildiğinde otomatik çalışır (örn: v1.0.1)
 
