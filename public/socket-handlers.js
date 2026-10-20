@@ -401,9 +401,28 @@ function bindSocketEvents() {
             data && data.message
                 ? data.message
                 : 'Şifreniz değiştirildiği için oturumunuz sonlandırıldı.';
-        showToast(msg, 'warning');
+        if (typeof clearJwtToken === 'function') clearJwtToken();
         if (typeof disconnectFromServer === 'function') {
-            disconnectFromServer();
+            disconnectFromServer(msg);
+        } else {
+            showToast(msg, 'warning');
+        }
+    });
+
+    socket.off('token_refreshed');
+    /**
+     * Şifre değişimi sonrasında mevcut aktif oturumun yenilenen JWT token'ını günceller.
+     * @param {Object} data - Yeni token verisi ({ token: string }).
+     */
+    socket.on('token_refreshed', async (data) => {
+        if (data && data.token) {
+            if (typeof saveJwtToken === 'function') {
+                await saveJwtToken(data.token);
+            } else {
+                localStorage.setItem('cyber_jwt', data.token);
+            }
+            socket.auth = { token: data.token };
         }
     });
 }
+

@@ -1056,5 +1056,28 @@ describe('Crypto & E2EE Unit Tests', () => {
                 staticResp,
             );
         });
+
+        it('IndexedDB At-Rest Encryption: encryptVaultField and decryptVaultField protect cachedText and cachedFile using getVaultCryptoKey', async () => {
+            cryptoModule.setMyPublicKeyJwk(aliceJwk);
+            cryptoModule.setMyEcdhKeyPair(alicePair);
+            cryptoModule.setVaultExtraSecret('os-keychain-safe-storage-secret-hex-256');
+
+            const vaultKey = await cryptoModule.getVaultCryptoKey();
+            expect(vaultKey).not.toBeNull();
+            expect(vaultKey.extractable).toBe(false);
+
+            const plainMsg = 'Çok gizli yerel kasa mesajı 🚀';
+            const cipherText = await cryptoModule.encryptVaultField(plainMsg);
+            expect(cipherText).toBeTypeOf('string');
+            expect(cipherText).not.toContain(plainMsg);
+
+            const decryptedMsg = await cryptoModule.decryptVaultField(cipherText);
+            expect(decryptedMsg).toBe(plainMsg);
+
+            // Different vaultExtraSecret produces a different key that cannot decrypt previous ciphertext
+            cryptoModule.setVaultExtraSecret('wrong-os-keychain-secret');
+            const wrongDecrypt = await cryptoModule.decryptVaultField(cipherText);
+            expect(wrongDecrypt).toBeNull();
+        });
     });
 });

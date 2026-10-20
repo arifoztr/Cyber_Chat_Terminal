@@ -37,10 +37,10 @@ describe('Socket.io Architecture & Security Test Suite', () => {
     // Helper to create a fresh mock socket
     const createMockSocket = (overrides = {}) => {
         const events = {};
+        const sockId = overrides.id || 'sock-' + Math.random().toString(36).substring(7);
         const s = {
-            id:
-                overrides.id ||
-                'sock-' + Math.random().toString(36).substring(7),
+            id: sockId,
+            rooms: new Set([sockId]),
             handshake: {
                 address: '127.0.0.1',
                 headers: {},
@@ -57,6 +57,10 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             }),
             join: vi.fn((room) => {
                 roomsJoined.push(room);
+                s.rooms.add(room);
+            }),
+            leave: vi.fn((room) => {
+                s.rooms.delete(room);
             }),
             disconnect: vi.fn(),
             _trigger: async (event, data, cb) => {
@@ -2078,6 +2082,68 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             expect(failedLoginAttempts.has('198.51.100.999')).toBe(false);
 
             vi.useRealTimers();
+        });
+
+        it('status_ room isolation & passwordChangedAt session invalidation: restricts node_status_change to status_ room and disconnects other sockets on password change', async () => {
+            const sock1 = createMockSocket({ id: 'sock-main' });
+            const sock2 = createMockSocket({ id: 'sock-other-device' });
+            const oldToken = signJWT({ email: 'sec@cyber.local', userId: 'AGN-SEC-01', username: 'SecUser' });
+            sock2.handshake.auth = { token: oldToken };
+            sock2.disconnect = vi.fn();
+
+            io.sockets.sockets.set('sock-main', sock1);
+            io.sockets.sockets.set('sock-other-device', sock2);
+
+            connectionHandler(sock1);
+            connectionHandler(sock2);
+
+            const hashedPassword = await bcrypt.hash('initialPass123', 10);
+            const secUser = {
+                email: 'sec@cyber.local',
+                username: 'SecUser',
+                password: hashedPassword,
+                userId: 'AGN-SEC-01'
+            };
+            dbManager.getDB().users[secUser.email] = secUser;
+            dbManager.getUserIdIndex()[secUser.userId] = secUser.email;
+            sock1.user = secUser;
+            sock2.user = secUser;
+            onlineNodes.set(secUser.userId, new Set(['sock-main', 'sock-other-device']));
+
+            // 1. join_status_rooms caps at 100 rooms
+            const manyIds = Array.from({ length: 150 }, (_, i) => `AGN-PEER-${i}`);
+            await sock1._trigger('join_status_rooms', manyIds);
+            expect(sock1.rooms.size).toBeLessThanOrEqual(101); // own socket.id + max 100 status rooms
+
+            // 2. change_password disconnects sock2, revokes its token, sets passwordChangedAt, and emits token_refreshed to sock1
+            const cb = vi.fn();
+            await sock1._trigger('change_password', { oldPassword: 'initialPass123', newPassword: 'updatedPass456' }, cb);
+            expect(cb).toHaveBeenCalledWith({ success: true });
+            expect(secUser.passwordChangedAt).toBeTypeOf('number');
+            expect(sock2.disconnect).toHaveBeenCalledWith(true);
+            expect(sock2.user).toBeNull();
+            expect(revokedTokens.has(oldToken)).toBe(true);
+            expect(onlineNodes.get(secUser.userId).has('sock-other-device')).toBe(false);
+            expect(onlineNodes.get(secUser.userId).has('sock-main')).toBe(true);
+
+            const tokenRefreshedEvent = emittedEvents.find(e => e.target === 'sock-main' && e.event === 'token_refreshed');
+            expect(tokenRefreshedEvent).toBeDefined();
+            expect(tokenRefreshedEvent.data.token).toBeTypeOf('string');
+
+            // 3. Offline token issued before passwordChangedAt is rejected in verify_session
+            const staleOfflineToken = signJWT({ email: 'sec@cyber.local', userId: 'AGN-SEC-01', username: 'SecUser', pwdAt: secUser.passwordChangedAt - 1000 });
+            const sock3 = createMockSocket({ id: 'sock-stale' });
+            connectionHandler(sock3);
+            const cbVerify = vi.fn();
+            await sock3._trigger('verify_session', staleOfflineToken, cbVerify);
+            expect(cbVerify).toHaveBeenCalledWith({ success: false });
+
+            // 4. Disconnect emits node_status_change strictly to status_AGN-SEC-01 room
+            emittedEvents.length = 0;
+            await sock1._trigger('disconnect');
+            const statusEv = emittedEvents.find(e => e.event === 'node_status_change');
+            expect(statusEv).toBeDefined();
+            expect(statusEv.target).toBe('status_AGN-SEC-01');
         });
     });
 });

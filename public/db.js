@@ -94,6 +94,8 @@ async function migrateLocalStorageToIndexedDB() {
 
 /**
  * Mesaj paketini IndexedDB kasasına (packets store) kaydeder.
+ * Çözülmüş mesaj ve dosya içeriklerini (cachedText, cachedFile) diske düz metin olarak YAZMAZ;
+ * AES-GCM-256 kasa anahtarı ile şifreleyerek (vaultCipherText, vaultCipherFile) saklar.
  * TTL süresi dolmuş paketleri kaydetmez.
  * @async
  * @function savePacketToVault
@@ -109,16 +111,32 @@ async function savePacketToVault(peerId, packet) {
         if (elapsed >= packet.ttl * 1000) return;
     }
     try {
+        const packetId = packet.id || packet.packetId;
+        const packetToSave = { ...packet, id: packetId, peerId: peerId, ownerId: currentUser.userId };
+
+        // [GÜVENLİK FIX] IndexedDB At-Rest Şifreleme:
+        // Düz metin (cachedText / cachedFile) diske asla açık yazılmaz; AES-256-GCM ile şifrelenir.
+        // İşlem IndexedDB transaction açılmadan ÖNCE yapılır (TransactionInactiveError önlemi).
+        if (typeof encryptVaultField === 'function') {
+            if (packetToSave.cachedText !== undefined && packetToSave.cachedText !== null) {
+                const encText = await encryptVaultField(packetToSave.cachedText);
+                if (encText) {
+                    packetToSave.vaultCipherText = encText;
+                }
+            }
+            if (packetToSave.cachedFile !== undefined && packetToSave.cachedFile !== null) {
+                const encFile = await encryptVaultField(packetToSave.cachedFile);
+                if (encFile) {
+                    packetToSave.vaultCipherFile = encFile;
+                }
+            }
+        }
+        delete packetToSave.cachedText;
+        delete packetToSave.cachedFile;
+
         const db = await openVaultDB();
         const tx = db.transaction('packets', 'readwrite');
         const store = tx.objectStore('packets');
-        const packetId = packet.id || packet.packetId;
-        const packetToSave = {
-            ...packet,
-            id: packetId,
-            peerId: peerId,
-            ownerId: currentUser.userId,
-        };
         store.put(packetToSave);
         return new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
@@ -129,7 +147,8 @@ async function savePacketToVault(peerId, packet) {
 
 /**
  * Belirtilen kişi ile olan mesaj geçmişini IndexedDB kasasından yükler.
- * TTL süresi dolmuş mesajları otomatik olarak temizler ve kalanları zaman sırasına göre sıralar.
+ * TTL süresi dolmuş mesajları otomatik olarak temizler, şifreli kasa alanlarını (vaultCipherText / vaultCipherFile)
+ * bellekte çözer ve kalanları zaman sırasına göre sıralar.
  * @async
  * @function loadHistoryFromVault
  * @param {string} peerId - Mesaj geçmişi istenen kişinin userId'si.
@@ -143,7 +162,7 @@ async function loadHistoryFromVault(peerId) {
         const store = tx.objectStore('packets');
         const index = store.index('peerId');
         const request = index.getAll(peerId);
-        return new Promise((resolve, reject) => {
+        const rawValidPackets = await new Promise((resolve, reject) => {
             request.onsuccess = () => {
                 let packets = request.result || [];
                 const now = Date.now();
@@ -166,6 +185,25 @@ async function loadHistoryFromVault(peerId) {
             };
             request.onerror = () => reject(request.error);
         });
+        // [GÜVENLİK FIX] At-Rest şifreli kasa alanlarını bellekte çöz (IDB transaction dışında)
+        if (typeof decryptVaultField === 'function') {
+            for (const p of rawValidPackets) {
+                if (p.vaultCipherText) {
+                    const decText = await decryptVaultField(p.vaultCipherText);
+                    if (decText !== null) p.cachedText = decText;
+                }
+                if (p.vaultCipherFile) {
+                    const decFile = await decryptVaultField(p.vaultCipherFile);
+                    if (decFile !== null) p.cachedFile = decFile;
+                }
+                // Eski sürümden kalma şifresiz (plaintext) kayıt varsa arka planda şifreli kasaya göç ettir
+                if (!p.vaultCipherText && !p.vaultCipherFile && (p.cachedText || p.cachedFile)) {
+                    savePacketToVault(peerId, p).catch(() => {});
+                }
+            }
+        }
+
+        return rawValidPackets;
     } catch (e) {
         return [];
     }
@@ -179,7 +217,7 @@ async function loadHistoryFromVault(peerId) {
  * @returns {Promise<void>}
  */
 async function purgeExpiredVaultPackets() {
-    if (!currentUser) return;
+    if (typeof currentUser === 'undefined' || !currentUser) return;
     try {
         const db = await openVaultDB();
         const tx = db.transaction('packets', 'readwrite');
@@ -200,7 +238,9 @@ async function purgeExpiredVaultPackets() {
         };
     } catch (_) {}
 }
-setInterval(purgeExpiredVaultPackets, 10000);
+const _purgeInterval = setInterval(purgeExpiredVaultPackets, 10000);
+if (_purgeInterval && typeof _purgeInterval.unref === 'function') _purgeInterval.unref();
+
 
 /**
  * Belirtilen mesaj paketini BOLA / IDOR korumasıyla IndexedDB kasasından siler.
@@ -313,7 +353,7 @@ function loadContactsFromVault() {
         myContacts = data ? JSON.parse(data) : [];
         myContacts.forEach((contact) => {
             delete contact.fingerprintVerified;
-            // Anahtar, derivedSecrets'tan (sessionStorage) yeniden yüklenir
+            // Anahtar, derivedSecrets'tan yeniden yüklenir
             if (derivedSecrets[contact.id]) {
                 contact.key = derivedSecrets[contact.id];
                 contact.ecdhStatus = 'established';
@@ -322,9 +362,114 @@ function loadContactsFromVault() {
     }
 }
 
+// ============================================================
+// ELECTRON safeStorage DESTEKLİ JWT VE KASA ANAHTARI YÖNETİMİ
+// ============================================================
+
+/**
+ * Aktif oturumun bellekteki JWT token önbelleği.
+ * @type {string|null}
+ * @private
+ */
+let _activeJwtToken = null;
+
+/**
+ * Oturum JWT token'ını güvenli şekilde saklar.
+ * Electron ortamında işletim sistemi anahtarlığı (safeStorage: DPAPI / Keychain / libsecret)
+ * ile şifreleyerek 'cyber_jwt_enc' olarak kaydeder ve düz metin 'cyber_jwt' kaydını siler.
+ * Tarayıcı ortamında standart localStorage kullanır.
+ * @async
+ * @function saveJwtToken
+ * @param {string} token - Saklanacak JWT token dizesi.
+ * @returns {Promise<void>}
+ */
+async function saveJwtToken(token) {
+    if (!token) return;
+    _activeJwtToken = token;
+    if (typeof window !== 'undefined' && window.electronAPI && typeof window.electronAPI.isSecureStorageAvailable === 'function' && typeof window.electronAPI.secureEncrypt === 'function') {
+        try {
+            const isAvailable = await window.electronAPI.isSecureStorageAvailable();
+            if (isAvailable) {
+                const encrypted = await window.electronAPI.secureEncrypt(token);
+                if (encrypted) {
+                    localStorage.setItem('cyber_jwt_enc', encrypted);
+                    localStorage.removeItem('cyber_jwt');
+                    return;
+                }
+            }
+        } catch (e) {
+            console.warn('[!] JWT safeStorage şifreleme hatası, yedek depolama kullanılıyor:', e);
+        }
+    }
+    localStorage.setItem('cyber_jwt', token);
+}
+
+/**
+ * Saklanan JWT oturum token'ını yükler.
+ * Electron ortamında 'cyber_jwt_enc' kaydını safeStorage ile çözer; eski düz metin 'cyber_jwt' varsa otomatik şifreleyerek taşır.
+ * @async
+ * @function loadJwtToken
+ * @returns {Promise<string|null>} Çözülmüş JWT token dizesi veya yoksa null.
+ */
+async function loadJwtToken() {
+    if (_activeJwtToken) return _activeJwtToken;
+
+    const encToken = (typeof localStorage !== 'undefined') ? localStorage.getItem('cyber_jwt_enc') : null;
+    if (encToken && typeof window !== 'undefined' && window.electronAPI && typeof window.electronAPI.secureDecrypt === 'function') {
+        try {
+            const decrypted = await window.electronAPI.secureDecrypt(encToken);
+            if (decrypted) {
+                _activeJwtToken = decrypted;
+                return decrypted;
+            }
+        } catch (e) {
+            console.error('[!] JWT safeStorage çözme hatası:', e);
+        }
+    }
+
+    const plainToken = (typeof localStorage !== 'undefined') ? localStorage.getItem('cyber_jwt') : null;
+    if (plainToken) {
+        _activeJwtToken = plainToken;
+        // Electron ortamındaysa düz metin token'ı safeStorage'a göç ettir
+        if (typeof window !== 'undefined' && window.electronAPI && typeof window.electronAPI.isSecureStorageAvailable === 'function') {
+            saveJwtToken(plainToken).catch(() => {});
+        }
+        return plainToken;
+    }
+
+    return null;
+}
+
+/**
+ * Bellekteki aktif JWT token'ı senkron olarak döner (yoksa localStorage yedeğine bakar).
+ * @function getActiveJwtToken
+ * @returns {string|null}
+ */
+function getActiveJwtToken() {
+    if (_activeJwtToken) return _activeJwtToken;
+    if (typeof localStorage !== 'undefined') {
+        return localStorage.getItem('cyber_jwt');
+    }
+    return null;
+}
+
+/**
+ * Oturum kapatıldığında veya geçersizleştiğinde JWT token'ı bellekten ve yerel depolamadan temizler.
+ * @function clearJwtToken
+ * @returns {void}
+ */
+function clearJwtToken() {
+    _activeJwtToken = null;
+    if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('cyber_jwt');
+        localStorage.removeItem('cyber_jwt_enc');
+    }
+}
+
 /**
  * Kullanıcının CryptoKey nesnelerini (privateKey, publicKey, publicJwk) IndexedDB cryptoKeys kasasına yazar.
- * Electron ortamında publicJwk verisi safeStorage (Windows DPAPI / macOS Keychain) ile şifrelenerek saklanır.
+ * Electron ortamında yerel kasa (At-Rest) şifrelemesini güçlendiren gizli `vaultSecret` tohumu
+ * safeStorage (Windows DPAPI / macOS Keychain / Linux libsecret) ile şifrelenerek saklanır.
  * @async
  * @function saveCryptoKeyToVault
  * @param {string} userId - Kullanıcı kimliği.
@@ -333,40 +478,36 @@ function loadContactsFromVault() {
  */
 async function saveCryptoKeyToVault(userId, keyData) {
     try {
-        const db = await openVaultDB();
-        const tx = db.transaction('cryptoKeys', 'readwrite');
-        const store = tx.objectStore('cryptoKeys');
-
         let dataToSave = { userId, ...keyData };
 
-        // [GÜVENLİK] Electron ortamında publicJwk'yı safeStorage ile şifrele (DPAPI/Keychain)
-        if (
-            typeof window !== 'undefined' &&
-            window.electronAPI &&
-            window.electronAPI.secureEncrypt
-        ) {
+        // [GÜVENLİK FIX] Electron safeStorage: Herkese açık olan publicJwk yerine,
+        // yerel IndexedDB kasasını koruyan 256-bit gizli kasa tohumunu (vaultSecret) DPAPI/Keychain ile şifrele.
+        // İşlem IndexedDB transaction açılmadan ÖNCE yapılır.
+        if (typeof window !== 'undefined' && window.electronAPI && typeof window.electronAPI.secureEncrypt === 'function') {
             try {
-                const isAvailable =
-                    await window.electronAPI.isSecureStorageAvailable();
-                if (isAvailable && keyData.publicJwk) {
-                    const jwkStr = JSON.stringify(keyData.publicJwk);
-                    const encrypted =
-                        await window.electronAPI.secureEncrypt(jwkStr);
-                    if (encrypted) {
-                        dataToSave.publicJwkEncrypted = encrypted;
-                        dataToSave.publicJwkProtected = true;
-                        // Şifresiz JWK'yı kaldır — diske sadece şifreli versiyon yazılır
-                        delete dataToSave.publicJwk;
+                const isAvailable = await window.electronAPI.isSecureStorageAvailable();
+                if (isAvailable) {
+                    const randomBytes = crypto.getRandomValues(new Uint8Array(32));
+                    const vaultSecret = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                    randomBytes.fill(0);
+
+                    const encryptedSecret = await window.electronAPI.secureEncrypt(vaultSecret);
+                    if (encryptedSecret) {
+                        dataToSave.vaultSecretEncrypted = encryptedSecret;
+                        dataToSave.vaultSecretProtected = true;
+                        if (typeof setVaultExtraSecret === 'function') {
+                            setVaultExtraSecret(vaultSecret);
+                        }
                     }
                 }
             } catch (e) {
-                console.warn(
-                    '[!] safeStorage şifreleme hatası, düz metin kaydediliyor:',
-                    e,
-                );
+                console.warn('[!] safeStorage kasa sırrı şifreleme hatası:', e);
             }
         }
 
+        const db = await openVaultDB();
+        const tx = db.transaction('cryptoKeys', 'readwrite');
+        const store = tx.objectStore('cryptoKeys');
         store.put(dataToSave);
         return new Promise((resolve, reject) => {
             tx.oncomplete = () => resolve();
@@ -379,7 +520,8 @@ async function saveCryptoKeyToVault(userId, keyData) {
 
 /**
  * Kullanıcının saklanan CryptoKey nesnelerini IndexedDB cryptoKeys deposundan yükler.
- * Electron ortamında safeStorage ile şifrelenmiş publicJwk verisi otomatik olarak çözülür.
+ * Electron ortamında safeStorage ile şifrelenmiş kasa sırrını (`vaultSecretEncrypted`) ve
+ * geriye dönük uyumluluk için eski `publicJwkEncrypted` verisini otomatik olarak çözer.
  * @async
  * @function loadCryptoKeyFromVault
  * @param {string} userId - Kullanıcı kimliği.
@@ -392,38 +534,46 @@ async function loadCryptoKeyFromVault(userId) {
         const tx = db.transaction('cryptoKeys', 'readonly');
         const store = tx.objectStore('cryptoKeys');
         const request = store.get(userId);
-        return new Promise((resolve, reject) => {
-            request.onsuccess = async () => {
-                const result = request.result || null;
-                if (!result) return resolve(null);
-
-                // [GÜVENLİK] safeStorage ile şifrelenmiş publicJwk'yı çöz
-                if (result.publicJwkProtected && result.publicJwkEncrypted) {
-                    if (
-                        typeof window !== 'undefined' &&
-                        window.electronAPI &&
-                        window.electronAPI.secureDecrypt
-                    ) {
-                        try {
-                            const decrypted =
-                                await window.electronAPI.secureDecrypt(
-                                    result.publicJwkEncrypted,
-                                );
-                            if (decrypted) {
-                                result.publicJwk = JSON.parse(decrypted);
-                            }
-                        } catch (e) {
-                            console.error('[!] safeStorage çözme hatası:', e);
-                        }
-                    }
-                    delete result.publicJwkEncrypted;
-                    delete result.publicJwkProtected;
-                }
-
-                resolve(result);
-            };
+        const result = await new Promise((resolve, reject) => {
+            request.onsuccess = () => resolve(request.result || null);
             request.onerror = () => reject(request.error);
         });
+
+        if (!result) return null;
+
+        // 1. [GÜVENLİK FIX] safeStorage ile korunan gizli kasa tohumunu (vaultSecretEncrypted) çöz ve belleğe yükle
+        if (result.vaultSecretProtected && result.vaultSecretEncrypted) {
+            if (typeof window !== 'undefined' && window.electronAPI && typeof window.electronAPI.secureDecrypt === 'function') {
+                try {
+                    const decryptedSecret = await window.electronAPI.secureDecrypt(result.vaultSecretEncrypted);
+                    if (decryptedSecret && typeof setVaultExtraSecret === 'function') {
+                        setVaultExtraSecret(decryptedSecret);
+                    }
+                } catch (e) {
+                    console.error('[!] safeStorage kasa sırrı çözme hatası:', e);
+                }
+            }
+            delete result.vaultSecretEncrypted;
+            delete result.vaultSecretProtected;
+        }
+
+        // 2. Geriye dönük uyumluluk: Eski sürümde safeStorage ile şifrelenmiş publicJwk varsa çöz
+        if (result.publicJwkProtected && result.publicJwkEncrypted) {
+            if (typeof window !== 'undefined' && window.electronAPI && typeof window.electronAPI.secureDecrypt === 'function') {
+                try {
+                    const decrypted = await window.electronAPI.secureDecrypt(result.publicJwkEncrypted);
+                    if (decrypted) {
+                        result.publicJwk = JSON.parse(decrypted);
+                    }
+                } catch (e) {
+                    console.error('[!] safeStorage eski publicJwk çözme hatası:', e);
+                }
+            }
+            delete result.publicJwkEncrypted;
+            delete result.publicJwkProtected;
+        }
+
+        return result;
     } catch (e) {
         console.error('[!] loadCryptoKeyFromVault hatası:', e);
         return null;
@@ -445,4 +595,23 @@ async function removeCryptoKeyFromVault(userId) {
         const store = tx.objectStore('cryptoKeys');
         store.delete(userId);
     } catch (e) {}
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        openVaultDB,
+        savePacketToVault,
+        loadHistoryFromVault,
+        removePacketFromVault,
+        clearPeerPacketsFromVault,
+        saveContactsToVault,
+        loadContactsFromVault,
+        saveJwtToken,
+        loadJwtToken,
+        getActiveJwtToken,
+        clearJwtToken,
+        saveCryptoKeyToVault,
+        loadCryptoKeyFromVault,
+        removeCryptoKeyFromVault
+    };
 }
