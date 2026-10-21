@@ -1,9 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 // Test ortamı için geçerli uzunlukta bir JWT_SECRET tanımlayarak uyarıyı temizliyoruz
-process.env.JWT_SECRET =
-    'cyber-chat-terminal-super-secure-jwt-test-key-32chars';
-const setupSockets = require('../src/socket.js');
+// (vi.hoisted: import'lardan önce çalışır, böylece socket.js yüklenirken bu değer okunur)
+vi.hoisted(() => {
+    process.env.JWT_SECRET =
+        'cyber-chat-terminal-super-secure-jwt-test-key-32chars';
+});
+// Not: socket.js native require yerine import ile yüklenir; native require ile yüklenen
+// örneklerin v8 kapsama verisi yanlış raporlanıyor ve diğer testlerin sonuçlarını bozuyordu.
+import setupSockets from '../src/socket.js';
 const { signJWT, verifyJWT, revokeToken, getClientIp, revokedTokens } =
     setupSockets._internals;
 

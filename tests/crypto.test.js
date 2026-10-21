@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import cryptoModule from '../public/crypto.js';
 const {
     hexToBytes,
@@ -899,8 +899,10 @@ describe('Crypto & E2EE Unit Tests', () => {
             expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(true);
             expect(cryptoModule.getDerivedSecrets()['AGN-BOB']).toBeDefined();
 
-            // Wipe specific target
+            // Wipe specific target (populates _aesKeyCache to cover arrow cleanup function)
+            cryptoModule._aesKeyCache['dummy-cache-key'] = {};
             cryptoModule.wipeTargetCryptoState('AGN-BOB');
+            expect(cryptoModule._aesKeyCache['dummy-cache-key']).toBeUndefined();
             expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(false);
             expect(cryptoModule.getDerivedSecrets()['AGN-BOB']).toBeUndefined();
 
@@ -1078,6 +1080,178 @@ describe('Crypto & E2EE Unit Tests', () => {
             cryptoModule.setVaultExtraSecret('wrong-os-keychain-secret');
             const wrongDecrypt = await cryptoModule.decryptVaultField(cipherText);
             expect(wrongDecrypt).toBeNull();
+        });
+
+        it('bufferToBase64 / base64ToBuffer: fall back to Buffer when window, btoa and atob are unavailable (lines 178, 194)', () => {
+            const originalWindow = globalThis.window;
+            const originalBtoa = globalThis.btoa;
+            const originalAtob = globalThis.atob;
+            try {
+                delete globalThis.window;
+                delete globalThis.btoa;
+                delete globalThis.atob;
+                expect(typeof btoa).toBe('undefined');
+                expect(typeof atob).toBe('undefined');
+
+                const bytes = new Uint8Array([0, 1, 127, 128, 254, 255]);
+                const b64 = cryptoModule.bufferToBase64(bytes);
+                expect(b64).toBe(Buffer.from(bytes).toString('base64'));
+                expect(Array.from(cryptoModule.base64ToBuffer(b64))).toEqual(
+                    Array.from(bytes),
+                );
+            } finally {
+                globalThis.btoa = originalBtoa;
+                globalThis.atob = originalAtob;
+                if (originalWindow !== undefined) globalThis.window = originalWindow;
+            }
+        });
+
+        it('handleEcdhAnswer: keeps the existing secret when ephemeral key is already consumed but a ratchet session exists (line 949)', async () => {
+            await cryptoModule.initRatchetChain(
+                'AGN-BOB',
+                new Uint8Array(32).fill(5),
+            );
+            cryptoModule.getDerivedSecrets()['AGN-BOB'] = 'existing_hex_secret';
+
+            // Tekrarlanan / geç gelen answer: ephemeral anahtar yok ama ratchet oturumu aktif
+            const secret = await cryptoModule.handleEcdhAnswer({
+                senderId: 'AGN-BOB',
+                ephemeralPublicKeyJwk: bobJwk,
+            });
+            expect(secret).toBe('existing_hex_secret');
+            expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(true);
+
+            // Hiçbir sır yoksa null döner
+            delete cryptoModule.getDerivedSecrets()['AGN-BOB'];
+            const none = await cryptoModule.handleEcdhAnswer({
+                senderId: 'AGN-BOB',
+                ephemeralPublicKeyJwk: bobJwk,
+            });
+            expect(none).toBeNull();
+        });
+
+        describe('Memory hygiene with skipped (out-of-order) message keys (lines 1021, 1042, 1055, 1082)', () => {
+            // Alım zincirini 2. indekse atlatarak 0 ve 1 için atlanmış anahtar üretir.
+            // Veri geçersiz olduğu için deşifreleme başarısız olur ama atlanan anahtarlar saklanır.
+            const createSkippedKeys = async (peerId) => {
+                await cryptoModule.initRatchetChain(
+                    peerId,
+                    new Uint8Array(32).fill(11),
+                );
+                const errSpy = vi
+                    .spyOn(console, 'error')
+                    .mockImplementation(() => {});
+                const garbage = cryptoModule.bufferToBase64(new Uint8Array(40));
+                const res = await cryptoModule.decryptWithRatchet(
+                    garbage,
+                    peerId,
+                    2,
+                );
+                expect(res).toBeNull();
+                errSpy.mockRestore();
+            };
+
+            // Atlanmış anahtarların `fill(0)` ile sıfırlandığını doğrulamak için Uint8Array.prototype.fill izlenir
+            const spyFill = () => vi.spyOn(Uint8Array.prototype, 'fill');
+
+            it('clearRatchetState zeroes and removes skipped keys', async () => {
+                await createSkippedKeys('AGN-BOB');
+                const fillSpy = spyFill();
+                cryptoModule.clearRatchetState('AGN-BOB');
+                // send/recv zincir anahtarları (2) + atlanmış anahtarlar (2)
+                expect(fillSpy).toHaveBeenCalledTimes(4);
+                fillSpy.mockRestore();
+                expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(false);
+            });
+
+            it('wipeTargetCryptoState removes static secret and zeroes skipped keys', async () => {
+                cryptoModule.setMyPublicKeyJwk(aliceJwk);
+                cryptoModule.setMyEcdhKeyPair(alicePair);
+                // Eski protokol answer'ı statik sırrı oluşturur
+                const staticSecret = await cryptoModule.handleEcdhAnswer({
+                    senderId: 'AGN-BOB',
+                    publicKeyJwk: bobJwk,
+                });
+                expect(cryptoModule.getStaticSecret('AGN-BOB')).toBe(staticSecret);
+
+                await createSkippedKeys('AGN-BOB');
+                const fillSpy = spyFill();
+                cryptoModule.wipeTargetCryptoState('AGN-BOB');
+                expect(fillSpy).toHaveBeenCalledTimes(4);
+                fillSpy.mockRestore();
+
+                expect(cryptoModule.getStaticSecret('AGN-BOB')).toBeFalsy();
+                expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(false);
+            });
+
+            it('wipeAllCryptoState zeroes skipped keys of every peer', async () => {
+                await createSkippedKeys('AGN-BOB');
+                await createSkippedKeys('AGN-CAROL');
+                const fillSpy = spyFill();
+                cryptoModule.wipeAllCryptoState();
+                // 2 eş x (2 zincir anahtarı + 2 atlanmış anahtar)
+                expect(fillSpy).toHaveBeenCalledTimes(8);
+                fillSpy.mockRestore();
+                expect(cryptoModule.hasRatchetSession('AGN-BOB')).toBe(false);
+                expect(cryptoModule.hasRatchetSession('AGN-CAROL')).toBe(false);
+            });
+        });
+
+        describe('getVaultCryptoKey edge cases (lines 1130-1131, 1136, 1161-1162)', () => {
+            afterEach(() => {
+                delete globalThis.loadCryptoKeyFromVault;
+                delete globalThis.localStorage;
+            });
+
+            it('lazily initializes the identity key via initEcdhKeys when no key pair is loaded', async () => {
+                expect(cryptoModule.getMyEcdhKeyPair()).toBeNull();
+                globalThis.loadCryptoKeyFromVault = async () => ({
+                    privateKey: alicePair.privateKey,
+                    publicKey: alicePair.publicKey,
+                    publicJwk: aliceJwk,
+                });
+                globalThis.localStorage = { removeItem: () => {} };
+
+                const key = await cryptoModule.getVaultCryptoKey();
+                expect(key).not.toBeNull();
+                expect(key.extractable).toBe(false);
+                expect(cryptoModule.getMyEcdhKeyPair().privateKey).toBe(
+                    alicePair.privateKey,
+                );
+                // İkinci çağrı önbellekten döner
+                expect(await cryptoModule.getVaultCryptoKey()).toBe(key);
+            });
+
+            it('returns null when initEcdhKeys throws and no key pair is available', async () => {
+                // loadCryptoKeyFromVault ve localStorage tanımsız -> initEcdhKeys hata fırlatır
+                const warnSpy = vi
+                    .spyOn(console, 'warn')
+                    .mockImplementation(() => {});
+                const key = await cryptoModule.getVaultCryptoKey();
+                warnSpy.mockRestore();
+                expect(key).toBeNull();
+                expect(cryptoModule.getMyEcdhKeyPair()).toBeNull();
+            });
+
+            it('returns null when there is no current user and no key pair', async () => {
+                delete globalThis.currentUser;
+                expect(await cryptoModule.getVaultCryptoKey()).toBeNull();
+            });
+
+            it('returns null and logs when key derivation fails', async () => {
+                // Geçersiz anahtar nesneleri deriveBits'in hata fırlatmasına neden olur
+                cryptoModule.setMyEcdhKeyPair({ privateKey: {}, publicKey: {} });
+                const errSpy = vi
+                    .spyOn(console, 'error')
+                    .mockImplementation(() => {});
+                const key = await cryptoModule.getVaultCryptoKey();
+                expect(key).toBeNull();
+                expect(errSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('Kasa'),
+                    expect.anything(),
+                );
+                errSpy.mockRestore();
+            });
         });
     });
 });

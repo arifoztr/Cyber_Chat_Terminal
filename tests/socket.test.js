@@ -187,18 +187,19 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             expect(verifyJWT(token)).toBeNull();
         });
 
-        it('should load JWT_SECRET from environment when >= 32 characters (line 39)', () => {
+        it('should load JWT_SECRET from environment when >= 32 characters (line 39)', async () => {
+            // Not: require.cache silip native require ile ikinci bir modül örneği yüklemek
+            // v8 kapsama birleştirmesini bozuyordu; bu yüzden vi.resetModules + dinamik import kullanılır.
             const originalSecret = process.env.JWT_SECRET;
             process.env.JWT_SECRET = 'a'.repeat(32);
-            delete require.cache[require.resolve('../src/socket.js')];
-            const freshSocketModule = require('../src/socket.js');
+            vi.resetModules();
+            const freshSocketModule = (await import('../src/socket.js')).default;
             expect(freshSocketModule._internals.JWT_SECRET).toBe(
                 'a'.repeat(32),
             );
             if (originalSecret) process.env.JWT_SECRET = originalSecret;
             else delete process.env.JWT_SECRET;
-            delete require.cache[require.resolve('../src/socket.js')];
-            require('../src/socket.js');
+            vi.resetModules();
         });
     });
 
@@ -2144,6 +2145,101 @@ describe('Socket.io Architecture & Security Test Suite', () => {
             const statusEv = emittedEvents.find(e => e.event === 'node_status_change');
             expect(statusEv).toBeDefined();
             expect(statusEv.target).toBe('status_AGN-SEC-01');
+        });
+
+        it('logout: leaves all status_ rooms the socket has joined (line 670)', async () => {
+            const socket = createMockSocket({
+                handshake: { address: '203.0.113.170' },
+            });
+            connectionHandler(socket);
+            socket.user = { email: 'lo@cyber.local', userId: 'AGN-LO' };
+            socket.rooms.add('status_AGN-PEER-1');
+            socket.rooms.add('status_AGN-PEER-2');
+            socket.rooms.add('some_other_room');
+
+            const cb = vi.fn();
+            await socket._trigger('logout', {}, cb);
+
+            expect(socket.leave).toHaveBeenCalledWith('status_AGN-PEER-1');
+            expect(socket.leave).toHaveBeenCalledWith('status_AGN-PEER-2');
+            expect(socket.leave).not.toHaveBeenCalledWith('some_other_room');
+            expect(socket.rooms.has('some_other_room')).toBe(true);
+            expect(cb).toHaveBeenCalledWith({ success: true });
+        });
+
+        it('should hit rate limits for get_profiles, update_avatar, change_password and check_node_statuses (lines 706, 734, 761, 1016)', async () => {
+            const socket = createMockSocket({
+                handshake: { address: '203.0.113.171' },
+            });
+            connectionHandler(socket);
+            socket.user = {
+                email: 'rl2@cyber.local',
+                username: 'Rl2User',
+                password: 'pwd',
+                userId: 'AGN-RL2',
+            };
+            dbManager.getDB().users[socket.user.email] = socket.user;
+            vi.spyOn(dbManager, 'saveDatabase').mockResolvedValue();
+
+            // get_profiles (limit 60)
+            const cbProfiles = vi.fn();
+            for (let i = 0; i < 61; i++) {
+                await socket._trigger('get_profiles', ['AGN-X'], cbProfiles);
+            }
+            expect(cbProfiles).toHaveBeenLastCalledWith({ profiles: {} });
+            // callback olmadan limit aşımı da güvenle sonlanmalı
+            expect(await socket._trigger('get_profiles', ['AGN-X'])).toBeUndefined();
+
+            // update_avatar (limit 10)
+            const cbAvatar = vi.fn();
+            for (let i = 0; i < 11; i++) {
+                await socket._trigger('update_avatar', 'data:x', cbAvatar);
+            }
+            expect(cbAvatar).toHaveBeenLastCalledWith({
+                success: false,
+                message: 'Çok fazla istek.',
+            });
+
+            // change_password (limit 5)
+            const cbPwd = vi.fn();
+            for (let i = 0; i < 6; i++) {
+                await socket._trigger(
+                    'change_password',
+                    { oldPassword: 'x', newPassword: 'y' },
+                    cbPwd,
+                );
+            }
+            expect(cbPwd).toHaveBeenLastCalledWith({
+                success: false,
+                message: 'Çok fazla istek.',
+            });
+
+            // check_node_statuses (paylaşılan 'node_status' limiti: 60)
+            const cbStatuses = vi.fn();
+            for (let i = 0; i < 61; i++) {
+                await socket._trigger('check_node_statuses', ['AGN-X'], cbStatuses);
+            }
+            expect(cbStatuses).toHaveBeenLastCalledWith({ statuses: {} });
+        });
+
+        it('module-level interval: purges expired revoked tokens every hour (lines 118-120)', async () => {
+            vi.useFakeTimers();
+            try {
+                // Interval modül yüklenirken kurulduğu için sahte zamanlayıcılarla taze bir örnek yüklenir
+                vi.resetModules();
+                const fresh = (await import('../src/socket.js')).default;
+                const { revokedTokens: freshRevoked } = fresh._internals;
+                freshRevoked.set('expired-token', Date.now() - 1000);
+                freshRevoked.set('valid-token', Date.now() + 10 * 3600 * 1000);
+
+                await vi.advanceTimersByTimeAsync(60 * 60 * 1000 + 1);
+
+                expect(freshRevoked.has('expired-token')).toBe(false);
+                expect(freshRevoked.has('valid-token')).toBe(true);
+            } finally {
+                vi.useRealTimers();
+                vi.resetModules();
+            }
         });
     });
 });

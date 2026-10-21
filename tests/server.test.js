@@ -1,7 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import http from 'http';
+import Module from 'module';
 const dbManager = require('../src/database.js');
-import serverModule from '../src/server.js';
+
+// server.js içindeki require('./socket') native Node require'dır. Native require ile yüklenen
+// socket.js örneğinin v8 kapsama verisi yanlış raporlandığı (çalışan satırlar "kapsanmadı" göründüğü)
+// için, server.js yüklenmeden önce vite üzerinden yüklenen örnek require önbelleğine kaydedilir.
+const socketModule = (await import('../src/socket.js')).default;
+const socketPath = require.resolve('../src/socket.js');
+const cachedSocket = new Module(socketPath);
+cachedSocket.filename = socketPath;
+cachedSocket.exports = socketModule;
+cachedSocket.loaded = true;
+require.cache[socketPath] = cachedSocket;
+
+const serverModule = (await import('../src/server.js')).default;
 const { app, isOriginAllowed, gracefulShutdown, startServer } = serverModule;
 
 describe('Server & Express Infrastructure Tests', () => {
@@ -332,6 +345,14 @@ describe('Server & Express Infrastructure Tests', () => {
             rateLimitMiddleware({ url: '/socket.io/?EIO=4' }, {}, nextSocket);
             expect(nextSocket).toHaveBeenCalled();
 
+            // 1b. IP extraction fallbacks: req.connection.remoteAddress & default 127.0.0.1
+            const nextConn = vi.fn();
+            rateLimitMiddleware({ url: '/api/test', connection: { remoteAddress: '10.0.0.99' } }, {}, nextConn);
+            expect(nextConn).toHaveBeenCalled();
+            const nextFallback = vi.fn();
+            rateLimitMiddleware({ url: '/api/test' }, {}, nextFallback);
+            expect(nextFallback).toHaveBeenCalled();
+
             // 2. Normal requests under limit
             const ip = '198.51.100.55';
             const mockReq = { url: '/api/v1/test', ip };
@@ -362,19 +383,38 @@ describe('Server & Express Infrastructure Tests', () => {
         });
 
         it('HTTP rate limiter: periodic interval cleans up expired entries', async () => {
+            // Interval modül yüklenirken gerçek zamanlayıcıyla kurulduğu için, sahte zamanlayıcılar
+            // etkinken server.js'in taze bir örneği yüklenir; aksi halde temizleyici hiç tetiklenmez.
             vi.useFakeTimers();
-            const rateLimitMiddleware = app._router.stack.find(
-                (s) =>
-                    s.name === '<anonymous>' &&
-                    s.handle.length === 3 &&
-                    s.handle.toString().includes('httpRateLimits'),
-            ).handle;
-            const ip = '198.51.100.77';
-            rateLimitMiddleware({ url: '/test-exp', ip }, {}, () => {});
+            try {
+                vi.resetModules();
+                const fresh = (await import('../src/server.js')).default;
+                const rateLimitMiddleware = fresh.app._router.stack.find(
+                    (s) =>
+                        s.name === '<anonymous>' &&
+                        s.handle.length === 3 &&
+                        s.handle.toString().includes('httpRateLimits'),
+                ).handle;
+                const expiredIp = '198.51.100.77';
+                rateLimitMiddleware({ url: '/test-exp', ip: expiredIp }, {}, () => {});
 
-            // Advance timers by 65 seconds to trigger interval and delete expired record
-            await vi.advanceTimersByTimeAsync(65000);
-            vi.useRealTimers();
+                const deleteSpy = vi.spyOn(Map.prototype, 'delete');
+                // 1. tur (60s): kayıt henüz süresi dolmadı (now === resetAt) -> silinmez
+                await vi.advanceTimersByTimeAsync(60000);
+                expect(deleteSpy).not.toHaveBeenCalledWith(expiredIp);
+
+                // Bu sırada yeni ve süresi dolmamış bir kayıt eklenir
+                const freshIp = '198.51.100.78';
+                rateLimitMiddleware({ url: '/test-exp', ip: freshIp }, {}, () => {});
+
+                // 2. tur (120s): süresi dolan kayıt silinir, yenisi korunur
+                await vi.advanceTimersByTimeAsync(60000);
+                expect(deleteSpy).toHaveBeenCalledWith(expiredIp);
+                expect(deleteSpy).not.toHaveBeenCalledWith(freshIp);
+            } finally {
+                vi.useRealTimers();
+                vi.resetModules();
+            }
         });
 
         it('GET /health route handler: executes and returns status 200 with timestamp', () => {
@@ -501,6 +541,13 @@ describe('Server & Express Infrastructure Tests', () => {
                 () => {},
             );
             expect(statusCustom).toBe(403);
+
+            // Fallback for non-Error object / string error (err?.message || err)
+            errorHandler('String error payload', {}, res500, () => {});
+            expect(consoleSpy).toHaveBeenCalledWith(
+                expect.stringContaining('Unhandled HTTP Error:'),
+                'String error payload',
+            );
 
             consoleSpy.mockRestore();
         });

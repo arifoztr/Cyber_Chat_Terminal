@@ -272,6 +272,9 @@ async function gracefulShutdown(signal) {
     process.exit(0);
 }
 
+// Doğrudan `node src/server.js` ile çalıştırıldığında devreye giren giriş noktası.
+// Testler modülü import ettiği için bu blok test sürecinde çalışamaz; kapsamadan hariç tutulur.
+/* v8 ignore next */
 if (require.main === module) {
     startServer();
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

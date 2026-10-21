@@ -409,6 +409,9 @@ async function decryptWithRatchet(base64Data, senderId, messageIndex) {
                     await advanceChain(state.recvChainKey);
                 state.recvChainKey = nextChainKey;
                 // Atlanan anahtarları sakla (sıra dışı mesajlar için)
+                // Savunma amaçlı: initRatchetChain bu tabloyu her zaman oluşturur, bu yüzden
+                // genel API üzerinden bu dala ulaşılamaz; kapsamadan hariç tutulur.
+                /* v8 ignore next */
                 if (!_skippedMessageKeys[senderId])
                     _skippedMessageKeys[senderId] = {};
                 _skippedMessageKeys[senderId][state.recvCounter] = skippedKey;
