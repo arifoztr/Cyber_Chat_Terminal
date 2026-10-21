@@ -72,7 +72,7 @@
     ]
   },
   "linux": {
-    "maintainer": "Arif8054 <arifoz5354@gmail.com>",
+    "maintainer": "arifoztr <arifoz5354@gmail.com>",
     "target": [
       {
         "target": "AppImage",

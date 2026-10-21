@@ -1,7 +1,10 @@
 # AGENTS.md – Siber E2EE Sohbet Terminali (Developer & AI Agent Kılavuzu)
 
+> [!WARNING]
+> **Eğitim ve Portfolyo Uyarısı:** Bu proje uçtan uca şifreleme ve modern web güvenliği konseptlerini inceleyen deneysel bir öğrenme çalışmasıdır. Bağımsız bir kriptografik güvenlik denetiminden geçmemiştir; gerçek hassas iletişimlerde kullanılmamalıdır.
+
 ## 📌 Proje Özeti
-Bu proje, uçtan uca şifreli (E2EE) bir P2P sohbet terminalidir. İstemciler (web tarayıcıları ve Electron masaüstü uygulaması) arasında ECDH (P-256) ile asenkron anahtar takası yapılır; tüm mesajlar ve dosyalar (resim, PDF) AES-GCM-256 ile şifrelenir. Sunucu yalnızca signaling ve relay görevi görür; şifreli içerikleri asla çözemez, inceleyemez veya saklayamaz.
+Bu proje, uçtan uca şifreli (E2EE) bir P2P sohbet terminalidir. İstemciler (web tarayıcıları ve Electron masaüstü uygulaması) arasında ECDHE (P-256) ile dinamik geçici anahtar takası ve HKDF-SHA256 simetrik KDF cırcır (ratchet) zinciri işletilir; mesajlar ve dosyalar AES-GCM-256 ile istemci tarafında şifrelenir. Sunucu yalnızca signaling ve kör paket iletim (blind relay) görevi görür; şifreli içerikleri çözemez veya inceleyemez. İletişim üst verileri (metadata: kim kiminle ne zaman konuştu, IP adresleri) ise sunucu tarafından bilinmektedir.
 
 Arayüz; modern siber karanlık terminal estetiğinde tasarlanmış olup TTL ile kendini imha eden mesajlar, dosya/belge paylaşımı, çevrimdışı kuyruklama, parmak izi (Safety Number) doğrulaması, ses efektleri ve tamamen istemci tarafında saklanan IndexedDB şifreli kasası içerir.
 
@@ -13,12 +16,12 @@ Arayüz; modern siber karanlık terminal estetiğinde tasarlanmış olup TTL ile
 |------|-----------|
 | **Frontend** | Vanilla JavaScript (ES6+), Tailwind CSS, Socket.IO Client |
 | **Masaüstü (Desktop)** | Electron, ContextBridge API (İzole Preload, Sandbox) |
-| **Backend** | Node.js, Express, Socket.IO Server |
-| **Şifreleme (E2EE)** | Web Crypto API (`window.crypto.subtle`): AES-256-GCM, ECDH (P-256), SHA-256, PBKDF2 |
+| **Backend** | Node.js, Express, Socket.IO Server (Kör İletim / Blind Relay) |
+| **Şifreleme (E2EE)** | Web Crypto API (`window.crypto.subtle`): AES-256-GCM, ECDHE (P-256), HKDF-SHA256, PBKDF2 |
 | **Kimlik Doğrulama** | Bağımsız JWT (HMAC-SHA256) + bcrypt şifreleme |
 | **Veritabanı** | Hibrit: Yerel SQLite3 (WAL modu) veya Cloud Turso (`@libsql/client`) |
-| **İstemci Depolama** | IndexedDB (Kasa / Vault) + localStorage yedekleme/taşıma |
-| **Test Altyapısı** | Vitest, V8 Coverage (173 Test, %95+ kod kapsamı) |
+| **İstemci Depolama** | IndexedDB (Kasa / Vault) + Electron safeStorage (DPAPI/Keychain) |
+| **Test Altyapısı** | Vitest, V8 Coverage (190 Test, %99+ kod kapsamı) |
 | **Dökümantasyon** | JSDoc 3, Markdown Eklentisi (`npm run docs`) |
 | **Tipografi** | Inter, JetBrains Mono |
 
@@ -73,12 +76,13 @@ Arayüz; modern siber karanlık terminal estetiğinde tasarlanmış olup TTL ile
 
 2. **Frontend Katmanı:**
    - **Vanilla JavaScript:** React, Vue veya harici UI derleyicileri kesinlikle kullanılmaz.
-   - **Doğal Kriptografi:** Şifreleme işlemleri yalnızca `window.crypto.subtle` API'siyle yapılır. Harici kütüphane eklenmez.
+   - **Doğal Kriptografi:** Şifreleme işlemleri yalnızca `window.crypto.subtle` API'siyle yapılır. Harici JS kripto kütüphaneleri eklenmez.
    - **XSS ve CSP Uyumluluğu:** Inline event handler'lar (`onclick=""`) yerine `addEventListener` kullanılır (`SEC-13`). `innerHTML` ile kullanıcı girdisi basılmaz; güvenli DOM API'leri (`textContent`, `createElement`) tercih edilir.
 
-3. **Sıfır-Bilgi Backend (Zero-Knowledge):**
-   - Sunucu yalnızca sinyalleşme ve paket yönlendirme yapar.
+3. **Kör İletim Backend (Blind Relay):**
+   - Sunucu yalnızca sinyalleşme ve şifreli paket yönlendirme yapar.
    - `textPayload` veya `filePayload` içerikleri sunucuda asla deşifre edilmez, parse edilmez, kaydedilmez veya loglanmaz.
+   - Ancak iletişim metadata'sı (gönderici, alıcı, zaman, IP) sunucu tarafından bilinmektedir; metadata anonimliği iddiasında bulunulmamalıdır.
 
 4. **Veritabanı ve Çevrimdışı Kuyruk Güvenliği:**
    - Veritabanı hem yerel SQLite3 hem de bulut Turso (`@libsql/client`) ile uyumlu çalışır.
@@ -86,7 +90,7 @@ Arayüz; modern siber karanlık terminal estetiğinde tasarlanmış olup TTL ile
    - Zaman aşımına uğrayan TTL paketleri hem sunucuda (GC) hem de istemcide anında imha edilir.
 
 5. **Test Bütünlüğü:**
-   - Kod tabanında yapılan her değişiklik sonrası `npm.cmd test` çalıştırılarak 173 testin tamamının başarılı geçtiği doğrulanmalıdır.
+   - Kod tabanında yapılan her değişiklik sonrası `npm test` çalıştırılarak 190 testin tamamının başarılı geçtiği doğrulanmalıdır.
 
 ---
 
@@ -94,10 +98,10 @@ Arayüz; modern siber karanlık terminal estetiğinde tasarlanmış olup TTL ile
 
 ```bash
 # Birim ve entegrasyon testlerini çalıştırma (Kapsam raporu ile)
-npm.cmd test
+npm test
 
 # JSDoc HTML dökümantasyonunu yeniden üretme
-npm.cmd run docs
+npm run docs
 
 # Sunucuyu başlatma
 npm start
@@ -108,6 +112,6 @@ npm run desktop:start
 
 ---
 
-**Son Güncelleme:** 2026-09-30  
-**Sürüm:** v1.0 (Production Ready)  
+**Son Güncelleme:** 2026-10-21  
+**Sürüm:** v1.0 (Deneysel / Portfolio Sürümü)  
 **Lisans:** ISC

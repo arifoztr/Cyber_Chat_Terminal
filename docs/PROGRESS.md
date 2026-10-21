@@ -1,8 +1,11 @@
 # PROJE İLERLEME DURUMU (PROGRESS & ROADMAP)
 
-**Mevcut Sürüm:** v1.0 (Production Ready)  
-**Son Güncelleme:** 2026-09-30  
-**Durum:** Kararlı (Stable), 173/173 Test Başarılı (%95+ Kod Kapsamı), Tam JSDoc Dökümante.
+**Mevcut Sürüm:** v1.0 (Deneysel / Portfolio Sürümü)  
+**Son Güncelleme:** 2026-10-21  
+**Durum:** Kararlı (Deneysel/Eğitim Amaçlı), 190/190 Test Başarılı (%99+ İfade / %89+ Dal Kod Kapsamı), Tam JSDoc Dökümante.
+
+> [!WARNING]
+> **Güvenlik Notu:** Bu proje deneysel bir portfolyo ve eğitim çalışmasıdır. Bağımsız bir güvenlik denetiminden geçmemiştir; gerçek hassas iletişimlerde kullanılmamalıdır.
 
 ---
 
@@ -17,14 +20,15 @@
 ### FAZ 2 — Veritabanı ve Çevrimdışı İletişim ✅
 * **[x] Hibrit Veritabanı:** Yerel SQLite3 (WAL modu) veya Cloud Turso (`@libsql/client`) entegrasyonu.
 * **[x] Asenkron Kilit ve Önbellek:** Veri bütünlüğünü koruyan `withLock` asenkron eşzamanlama kilidi ve bellek içi hızlı önbellek.
-* **[x] Çevrimdışı Mesaj Kuyruğu:** Alıcının çevrimdışı olduğu durumlarda şifreli mesajların sunucuda güvenle kuyruğa alınması ve bağlantı kurulduğunda iletilmesi.
-* **[x] Otomatik Çöp Toplayıcı (Garbage Collector):** 7 günden eski veya süresi dolan paketlerin otomatik imhası.
+* **[x] Çevrimdışı Mesaj Kuyruğu:** Alıcının çevrimdışı olduğu durumlarda şifreli paketlerin kör iletim (blind relay) sunucusunda kuyruğa alınması ve bağlantı kurulduğunda iletilmesi.
+* **[x] Otomatik Çöp Toplayıcı (Garbage Collector):** 7 günden eski veya süresi dolan paketlerin sunucudan otomatik temizlenmesi.
 
 ### FAZ 3 — Kriptografik Yapı, ECDHE ve KDF Ratchet Protokolleri ✅
-* **[x] Uçtan Uca Şifreleme (E2EE):** İstemci tarafında `window.crypto.subtle` ile AES-256-GCM veri şifreleme/deşifreleme.
+* **[x] Uçtan Uca Şifreleme (E2EE):** İstemci tarafında `window.crypto.subtle` ile AES-256-GCM veri şifreleme/deşifreleme (12-bayt IV).
 * **[x] ECDHE Dinamik El Sıkışması (PFS):** P-256 eğrisinde oturum bazlı tek kullanımlık geçici anahtar çifti türetimi (Perfect Forward Secrecy).
-* **[x] KDF Ratchet Zinciri (HKDF-SHA256):** Mesaj başına simetrik anahtar rotasyonu ve sıra dışı paket önbelleği (`_skippedMessageKeys`).
-* **[x] Bellek Hijyeni & extractable: false:** Kriptografik anahtarların dışa aktarımının engellenmesi ve `Uint8Array.fill(0)` ile sıfırlanması.
+* **[x] KDF Ratchet Zinciri (HKDF-SHA256):** Mesaj başına simetrik anahtar rotasyonu ve sıra dışı paket toleransı (`_skippedMessageKeys`).
+* **[x] Dışa Aktarılamaz Anahtarlar (`extractable: false`):** Kriptografik özel anahtarların Web Crypto katmanında tutulması.
+* **[x] Savunma Derinliği / Bellek Hijyeni:** Ara bayt dizileri için `Uint8Array.fill(0)` ile en iyi çaba (best-effort) tampon temizliği (JS çalışma zamanı ve GC sınırları dokümante edilmiştir).
 * **[x] Donanım/İşletim Sistemi Kasası:** Electron safeStorage (Windows DPAPI, macOS Keychain) ile yerel anahtar şifreleme.
 * **[x] Parmak İzi & Güvenlik Numarası:** İki tarafın iletişimini doğrulayan SHA-256 Safety Number / Parmak izi üretimi.
 * **[x] Geri Çekme (Revoke) Protokolü:** Gönderilen mesajların hem yerel kasadan hem karşı taraftan kalıcı olarak silinmesi (BOLA/IDOR korumalı).
@@ -39,7 +43,7 @@
 * **[x] Duyarlı Terminal Arayüzü:** Mobil ve masaüstü ekran boyutlarına tam uyumlu dinamik terminal arayüzü.
 
 ### FAZ 5 — Test, Masaüstü ve Dökümantasyon ✅
-* **[x] Kapsamlı Test Paketi:** Vitest ile 6 test dosyasında **173/173 geçen test**, %95+ kod kapsamı (`npm.cmd test`).
+* **[x] Kapsamlı Test Paketi:** Vitest ile 6 test dosyasında **190/190 geçen test**, %99+ ifade kod kapsamı (`npm test`).
 * **[x] Masaüstü Uygulaması (Electron):** Güvenli BrowserWindow, ContextBridge preload API, izole sandbox (`npm run desktop:start`).
 * **[x] Standart JSDoc Dökümantasyonu:** Tüm backend, client ve Electron modüllerinin Türkçe JSDoc ile etiketlenmesi.
 * **[x] Otomatik Dökümantasyon Derlemesi:** `jsdoc.json` ve `npm run docs` ile `docs/api` altında zengin HTML döküman üretimi.
@@ -48,6 +52,10 @@
 
 ## 🟡 GELECEK YOL HARİTASI (PLANLANAN ÖZELLİKLER)
 
+* **[ ] Asimetrik DH Ratchet (Tam Double Ratchet) & Gerçek PCS:**
+  Mevcut simetrik KDF ratchet mimarisine her konuşma turunda periyodik ECDH anahtar değişimleri eklenerek tam **Post-Compromise Security (İhlal Sonrası İyileşme / Self-Healing)** sağlanması.
+* **[ ] Metadata Koruma & Trafik Maskeleme Araştırmaları:**
+  Kim kiminle ne zaman konuştu bilgisini gizlemek amacıyla kör yönlendirme veya cover-traffic mekanizmalarının incelenmesi.
 * **[ ] WebRTC Uçtan Uca Sesli / Görüntülü Arama:** Signaling altyapısını kullanarak doğrudan P2P şifreli sesli iletişim.
 * **[ ] Çoklu Kullanıcı Şifreli Grup Odaları:** Grup üyeleri arasında eşzamanlı anahtar dağıtımı (Group E2EE / MLS tabanlı).
 * **[ ] Çoklu Cihaz Senkronizasyonu:** Kullanıcının birden fazla cihazındaki IndexedDB kasaları arasında QR kod / parola ile güvenli anahtar aktarımı.
@@ -55,5 +63,5 @@
 
 ---
 
-**Son Güncelleme:** 2026-09-30  
-**Geliştirici:** Arif8054
+**Son Güncelleme:** 2026-10-21  
+**Geliştirici:** arifoztr

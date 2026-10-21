@@ -1,6 +1,7 @@
 node_modules/
 
 # Veritabanı dosyaları (runtime)
+*.sqlite*
 database.sqlite*
 database.json*
 data/
@@ -11,12 +12,10 @@ data/
 # Loglar
 *.log
 
-# OS
+# OS & IDE
 .DS_Store
 .vs/
 dist/
 coverage/
 tests/test_temp.sqlite*
 Cyber_Chat_Terminal/
-
-

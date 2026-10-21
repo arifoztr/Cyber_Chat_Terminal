@@ -71,7 +71,7 @@ Proje hem yerel dosya tabanlı SQLite hem de bulut tabanlı **Turso (LibSQL)** d
 ### Seçenek C: VPS / Kendi Linux Sunucunuz (Docker İle)
 ```bash
 # Depoyu sunucuya klonlayın
-git clone https://github.com/Arif8054/Cyber_Chat_Terminal.git
+git clone https://github.com/arifoztr/Cyber_Chat_Terminal.git
 cd Cyber_Chat_Terminal
 
 # Docker imajını derleyin ve arka planda çalıştırın

@@ -8,7 +8,7 @@
  *   - KDF Zinciri (HKDF-SHA256 Ratchet) — her mesajda anahtar rotasyonu yaparak ileriye dönük gizlilik sağlar.
  *   - AES-GCM-256 (12-bayt IV) şifreleme / deşifreleme.
  *   - SHA-256 parmak izi ve Signal tarzı Güvenlik Numarası üretimi.
- *   - Bellek hijyeni: Uint8Array + fill(0) ile anahtar silme, sessionStorage'a sır yazılmaz.
+ *   - Savunma derinliği: Uint8Array ara tamponları için fill(0) (en iyi çaba / best-effort tampon temizliği), sessionStorage'a sır yazılmaz.
  */
 
 // ============================================================

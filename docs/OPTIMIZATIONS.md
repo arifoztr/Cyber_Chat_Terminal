@@ -1,27 +1,33 @@
 # OPTİMİZASYON VE GÜVENLİK KILAVUZU (OPTIMIZATIONS)
 
-**Sürüm:** v1.0 (Production Ready)  
-**Son Güncelleme:** 2026-09-30  
+**Sürüm:** v1.0 (Deneysel / Portfolio Sürümü)  
+**Son Güncelleme:** 2026-10-21  
+
+> [!WARNING]
+> **Eğitim ve Portfolyo Uyarısı:** Bu proje bağımsız bir kriptografik güvenlik denetiminden geçmemiştir. Aşağıdaki güvenlik mekanizmaları eğitim ve mimari demonstrasyon amaçlıdır; gerçek hassas konuşmalarda kullanılmamalıdır.
 
 ---
 
-## 📌 Temel Güvenlik İlkeleri (Sıfır-Güven / Zero-Knowledge)
+## 📌 Temel Güvenlik İlkeleri ve Tehdit Modeli
 
-### 1. Sıfır-Bilgi Backend (Zero-Knowledge Signaling)
-Backend sunucusu (`src/server.js`, `src/socket.js`) yalnızca signaling ve relay görevi görür.
-- Sunucu mantığında `textPayload` veya `filePayload` içerikleri **asla** çözülmez, parse edilmez, incelenmez veya loglanmaz.
-- Şifreli paketler sunucu belleğinde veya veritabanında yalnızca alıcı çevrimiçi olana kadar tutulur ve teslim edildikten/süresi dolduktan sonra silinir.
+### 1. Kör İletim Sunucusu (Blind Relay / Content-Oblivious)
+Backend sunucusu (`src/server.js`, `src/socket.js`) yalnızca signaling ve paket iletim (relay) görevi görür.
+- **İçerik Körlüğü:** Sunucu katmanında `textPayload` veya `filePayload` içerikleri **asla** çözülmez, parse edilmez, incelenmez veya loglanmaz. Şifreleme/çözme yalnızca uç noktalarda (istemcilerde) gerçekleşir.
+- **Metadata Sınırı:** Sunucu mesaj içeriğini göremez; ancak **iletişim üst verileri (metadata)** — hangi kullanıcının (Ajan ID) hangi hedefle ne zaman iletişime geçtiği, IP adresi ve paket boyutu — sunucu tarafından bilinir. Tor / Onion yönlendirmesi veya cover-traffic mekanizmaları bulunmadığından metadata gizliliği garanti edilmez.
+- Şifreli paketler sunucu belleğinde veya veritabanında yalnızca alıcı çevrimdışı olduğunda geçici olarak tutulur (7 günlük GC ve teslim sonrası silinme).
 
 ### 2. İstemci Tarafı Depolama İzolasyonu
-- Sohbet geçmişi, kişi listesi ve türetilmiş simetrik oturum anahtarları (ECDH shared secrets) **yalnızca** tarayıcının IndexedDB kasasında (`cyber_vault_db`) saklanır.
-- Kriptografik anahtarlar veya şifresi çözülmüş metinler **asla** sunucuya iletilmez.
+- Sohbet geçmişi, kişi listesi ve oturum durumları **yalnızca** istemcinin IndexedDB kasasında (`cyber_vault_db`) saklanır.
+- Kriptografik anahtarlar veya şifresi çözülmüş ham metinler **asla** sunucuya iletilmez.
 
 ### 3. Standart Web Crypto API, ECDHE ve KDF Ratchet
 - Tüm şifreleme ve anahtar türetme işlemleri W3C standartlarında `window.crypto.subtle` API'si üzerinden gerçekleştirilir.
-- **ECDHE (P-256):** Oturum başına tek kullanımlık geçici anahtar çiftleri üretilerek Mükemmel İleriye Dönük Gizlilik (PFS) sağlanır; el sıkışma sonrası geçici özel anahtar referansı bellekten silinir.
-- **KDF Ratchet Zinciri:** HKDF-SHA256 ile her tekil ileti için tek kullanımlık `messageKey` türetilir. Eski zincir anahtarları ve mesaj anahtarları derhal `Uint8Array.fill(0)` ile sıfırlanarak RAM üzerinden temizlenir.
-- **Dışa Aktarılamaz Anahtarlar (`extractable: false`):** Kriptografik anahtarlar Web Crypto katmanında korunur; XSS durumunda bile JavaScript ile belleğe dökülemez.
-- **İşletim Sistemi Kasası (Electron safeStorage):** Masaüstü istemcisinde IndexedDB anahtarları ve oturum belirteçleri Windows DPAPI, macOS Keychain veya Linux Secret Service ile donanım/kullanıcı destekli şifrelenir.
+- **ECDHE (P-256):** Oturum başına tek kullanımlık geçici anahtar çiftleri üretilerek **İleriye Dönük Gizlilik (Forward Secrecy - PFS)** sağlanır; el sıkışma sonrası geçici özel anahtar referansı silinir.
+- **KDF Ratchet Zinciri (HKDF-SHA256):** Her tekil ileti için tek yönlü HKDF zinciri ile tek kullanımlık `messageKey` türetilir. Bu mekanizma geçmiş mesajların korunmasını (Forward Secrecy) garanti eder.
+  - *Post-Compromise Security (PCS) Ayrımı:* Mevcut mimaride periyodik Diffie-Hellman ratchet (Double Ratchet) yer almadığından, bir saldırgan mevcut zincir durumunu ele geçirirse yeni bir el sıkışma olana kadar sonraki mesajları da türetebilir. Gerçek PCS için gelecekte periyodik DH ratchet entegrasyonu planlanmaktadır.
+- **Dışa Aktarılamaz Anahtarlar (`extractable: false`):** Kriptografik özel anahtarlar Web Crypto katmanında kilitlenir; doğrudan JS katmanından JWK/raw olarak dışa aktarılması engellenir.
+- **JavaScript Bellek Sıfırlama (`fill(0)`) Sınırları:** Ara bayt dizileri `Uint8Array.fill(0)` ile sıfırlanmaya çalışılır. Ancak V8 motoru ve otomatik çöp toplayıcı (Garbage Collector) nedeniyle RAM'de geçici kopya sayfaları kalabilir. Bu nedenle `fill(0)` C/Rust düzeyinde kesin bir zeroization (`explicit_bzero`) değil, "en iyi çaba" (best-effort) savunma derinliği adımı olarak kabul edilmelidir.
+- **İşletim Sistemi Kasası (Electron safeStorage):** Masaüstü istemcisinde IndexedDB anahtarları ve oturum belirteçleri Windows DPAPI, macOS Keychain veya Linux Secret Service ile işletim sistemi düzeyinde şifrelenir.
 
 ---
 
@@ -98,4 +104,4 @@ DDoS ve brute-force saldırılarına karşı IP bazlı dinamik hız sınırları
 
 ---
 
-**Son Güncelleme:** 2026-09-26
+**Son Güncelleme:** 2026-10-21
